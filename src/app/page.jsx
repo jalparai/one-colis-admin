@@ -130,7 +130,7 @@ export default function HomePage() {
       <div className="relative w-[500px] h-[500px] mx-auto">
         {/* Center Logo */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-          <div className="w-40 h-40 bg-white rounded-full flex items-center justify-center shadow-2xl">
+          <div className="w-40 h-40 bg-[#131e3d] border-2 border-white mt-[31px] rounded-full flex items-center justify-center shadow-2xl">
             <Image src={Shiping} alt="Shipping" className="w-100" />
           </div>
         </div>
@@ -331,24 +331,7 @@ export default function HomePage() {
       </div>
     </div>
 
-    {/* Coverage Section */}
-    {/* <div className="bg-gray-50 border border-gray-200 rounded-2xl p-10 text-center shadow-lg">
-      <h3 className="text-3xl font-bold text-gray-900 mb-4">Nationwide Coverage</h3>
-      <p className="text-gray-700 mb-8">
-        Serving <span className="text-gray-800 font-semibold">50+ cities</span> across Morocco with same-day & next-day delivery.
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-        {["Casablanca", "Rabat", "Marrakech", "Fès", "Tangier", "Agadir", "Meknès", "Oujda"].map((city) => (
-          <div
-            key={city}
-            className="flex items-center justify-center gap-2 bg-white py-2 px-3 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            <MapPin className="h-4 w-4 text-gray-800" />
-            <span className="text-gray-800">{city}</span>
-          </div>
-        ))}
-      </div>
-    </div> */}
+   
   </div>
 </section>
 
@@ -356,7 +339,7 @@ export default function HomePage() {
 
 
       {/* Dashboard Preview Section */}
-      <section id="dashboard" className="py-24 px-4 relative overflow-hidden">
+      <section className="py-24 px-4 relative overflow-hidden">
     
       <div className="lg:w-[90%] w-[95%] m-auto">
 
@@ -369,7 +352,7 @@ export default function HomePage() {
           }}
         ></div> */}
 
-        <div className="container mx-auto relative z-10">
+        <div  className="container mx-auto relative z-10">
           <div className="lg:flex w-full justify-end  relative bottom-[102px]">
              <main className="relative  overflow-hidden">
 
@@ -386,7 +369,7 @@ export default function HomePage() {
   </div>
 
 
-  <div className="relative z-10  pt-24 px-4 lg:text-left text-center">
+  <div className="relative z-10  pt-24 px-4 lg:text-left text-center" id="pricing">
     <h1 className="text-4xl text-white md:text-5xl font-bold mb-6 leading-tight drop-shadow-md">
       Shipping throughout Morocco
     </h1>
@@ -401,7 +384,7 @@ export default function HomePage() {
              <CityTable />
           </div>
           
-          <div className="text-center mb-16">
+          <div className="text-center mb-16" id="dashboard" >
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Powerful Dashboard & Analytics</h2>
             <p className="text-xl text-blue-100 max-w-2xl mx-auto">
               Real-time insights and complete control over your shipping operations

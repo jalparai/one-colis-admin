@@ -11,7 +11,7 @@ export default function Header() {
   return (
  <div className="border-b border-border bg-white sticky top-0 z-50">
    <header className="w-[90%] m-auto">
-      <div className="container mx-auto px-4 flex items-center justify-between h-20">
+      <div className="container mx-auto lg:px-4 flex items-center justify-between h-20">
         {/* Logo */}
         <div className="flex">
           <Image src={Logo} alt="Logo" className="h-16 w-auto" />
