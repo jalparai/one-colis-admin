@@ -1,178 +1,101 @@
 "use client"
 
 import * as React from "react"
+import { useParams, usePathname } from "next/navigation" // ✅ get current path
 import {
-  IconCamera,
   IconChartBar,
   IconDashboard,
-  IconDatabase,
-  IconFileAi,
-  IconFileDescription,
-  IconFileWord,
   IconFolder,
-  IconHelp,
-  IconInnerShadowTop,
   IconListDetails,
-  IconReport,
-  IconSearch,
-  IconSettings,
   IconUsers,
 } from "@tabler/icons-react"
 
-import { NavDocuments } from "@/components/nav-documents"
-import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar"
-
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  navMain: [
-    {
-      title: "Empolyee",
-      url: "/dashboard/Employees",
-      icon: IconDashboard,
-    },
-    {
-      title: "Lifecycle",
-      url: "#",
-      icon: IconListDetails,
-    },
-    {
-      title: "Analytics",
-      url: "#",
-      icon: IconChartBar,
-    },
-    {
-      title: "Projects",
-      url: "#",
-      icon: IconFolder,
-    },
-    {
-      title: "Team",
-      url: "#",
-      icon: IconUsers,
-    },
-  ],
-  navClouds: [
-    {
-      title: "Capture",
-      icon: IconCamera,
-      isActive: true,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: IconFileDescription,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: IconFileAi,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: IconSearch,
-    },
-  ],
-  documents: [
-    {
-      name: "Data Library",
-      url: "#",
-      icon: IconDatabase,
-    },
-    {
-      name: "Reports",
-      url: "#",
-      icon: IconReport,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: IconFileWord,
-    },
-  ],
-}
+import Image from "next/image"
+import Logo from "../../public/images/One-Colis.png"
+import Link from "next/link"
+import { cn } from "@/lib/utils" // ✅ utility for conditional classes
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const params = useParams()
+  const pathname = usePathname()
+  const locale = params.locale as string // get "en" | "ar" from route
+
+  const data = {
+    user: {
+      name: "shadcn",
+      email: "m@example.com",
+      avatar: "/avatars/shadcn.jpg",
+    },
+    navMain: [
+      {
+        title: "Employee",
+        url: `/${locale}/admin/Employees`,
+        icon: IconDashboard,
+      },
+      {
+        title: "Seller",
+        url: `/${locale}/admin/Seller`,
+        icon: IconListDetails,
+      },
+      {
+        title: "Ware House",
+        url: `/${locale}/admin/Warehouses`,
+        icon: IconChartBar,
+      },
+      {
+        title: "Delivery Agents",
+        url: `/${locale}/admin/Delivery-Agents`,
+        icon: IconFolder,
+      },
+      {
+        title: "Team",
+        url: `/${locale}/admin/Team`,
+        icon: IconUsers,
+      },
+    ],
+  }
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              className="data-[slot=sidebar-menu-button]:!p-1.5"
-            >
-              <a href="#">
-                <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Acme Inc.</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        {/* ✅ Logo */}
+        <div className="flex items-center justify-start py-6">
+          <Link href={`/${locale}`}>
+            <Image src={Logo} alt="Logo" className="w-40" priority />
+          </Link>
+        </div>
+
+        {/* ✅ Main Nav */}
+        <nav className="space-y-1 px-3">
+          {data.navMain.map((item) => {
+            const isActive = pathname === item.url
+            return (
+              <Link
+                key={item.title}
+                href={item.url}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "hover:bg-gray-100 dark:hover:bg-gray-800",
+                  isActive
+                    ? "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-white"
+                    : "text-gray-600 dark:text-gray-300"
+                )}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                <span>{item.title}</span>
+              </Link>
+            )
+          })}
+        </nav>
       </SidebarContent>
+
+      {/* ✅ Footer with user info */}
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>

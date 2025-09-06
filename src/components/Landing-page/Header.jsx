@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import { Menu, X } from "lucide-react"
 import Logo from "../../../public/One-Colis.png"
-
+import  LanguageSwitcher  from "../LanguageSwitcher"
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -29,7 +29,7 @@ export default function Header() {
             Process
           </a>
           <a href="#infrastructure" className="text-gray-800 hover:text-foreground transition-colors">
-            Infrastructure
+            Service
           </a>
           <a href="#dashboard" className="text-gray-800 hover:text-foreground transition-colors">
             Dashboard
@@ -46,10 +46,11 @@ export default function Header() {
         </nav>
 
         {/* CTA Button (Desktop only) */}
-        <button className="hidden md:block bg-[#dbb160] hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-md font-medium transition-colors">
-          Get Started
+        <button 
+            className="bg-[#2BC3F1] hover:bg-sky-600 lg:block hidden text-white px-6 py-3 rounded-full font-semibold  items-center gap-2 transition"
+>          Get Started
         </button>
-
+<LanguageSwitcher />
         {/* Mobile Menu Button */}
         <button
           className="md:hidden p-2 rounded-md hover:bg-muted"
@@ -87,8 +88,9 @@ export default function Header() {
 >
             Contact
           </a>
-            <button className="bg-[#dbb160] hover:bg-accent/90 text-accent-foreground px-4 py-2 rounded-md font-medium transition-colors w-full">
-              Get Started
+            <button 
+            className="bg-[#2BC3F1] hover:bg-sky-600  text-white px-6 py-3 rounded-full font-semibold  items-center gap-2 transition"
+>              Get Started
             </button>
           </nav>
         </div>

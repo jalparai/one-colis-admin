@@ -1,3 +1,6 @@
+'use client';
+import { useTranslation } from 'react-i18next';
+// import { useState,useEffect } from 'react';
 import {
   Truck,
   Package,
@@ -20,50 +23,79 @@ import {
   Activity,
   Phone,
   Mail,
+  RotateCcw,
+  Repeat,
+  HandCoins,
   Building2,
-    Facebook, Twitter, Linkedin
+    Facebook, Twitter, Linkedin,
+    LocationEditIcon,
+    PhoneCall,
+    MailIcon
 } from "lucide-react"
 import Image from "next/image"
-import Shiping from "../../public/Shipping.png"
-import Header from "../components/Landing-page/Header"
-import OrderTracking from "../components/Landing-page/OrderTracking"
-import FooterLogo from "../../public/images/One-Colis.png"
-import AboutUsImage from "../../public/about-us.jpeg"
-import CityTable from "../components/Landing-page/Pricing"
-export default function HomePage() {
+import Shiping from "../../../public/Shipping.png"
+import Header from "../../components/Landing-page/Header"
+import FooterLogo from "../../../public/images/One-Colis.png"
+import AboutUsImage from "../../../public/about-us.jpeg"
+import CityTable from "../../components/Landing-page/Pricing"
+import ClientLogosSection from '@/components/Landing-page/ClientLogosSection';
+import ClientTestimonials from '@/components/Landing-page/ClientTestimonials';
+import { IconLocationPin } from '@tabler/icons-react';
+import HeroWithTracking from '../../components/Landing-page/HeroWithTracking';
+import { notFound } from 'next/navigation';
+
+export default function HomePage({params}) {
+  const locale = params.locale;
+
+  // Optional: validate locale, if invalid call notFound()
+  if (!['en', 'fr', 'ar'].includes(locale)) {
+    notFound();
+  }
+
+  const { t } = useTranslation('common');
+  //   const [ready, setReady] = useState(false);
+
+  // useEffect(() => {
+  //   setReady(true);
+  // }, []);
+
+  // if (!ready) return null; // or a loading placeholder
+ const commitments = [
+    {
+      icon: <Truck className="h-6 w-6 text-[#E0B660]" />,
+      title: "Delivery within 24 hours",
+      description: "We provide Next Day delivery throughout Morocco",
+    },
+    {
+      icon: <RotateCcw className="h-6 w-6 text-[#E0B660]" />,
+      title: "Returns of goods",
+      description:
+        "Manage your returns online in case of unreachability or cancellation",
+    },
+    {
+      icon: <Repeat className="h-6 w-6 text-[#E0B660]" />,
+      title: "Exchange of goods",
+      description:
+        "We manage your package exchanges for better customer satisfaction.",
+    },
+    {
+      icon: <HandCoins className="h-6 w-6 text-[#E0B660]" />,
+      title: "Cash Collection & Return of Funds",
+      description: "Safely and smoothly",
+    },
+    {
+      icon: <Warehouse className="h-6 w-6 text-[#E0B660]" />,
+      title: "Warehousing & Storage",
+      description:
+        "100% digital solution to manage your stocks with complete transparency",
+    },
+  ];
   return (
     <div className="min-h-screen bg-background">
 
 <Header />
       {/* Hero Section */}
-      <section className="py-20 px-4 relative bgImg overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-black/50 to-black/50"></div>
-       <div className="relative z-10 container mx-auto text-center lg:px-6 max-w-4xl">
-        {/* Badge */}
-        <div className="inline-flex items-center px-4 py-2 rounded-full bg-[#dbb160]/20 text-[#dbb160] text-sm font-medium mb-6">
-          🇲🇦 Morocco's Leading COD Platform
-        </div>
-
-        {/* Heading */}
-        <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white leading-tight">
-          Complete Cash on Delivery Platform for {" "}
-          <span className="text-[#dbb160]">Moroccan E-commerce</span>
-        </h1>
-
-        {/* Subtext */}
-        <p className="text-lg md:text-xl text-gray-200 mb-8 max-w-2xl mx-auto leading-relaxed">
-          From order creation to cash collection – manage your entire shipping workflow with real warehouses, trained delivery agents, and automated systems built specifically for Morocco.
-        </p>
-
-        {/* CTA */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="bg-[#111b3d] text-white px-8 py-3 rounded-md font-semibold shadow-md transition-all flex items-center justify-center group">
-            Start Shipping Today
-            <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-          </button>
-        </div>
-      </div>
-      </section>
+     <HeroWithTracking />
 
 
 {/* Partnership / About Us Section */}
@@ -85,8 +117,8 @@ export default function HomePage() {
 
     {/* Right - Text */}
     <div>
-      <h2 className="text-3xl md:text-4xl font-bold mb-6 text-[#111b3d]">
-        Partner with <span className="text-yellow-500">OneColis</span>
+      <h2 className="text-3xl md:text-4xl font-bold mb-6 text-[#2BC3F1]">
+        Partner with <span className="text-[#E0B660]">OneColis</span>
       </h2>
       <p className="text-lg text-gray-600 mb-6 leading-relaxed">
         At <span className="font-semibold text-gray-800">OneColis</span>, we go beyond logistics.  
@@ -99,7 +131,7 @@ export default function HomePage() {
       </p>
       <a
         href="#contact"
-        className="inline-block bg-[#111b3d] text-white font-semibold px-8 py-3 rounded-lg shadow-md hover:bg-[#0e1530] transition"
+            className="bg-[#2BC3F1] hover:bg-sky-400 text-white px-6 py-3 rounded-full w-fit font-semibold flex items-center gap-2 transition"
       >
         Become a Partner
       </a>
@@ -114,7 +146,7 @@ export default function HomePage() {
   id="process"
   className="py-16 px-4 bg-gradient-to-r from-[#111b3d] via-slate-800 to-[#111b3d] border-t border-slate-700 relative"
 >
-  <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
+  <div className="absolute z-[-1] inset-0 bg-[linear-gradient(rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
   <div className="container mx-auto">
     <div className="text-center mb-16">
       <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
@@ -179,7 +211,6 @@ export default function HomePage() {
     {/* Mobile Vertical Steps */}
     <div className="block md:hidden space-y-6">
       {[
-        { icon: UserCheck, title: "Happy Customers", color: "bg-green-500" },
         { icon: PackageCheck, title: "You Create Shipment", color: "bg-blue-500" },
         { icon: Truck, title: "We Pick Up", color: "bg-purple-500" },
         { icon: Route, title: "Smart Routing", color: "bg-indigo-500" },
@@ -187,6 +218,8 @@ export default function HomePage() {
         { icon: CreditCard, title: "COD Collection", color: "bg-yellow-500" },
         { icon: Bell, title: "Instant Notification", color: "bg-orange-500" },
         { icon: DollarSign, title: "Next-Day Payout", color: "bg-red-500" },
+                { icon: UserCheck, title: "Happy Customers", color: "bg-green-500" },
+
       ].map((step, index) => (
         <div key={index} className="flex items-center space-x-4">
           <div className={`w-14 h-14 ${step.color} rounded-full flex items-center justify-center`}>
@@ -207,6 +240,7 @@ export default function HomePage() {
   className="py-24 px-4 relative overflow-hidden bg-white"
 >
   {/* Decorative background shapes removed */}
+
 
   <div className="container mx-auto relative z-10 lg:w-[90%] w-[95%]">
     {/* Title */}
@@ -255,87 +289,36 @@ export default function HomePage() {
         </div>
       ))}
     </div>
+<section className=" px-4 md:px-8">
+      <div className="max-w-7xl mx-auto">
+        <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6 text-center">
+          We also commit 
+        </h2>
 
-    {/* Feature Cards */}
-    <div className="grid md:grid-cols-3 gap-10">
-      {/* Warehouse */}
-      <div className="group bg-white hover:bg-gray-50 transition-all duration-300 rounded-xl p-8 border border-gray-200 shadow-lg">
-        <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-            <Warehouse className="h-8 w-8 text-gray-800" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Modern Warehouses</h3>
-          <p className="text-gray-600 mb-6">
-            Strategic locations across major Moroccan cities with advanced inventory systems.
-          </p>
-          <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Casablanca, Rabat, Marrakech
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Climate-controlled storage
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> 24/7 security monitoring
-            </li>
-          </ul>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+          {commitments.map((item, index) => (
+            <div
+              key={index}
+              className="group bg-white border border-gray-100 rounded-2xl shadow-md p-4 text-center transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+            >
+              <div className="flex items-center m-auto justify-center w-14 h-14 mb-4 rounded-full bg-white shadow-2xl group-hover:scale-105 transition-transform duration-300">
+                {item.icon}
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2  transition-colors">
+                {item.title}
+              </h3>
+              <p className="text-sm text-gray-600">{item.description}</p>
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* Fleet */}
-      <div className="group bg-white hover:bg-gray-50 transition-all duration-300 rounded-xl p-8 border border-gray-200 shadow-lg">
-        <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-            <Truck className="h-8 w-8 text-gray-800" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Delivery Fleet</h3>
-          <p className="text-gray-600 mb-6">
-            Modern vehicles equipped with GPS tracking and eco-friendly options.
-          </p>
-          <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> 500+ delivery vehicles
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Real-time GPS tracking
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Temperature control units
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Agents */}
-      <div className="group bg-white hover:bg-gray-50 transition-all duration-300 rounded-xl p-8 border border-gray-200 shadow-lg">
-        <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-blue-100 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-            <Users className="h-8 w-8 text-gray-800" />
-          </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Trained Agents</h3>
-          <p className="text-gray-600 mb-6">
-            Professional delivery agents trained in customer service & cash handling.
-          </p>
-          <ul className="space-y-2 text-sm text-gray-700">
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> 1000+ certified agents
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Multi-language support
-            </li>
-            <li className="flex items-center justify-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Background verified
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
+    </section>
 
    
   </div>
 </section>
 
-
+<ClientLogosSection />
 
 
       {/* Dashboard Preview Section */}
@@ -496,77 +479,97 @@ export default function HomePage() {
         </div>
       </div>
       </section>
-<OrderTracking  />
 
     
-
+<ClientTestimonials />
     {/* Contact Section */}
 {/* Contact Section */}
-<section id="contact" className="relative">
-  {/* Full-width Google Map */}
-  <div className="w-full h-[450px]">
-    <iframe
-      src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3313.0698766409105!2d-5.5670024!3d33.86209!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xda05be9d3327959%3A0xa13ce6535da819cf!2sOneColis!5e0!3m2!1sen!2s!4v1756999806488!5m2!1sen!2s"
-      width="100%"
-      height="100%"
-      style={{ border: 0 }}
-      allowFullScreen=""
-      loading="lazy"
-      referrerPolicy="no-referrer-when-downgrade"
-    ></iframe>
+<section id="contact" className="py-20 bg-white">
+  {/* Top Section with Contact Info */}
+  <div className="text-center mb-12">
+    <h2 className="text-3xl font-bold text-gray-800">Have a question, need support, or just want to connect?</h2>
+    <p className="text-gray-600 mt-2">Our team is here to help you. Reach out to us anytime — we’d love to hear from you and assist with whatever you need.</p>
+  
   </div>
 
- 
-  <div className="container mx-auto px-4">
-    <div className="grid md:grid-cols-2 gap-8 bg-white shadow-lg  rounded-sm p-2 md:p-2 absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-5xl top-[638px]">
-      
-      {/* Contact Form */}
-      <div className="lg:p-[20px] p-[10px]">
-        <h3 className="text-2xl font-bold text-gray-900 mb-6">Drop us a Line</h3>
-        <form className="space-y-4">
+  {/* Contact Info */}
+  <div className="flex flex-col md:flex-row justify-center items-center gap-10 mb-10 px-6">
+    <div className="flex items-center space-x-3">
+      <div className="bg-blue-100 p-3 rounded-full">
+      <IconLocationPin />
+      </div>
+      <span className="text-gray-800 font-medium">
+        Ahmed Tower (Floor #11), 28 & 30 Kamal Ataturk Avenue, Banani, Dhaka 1213
+      </span>
+    </div>
+    <div className="flex items-center space-x-3">
+      <div className="bg-blue-100 p-3 rounded-full">
+        <MailIcon />
+      </div>
+      <span className="text-gray-800 font-medium">support@autonemo.io</span>
+    </div>
+    <div className="flex items-center space-x-3">
+      <div className="bg-blue-100 p-3 rounded-full">
+        <PhoneCall />
+      </div>
+      <span className="text-gray-800 font-medium">8801711506350</span>
+    </div>
+  </div>
+
+  {/* Form and Map Side-by-Side */}
+  <div className="container mx-auto w-[95%] lg:w-[90%] px-6 grid md:grid-cols-2 gap-10 items-start">
+    {/* Contact Form */}
+    <div className="bg-white shadow-md rounded-lg p-6">
+      <h3 className="text-2xl font-bold text-gray-800 mb-6">Drop us a Line</h3>
+      <form className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           <input
             type="text"
-            placeholder="Your Name"
-            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="First name"
+            className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 w-full"
           />
           <input
-            type="email"
-            placeholder="Your Email"
-            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            type="text"
+            placeholder="Last name"
+            className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 w-full"
           />
-          <textarea
-            rows="4"
-            placeholder="Message"
-            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          ></textarea>
-          <button
-            type="submit"
-            className="bg-[#111b3d] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#0e1530] transition"
-          >
-            Send Message
-          </button>
-        </form>
-      </div>
+        </div>
+        <input
+          type="email"
+          placeholder="Email address"
+          className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 w-full"
+        />
+        <input
+          type="text"
+          placeholder="Subject"
+          className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 w-full"
+        />
+        <textarea
+          rows="4"
+          placeholder="Message"
+          className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-3 w-full"
+        ></textarea>
+        <button
+          type="submit"
+            className="bg-[#2BC3F1] hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition"
+        >
+          Send Message
+        </button>
+      </form>
+    </div>
 
-      {/* Contact Info */}
-      <div className="bg-[#111b3d] text-white rounded-md p-8">
-        <h3 className="text-2xl font-bold mb-6">Contact Information</h3>
-        <p className="mb-4">Feel free to reach out to us for any inquiries.</p>
-        <ul className="space-y-4">
-          <li className="flex items-center space-x-3">
-            <Phone className="h-5 w-5 text-white" />
-            <span>+212 5XX-XXXXXX</span>
-          </li>
-          <li className="flex items-center space-x-3">
-            <Mail className="h-5 w-5 text-white" />
-            <span>contact@onecolis.ma</span>
-          </li>
-          <li className="flex items-center space-x-3">
-            <Building2 className="h-5 w-5 text-white" />
-            <span>Casablanca, Morocco</span>
-          </li>
-        </ul>
-      </div>
+    {/* Embedded Map */}
+    <div className="h-full w-full">
+      <iframe
+        src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d3313.0698766409105!2d-5.5670024!3d33.86209!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xda05be9d3327959%3A0xa13ce6535da819cf!2sOneColis!5e0!3m2!1sen!2s!4v1756999806488!5m2!1sen!2s"
+        width="100%"
+        height="500"
+        style={{ border: 0 }}
+        allowFullScreen=""
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        className="rounded-lg shadow-md"
+      ></iframe>
     </div>
   </div>
 </section>
@@ -574,7 +577,7 @@ export default function HomePage() {
 
 
       {/* Footer */}
-  <footer className="bg-slate-900 border-t border-slate-700 py-10 lg:pt-[478px] pt-[596px]">
+  <footer className="bg-slate-900 border-t border-slate-700 py-10">
 <div className="container mx-auto px-6 text-center space-y-6">
 {/* Logo */}
 <div className="flex justify-center items-center space-x-2">

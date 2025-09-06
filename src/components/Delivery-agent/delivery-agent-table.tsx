@@ -47,8 +47,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { AddEmployee } from "./Add-employee"
-import { EditEmployee } from "./EditEmployee"
+
+import { EditAgent } from "./edit-agent"
+import { AddAgent } from "./add-agent"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -57,7 +58,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export type Employee = {
+export type delivery = {
   _id: string
   name: string
   email: string
@@ -65,7 +66,7 @@ export type Employee = {
   createdAt: string
 }
 
-export const columns: ColumnDef<Employee>[] = [
+export const columns: ColumnDef<delivery>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -131,7 +132,7 @@ export const columns: ColumnDef<Employee>[] = [
   id: "actions",
   enableHiding: false,
   cell: ({ row, table }) => {
-    const employee = row.original
+    const delivery = row.original
     const [editOpen, setEditOpen] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -141,13 +142,13 @@ export const columns: ColumnDef<Employee>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/admin/employees/${employee._id}`,
+          `http://localhost:8000/api/delivery-agent/${delivery._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)
         table.options.meta?.refresh?.()
       } catch (err) {
-        console.error("❌ Failed to delete employee", err)
+        console.error("❌ Failed to delete delivery", err)
       } finally {
         setLoading(false)
       }
@@ -175,8 +176,8 @@ export const columns: ColumnDef<Employee>[] = [
         </DropdownMenu>
 
         {/* ✏️ Edit modal */}
-        <EditEmployee
-          employee={employee}
+        <EditAgent
+          delivery={delivery}
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onUpdated={table.options.meta?.refresh || (() => {})}
@@ -187,10 +188,10 @@ export const columns: ColumnDef<Employee>[] = [
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Delete {employee.name}?
+                Delete {delivery.name}?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. The employee will be permanently
+                This action cannot be undone. The delivery will be permanently
                 removed from the system.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -213,34 +214,34 @@ export const columns: ColumnDef<Employee>[] = [
 
 ]
 
-export function EmployeesTable() {
-  const [employees, setEmployees] = React.useState<Employee[]>([])
+export function DeliveryTable() {
+  const [deliverys, setdeliverys] = React.useState<delivery[]>([])
   const [loading, setLoading] = React.useState(true)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
 
-  const fetchEmployees = React.useCallback(async () => {
+  const fetchdeliverys = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:8000/api/admin/get-employees", {
+      const res = await axios.get("http://localhost:8000/api/delivery-agent/", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setEmployees(res.data.data || [])
+      setdeliverys(res.data.data || [])
     } catch (err) {
-      console.error("Error fetching employees:", err)
+      console.error("Error fetching deliverys:", err)
     } finally {
       setLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    fetchEmployees()
-  }, [fetchEmployees])
+    fetchdeliverys()
+  }, [fetchdeliverys])
 
   const table = useReactTable({
-    data: employees,
+    data: deliverys,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -251,10 +252,10 @@ export function EmployeesTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
-    meta: { refresh: fetchEmployees },
+    meta: { refresh: fetchdeliverys },
   })
 
-  if (loading) return <p className="p-4">Loading employees...</p>
+  if (loading) return <p className="p-4">Loading deliverys...</p>
 
   return (
     <div className="w-full">
@@ -269,7 +270,7 @@ export function EmployeesTable() {
           className="max-w-sm"
         />
         <div className="flex gap-2">
-          <AddEmployee onEmployeeAdded={fetchEmployees} />
+          <AddAgent ondeliveryAdded={fetchdeliverys} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -328,7 +329,7 @@ export function EmployeesTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No employees found.
+                  No deliverys found.
                 </TableCell>
               </TableRow>
             )}

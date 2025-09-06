@@ -47,8 +47,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { AddEmployee } from "./Add-employee"
-import { EditEmployee } from "./EditEmployee"
+// import { Addseller } from "./Add-seller"
+// import { Editseller } from "./Editseller"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -57,7 +57,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export type Employee = {
+export type seller = {
   _id: string
   name: string
   email: string
@@ -65,7 +65,7 @@ export type Employee = {
   createdAt: string
 }
 
-export const columns: ColumnDef<Employee>[] = [
+export const columns: ColumnDef<seller>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -131,7 +131,7 @@ export const columns: ColumnDef<Employee>[] = [
   id: "actions",
   enableHiding: false,
   cell: ({ row, table }) => {
-    const employee = row.original
+    const seller = row.original
     const [editOpen, setEditOpen] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -141,13 +141,13 @@ export const columns: ColumnDef<Employee>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/admin/employees/${employee._id}`,
+          `http://localhost:8000/api/admin/delete-seller/${seller._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)
         table.options.meta?.refresh?.()
       } catch (err) {
-        console.error("❌ Failed to delete employee", err)
+        console.error("❌ Failed to delete seller", err)
       } finally {
         setLoading(false)
       }
@@ -164,9 +164,7 @@ export const columns: ColumnDef<Employee>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              Edit
-            </DropdownMenuItem>
+         
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
               Delete
@@ -175,22 +173,22 @@ export const columns: ColumnDef<Employee>[] = [
         </DropdownMenu>
 
         {/* ✏️ Edit modal */}
-        <EditEmployee
-          employee={employee}
+        {/* <Editseller
+          seller={seller}
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onUpdated={table.options.meta?.refresh || (() => {})}
-        />
+        /> */}
 
         {/* 🗑 Delete confirmation popup */}
         <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Delete {employee.name}?
+                Delete {seller.name}?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. The employee will be permanently
+                This action cannot be undone. The seller will be permanently
                 removed from the system.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -213,34 +211,34 @@ export const columns: ColumnDef<Employee>[] = [
 
 ]
 
-export function EmployeesTable() {
-  const [employees, setEmployees] = React.useState<Employee[]>([])
+export function SellerTable() {
+  const [sellers, setsellers] = React.useState<seller[]>([])
   const [loading, setLoading] = React.useState(true)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
 
-  const fetchEmployees = React.useCallback(async () => {
+  const fetchsellers = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:8000/api/admin/get-employees", {
+      const res = await axios.get("http://localhost:8000/api/admin/sellers", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setEmployees(res.data.data || [])
+      setsellers(res.data.data || [])
     } catch (err) {
-      console.error("Error fetching employees:", err)
+      console.error("Error fetching sellers:", err)
     } finally {
       setLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    fetchEmployees()
-  }, [fetchEmployees])
+    fetchsellers()
+  }, [fetchsellers])
 
   const table = useReactTable({
-    data: employees,
+    data: sellers,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -251,10 +249,10 @@ export function EmployeesTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
-    meta: { refresh: fetchEmployees },
+    meta: { refresh: fetchsellers },
   })
 
-  if (loading) return <p className="p-4">Loading employees...</p>
+  if (loading) return <p className="p-4">Loading sellers...</p>
 
   return (
     <div className="w-full">
@@ -269,7 +267,6 @@ export function EmployeesTable() {
           className="max-w-sm"
         />
         <div className="flex gap-2">
-          <AddEmployee onEmployeeAdded={fetchEmployees} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -328,7 +325,7 @@ export function EmployeesTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No employees found.
+                  No sellers found.
                 </TableCell>
               </TableRow>
             )}

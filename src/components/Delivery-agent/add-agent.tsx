@@ -16,14 +16,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-export function AddEmployee({ onEmployeeAdded }: { onEmployeeAdded?: () => void }) {
+export function AddAgent({ ondeliveryAdded }: { ondeliveryAdded?: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const handleAddEmployee = async (e: React.FormEvent) => {
+  const handleAdddelivery = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
@@ -32,21 +32,21 @@ export function AddEmployee({ onEmployeeAdded }: { onEmployeeAdded?: () => void 
       const token = localStorage.getItem("token");
 
       const res = await axios.post(
-        "http://localhost:8000/api/admin/create-employee",
-        { name, email, password, role: "employee" },
+        "http://localhost:8000/api/delivery-agent/register",
+        { name, email, password, role: "delivery" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setMessage(`✅ Employee ${res.data?.data?.name || "created"} successfully!`);
+      setMessage(`✅ delivery ${res.data?.data?.name || "created"} successfully!`);
 
       setName("");
       setEmail("");
       setPassword("");
 
-      if (onEmployeeAdded) onEmployeeAdded(); // 🔄 Refresh parent list
+      if (ondeliveryAdded) ondeliveryAdded(); // 🔄 Refresh parent list
     } catch (err: any) {
       if (axios.isAxiosError(err)) {
-        setMessage(err.response?.data?.message || "❌ Failed to create employee");
+        setMessage(err.response?.data?.message || "❌ Failed to create delivery");
       } else {
         setMessage("❌ Unexpected error");
       }
@@ -58,14 +58,14 @@ export function AddEmployee({ onEmployeeAdded }: { onEmployeeAdded?: () => void 
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button>+ Add Employee</Button>
+        <Button>+ Add delivery</Button>
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Add Employee</SheetTitle>
-          <SheetDescription>Fill in the details to create a new employee.</SheetDescription>
+          <SheetTitle>Add delivery</SheetTitle>
+          <SheetDescription>Fill in the details to create a new delivery.</SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleAddEmployee} className="grid flex-1 auto-rows-min gap-6 px-4">
+        <form onSubmit={handleAdddelivery} className="grid flex-1 auto-rows-min gap-6 px-4">
           <div className="grid gap-3">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />

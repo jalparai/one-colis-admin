@@ -7,6 +7,7 @@ import {
   IconNotification,
   IconUserCircle,
 } from "@tabler/icons-react"
+import { Button } from "@/components/ui/button";
 
 import {
   Avatar,
@@ -28,7 +29,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-
+import { useLogout } from "@/lib/logout"
 export function NavUser({
   user,
 }: {
@@ -39,7 +40,7 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
-
+    const { logout } = useLogout();
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -83,24 +84,13 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <IconUserCircle />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+           
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <IconLogout />
-              Log out
+    <Button onClick={logout} className="">
+        Logout
+      </Button>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

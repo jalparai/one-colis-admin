@@ -1,39 +1,23 @@
 "use client"
 
-import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
+import Link from "next/link"
+import { cn } from "@/lib/utils"
 
-import { Button } from "@/components/ui/button"
-import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar"
-
-export function NavMain({
-  items,
-}: {
-  items: {
-    title: string
-    url: string
-    icon?: Icon
-  }[]
-}) {
+export function NavMain({ items }: { items: any[] }) {
   return (
-    <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-2">
-        <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
-                {item.icon && <item.icon />}
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <nav className="space-y-1">
+      {items.map((item) => (
+        <Link
+          key={item.title}
+          href={item.url}
+          className={cn(
+            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
+          )}
+        >
+          <item.icon className="h-4 w-4" />
+          {item.title}
+        </Link>
+      ))}
+    </nav>
   )
 }

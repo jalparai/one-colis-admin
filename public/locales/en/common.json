@@ -1,0 +1,10 @@
+{
+  "sidebar": {
+    "employee": "Employee",
+    "seller": "Seller",
+    "warehouse": "Warehouse",
+    "delivery": "Delivery Agents",
+    "team": "Team"
+  },
+  "employees": "Employees"
+}
