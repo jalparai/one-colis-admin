@@ -39,7 +39,7 @@ export function EdidWareHouse({
     try {
       const token = localStorage.getItem("token")
       await axios.put(
-        `http://localhost:8000/api/warehouse/${wearHouse._id}`,
+        `https://cod-ecommerce-two.vercel.app/api/warehouse/${wearHouse._id}`,
         { name, password },
         { headers: { Authorization: `Bearer ${token}` } }
       )

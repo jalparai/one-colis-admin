@@ -142,7 +142,7 @@ export const columns: ColumnDef<delivery>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/delivery-agent/${delivery._id}`,
+          `https://cod-ecommerce-two.vercel.app/api/delivery-agent/${delivery._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)

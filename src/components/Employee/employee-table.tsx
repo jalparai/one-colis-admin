@@ -141,7 +141,7 @@ export const columns: ColumnDef<Employee>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/admin/employees/${employee._id}`,
+          `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)
@@ -224,7 +224,7 @@ export function EmployeesTable() {
   const fetchEmployees = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:8000/api/admin/get-employees", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-employees", {
         headers: { Authorization: `Bearer ${token}` },
       })
       setEmployees(res.data.data || [])

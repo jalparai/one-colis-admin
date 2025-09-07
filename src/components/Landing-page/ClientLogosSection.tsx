@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useTranslation } from "react-i18next";
 
 const logos = [
   "/client-1.png",
@@ -17,11 +18,12 @@ const logos = [
 
 export default function ClientLogosSection() {
   const repeated = [...logos, ...logos]; // repeat for infinite scroll
+  const { t } = useTranslation(); // hook from react-i18next
 
   return (
     <section className="bg-gray-50 py-12 overflow-hidden">
       <h2 className="text-3xl font-bold text-center text-gray-900 mb-10">
-        Our Client
+        {t("title_client")}
       </h2>
 
       <div className="relative w-full overflow-hidden">
@@ -43,7 +45,6 @@ export default function ClientLogosSection() {
         </div>
       </div>
 
-      {/* Custom styles (injected here, no need for tailwind.config.js) */}
       <style jsx>{`
         .scroll-track {
           display: flex;

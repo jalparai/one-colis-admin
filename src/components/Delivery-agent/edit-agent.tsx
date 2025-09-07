@@ -39,7 +39,7 @@ export function EditAgent({
     try {
       const token = localStorage.getItem("token")
       await axios.put(
-        `http://localhost:8000/api/delivery-agent/${delivery._id}`,
+        `https://cod-ecommerce-two.vercel.app/api/delivery-agent/${delivery._id}`,
         { name, password },
         { headers: { Authorization: `Bearer ${token}` } }
       )

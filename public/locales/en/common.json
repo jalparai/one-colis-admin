@@ -6,5 +6,195 @@
     "delivery": "Delivery Agents",
     "team": "Team"
   },
-  "employees": "Employees"
+  "employees": "Employees",
+    "about_title": "Partner with <span class='text-[#E0B660]'>OneColis</span>",
+  "about_heading": "Delivering Success Together 🚚",
+  "about_paragraph1": "At <strong>OneColis</strong>, we go beyond logistics. We create partnerships that empower Moroccan e-commerce sellers to scale with confidence. From reliable Cash on Delivery to advanced tracking, we ensure your business is always moving forward.",
+  "about_paragraph2": "Let’s simplify shipping, unlock growth, and build the future of Moroccan logistics — together.",
+  "about_button": "Become a Partner",
+   "warehouseAlt": "Warehouse Background",
+  "accelerateYour": "Accelerate Your",
+  "ecommerce": "E-commerce",
+  "growth": "Growth",
+  "with": "With",
+  "smartShipping": "Smart Shipping",
+  "technology": "Technology",
+  "cashCollection": "Guaranteed Cash Collection",
+  "realTimeTracking": "Real-Time Tracking",
+  "nextDayPayouts": "Next-Day Payouts",
+  "enterTrackingNumber": "Enter your tracking number...",
+  "trackNow": "Track now",
+  "orderId": "Order ID",
+  "status": "Status",
+  "estimatedDelivery": "Estimated Delivery",
+  "location": "Location",
+  "inTransit": "In Transit",
+  "orderNotFound": "Order not found. Please check your number.",
+   "shippingProcessTitle": "Complete Shipping Process",
+  "shippingProcessDescription": "From order creation to cash in hand – see how OneColis handles every step of your shipping journey",
+  "shippingAlt": "Shipping",
+  "happyCustomers": "Happy Customers",
+  "createShipment": "You Create Shipment",
+  "wePickUp": "We Pick Up",
+  "smartRouting": "Smart Routing",
+  "liveTracking": "Live Tracking",
+  "codCollection": "COD Collection",
+  "instantNotification": "Instant Notification",
+  "nextDayPayout": "Next-Day Payout",
+  "infrastructure": {
+    "title": {
+      "part1": "Real Infrastructure,",
+      "part2": "Real Results"
+    },
+    "subtitle": "Physical warehouses, trained delivery agents, and modern vehicles across Morocco.",
+    "cards": {
+      "warehouses": {
+        "title": "Strategic Warehouses",
+        "desc": "Climate-controlled facilities across Morocco"
+      },
+      "fleet": {
+        "title": "Modern Fleet",
+        "desc": "GPS-tracked vehicles for reliable delivery"
+      },
+      "professionals": {
+        "title": "Trained Professionals",
+        "desc": "Certified agents for secure COD collection"
+      }
+    },
+    "commitments": {
+      "title": "We also commit"
+    }
+  },
+   "commitments": {
+    "title": "We also commit",
+    "items": {
+      "delivery": {
+        "title": "Delivery within 24 hours",
+        "desc": "We provide Next Day delivery throughout Morocco"
+      },
+      "returns": {
+        "title": "Returns of goods",
+        "desc": "Manage your returns online in case of unreachability or cancellation"
+      },
+      "exchange": {
+        "title": "Exchange of goods",
+        "desc": "We manage your package exchanges for better customer satisfaction."
+      },
+      "cash": {
+        "title": "Cash Collection & Return of Funds",
+        "desc": "Safely and smoothly"
+      },
+      "warehouse": {
+        "title": "Warehousing & Storage",
+        "desc": "100% digital solution to manage your stocks with complete transparency"
+      }
+    }
+  }
+  ,
+  
+  "shippingSection": {
+    "shipping_title": "Shipping throughout Morocco",
+    "shipping_subtitle": "Fast, reliable, and affordable delivery to every major city.",
+    "dashboard_title": "Powerful Dashboard & Analytics",
+    "dashboard_subtitle": "Real-time insights and complete control over your shipping operations",
+    "order_management": "Order Management",
+    "active_orders": "Active Orders",
+    "delivery_rate": "Delivery Rate",
+    "pending_pickup": "Pending Pickup",
+    "in_transit": "In Transit",
+    "delivered": "Delivered",
+    "financial_overview": "Financial Overview",
+    "cod_collected": "COD Collected",
+    "pending_payout": "Pending Payout",
+    "todays_collection": "Today's Collection",
+    "commission_rate": "Commission Rate",
+    "next_payout": "Next Payout",
+    "tomorrow": "Tomorrow",
+    "real_time_tracking": "Real-time Tracking",
+    "real_time_tracking_desc": "Live GPS tracking for all shipments with customer notifications",
+    "advanced_analytics": "Advanced Analytics",
+    "advanced_analytics_desc": "Detailed reports on performance, revenue, and customer satisfaction",
+    "secure_payments": "Secure Payments",
+    "secure_payments_desc": "Automated COD collection with next-day payouts and full transparency"
+  }
+,
+
+ 
+  "whatClientsSay": "What Our Clients Say",
+  "testimonialIntro": "Real stories from real businesses. See how we’ve helped transform delivery, cash flow, and customer satisfaction for our partners across Morocco.",
+  "scaleBusiness": "Scale your business",
+
+  "casablancaBoutique": "Casablanca (Fashion Boutique)",
+  "agadirArtisan": "Agadir (Artisan Goods)",
+  "rabatElectronics": "Rabat (Electronics Store)",
+  "fesBeauty": "Fes (Beauty & Cosmetics)",
+  "tangierHomeDecor": "Tangier (Home Decor)",
+  "marrakechHandmade": "Marrakech (Handmade Goods)",
+
+  "testimonial1": "We scaled from 30 to 200+ orders/month thanks to their bulk shipping tools. What used to take 3 hours now takes 15 minutes!",
+  "testimonial2": "Finding reliable COD delivery for rural customers was impossible. Now we ship to every corner of Morocco with the same confidence as city orders.",
+  "testimonial3": "Before OneColis, I waited weeks for COD payments. Now I get paid the next day – my cash flow improved so much I could finally hire an assistant!",
+  "testimonial4": "The customer support is top-notch. Whenever I have a question, they’re quick and helpful. Love working with them!",
+  "testimonial5": "Deliveries are always on time, and COD processing is fast. Game-changer for small businesses like mine.",
+  "testimonial6": "We doubled our monthly orders within 2 months of switching. The analytics dashboard is super useful too."
+
+,
+  "faqTitle": "Frequently Asked Questions",
+  "faqIntro": "Have questions? We’ve got answers. Browse our most frequently asked questions to learn more about our services, policies, and how we support your business every step of the way.",
+
+  "faq1Q": "How fast can you deliver COD orders across Morocco?",
+  "faq1A": "Our smart routing delivers in 1-2 days (major cities) and 2-3 days (nationwide) – 40% faster than standard couriers. Casablanca sellers often see same-day delivery!",
+
+  "faq2Q": "What happens if a customer refuses a COD order?",
+  "faq2A": "Zero cost to you. We handle free return pickups and notify you immediately. Most refused parcels are back in your hands within 48 hours.",
+
+  "faq3Q": "How quickly will I receive my COD payments?",
+  "faq3A": "Next-business-day deposits to your bank account – the fastest in Morocco. Track every dirham in real-time via your dashboard.",
+
+  "faq4Q": "Can I ship bulk orders from Shopify or Jumia?",
+  "faq4A": "Yes! Automatically import orders from major platforms. Our system processes 100+ orders in under 5 minutes with bulk upload.",
+
+  "faq5Q": "What makes your tracking better than competitors?",
+  "faq5A": "Customers get GPS-powered WhatsApp/SMS alerts with live delivery windows (not vague 'out for delivery' updates). Sellers see exact driver locations."
+,
+  "contact": {
+    "title": "Have a question, need support, or just want to connect?",
+    "subtitle": "Our team is here to help you. Reach out to us anytime — we’d love to hear from you and assist with whatever you need.",
+    "address": "Ahmed Tower (Floor #11), 28 & 30 Kamal Ataturk Avenue, Banani, Dhaka 1213",
+    "email": "support@autonemo.io",
+    "phone": "8801711506350",
+    "formTitle": "Drop us a Line",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "emailPlaceholder": "Email address",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send Message"
+  },
+  "footer": {
+    "about": "About us",
+    "process": "Process",
+    "services": "Services",
+    "testimonials": "Testimonials",
+    "pricing": "Pricing",
+    "faq": "Faq's",
+    "contact": "Contact us",
+    "rights": "© 2025 OneColis. All rights reserved."
+  }
+  
+
+,
+"header": {
+  "getStarted": "Get Started"
+}
+,
+
+ 
+
+
+
+    "title_client": "Our Clients"
+
+
+
 }

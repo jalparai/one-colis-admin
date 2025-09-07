@@ -222,7 +222,7 @@ export function SellerTable() {
   const fetchsellers = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:8000/api/admin/sellers", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/sellers", {
         headers: { Authorization: `Bearer ${token}` },
       })
       setsellers(res.data.data || [])

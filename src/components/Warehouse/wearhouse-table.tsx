@@ -141,7 +141,7 @@ export const columns: ColumnDef<wearHouse>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/warehouse/${wearHouse._id}`,
+          `https://cod-ecommerce-two.vercel.app/api/warehouse/${wearHouse._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)
@@ -224,7 +224,7 @@ export function WearHouseTable() {
   const fetchwearHouse = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:8000/api/warehouse/", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/warehouse/", {
         headers: { Authorization: `Bearer ${token}` },
       })
       setwearHouse(res.data.data || [])

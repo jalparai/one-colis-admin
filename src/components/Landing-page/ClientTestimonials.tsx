@@ -1,84 +1,88 @@
 "use client";
 
 import Image from "next/image";
-
-const testimonials = [
-  {
-    name: "Salma T",
-    role: "Casablanca (Fashion Boutique)",
-    image: "/client-profile-1.png",
-    text: "We scaled from 30 to 200+ orders/month thanks to their bulk shipping tools. What used to take 3 hours now takes 15 minutes!",
-  },
-  {
-    name: "Ahmed S.",
-    role: "Agadir (Artisan Goods)",
-    image:"/client-profile-2.png",
-    text: "Finding reliable COD delivery for rural customers was impossible. Now we ship to every corner of Morocco with the same confidence as city orders.",
-  },
-  {
-    name: "Youssef L",
-    role: "Rabat (Electronics Store)",
-    image:"/client-profile-3.png",
-    text: "Before OneColis, I waited weeks for COD payments. Now I get paid the next day – my cash flow improved so much I could finally hire an assistant!",
-  },
-  {
-    name: "Nadia B",
-    role: "Fes (Beauty & Cosmetics)",
-    image: "/client-profile-2.png",
-    text: "The customer support is top-notch. Whenever I have a question, they’re quick and helpful. Love working with them!",
-  },
-  {
-    name: "Karim E.",
-    role: "Tangier (Home Decor)",
-    image: "/client-profile-2.png",
-    text: "Deliveries are always on time, and COD processing is fast. Game-changer for small businesses like mine.",
-  },
-  {
-    name: "Laila M",
-    role: "Marrakech (Handmade Goods)",
-    image: "/client-profile-2.png",
-    text: "We doubled our monthly orders within 2 months of switching. The analytics dashboard is super useful too.",
-  },
-];
+import { useTranslation } from "react-i18next";
 
 export default function ClientTestimonials() {
+  const { t } = useTranslation("common");
+
+  const testimonials = [
+    {
+      name: "Salma T",
+      role: t("casablancaBoutique"),
+      image: "/client-profile-1.png",
+      text: t("testimonial1"),
+    },
+    {
+      name: "Ahmed S.",
+      role: t("agadirArtisan"),
+      image: "/client-profile-2.png",
+      text: t("testimonial2"),
+    },
+    {
+      name: "Youssef L",
+      role: t("rabatElectronics"),
+      image: "/client-profile-3.png",
+      text: t("testimonial3"),
+    },
+    {
+      name: "Nadia B",
+      role: t("fesBeauty"),
+      image: "/client-profile-2.png",
+      text: t("testimonial4"),
+    },
+    {
+      name: "Karim E.",
+      role: t("tangierHomeDecor"),
+      image: "/client-profile-2.png",
+      text: t("testimonial5"),
+    },
+    {
+      name: "Laila M",
+      role: t("marrakechHandmade"),
+      image: "/client-profile-2.png",
+      text: t("testimonial6"),
+    },
+  ];
+
   const repeated = [...testimonials, ...testimonials];
 
   return (
-    <section className="bg-gray-50 py-16 overflow-hidden">
-      <div className="w-[95%] lg:w-[90%] mx-auto px-4 text-center">
-        <h2 className="text-4xl font-bold text-gray-900 mb-4">What Our Clients Say</h2>
+    <section className="bg-gray-50 py-16 overflow-hidden" id="testimonials">
+      <div className="container mx-auto max-w-7xl px-4 lg:px-6 text-center">
+        <h2 className="text-4xl font-bold text-gray-900 mb-4">
+          {t("whatClientsSay")}
+        </h2>
         <p className="text-lg text-gray-600 mb-12 w-[95%] lg:w-[90%] mx-auto">
-          Real stories from real businesses. See how we’ve helped transform delivery,
-          cash flow, and customer satisfaction for our partners across Morocco.
+          {t("testimonialIntro")}
         </p>
 
         {/* Auto-scroll container */}
         <div className="relative overflow-hidden">
           <div className="flex space-x-6 animate-slide-slow px-1">
-            {repeated.map((t, index) => (
+            {repeated.map((tData, index) => (
               <div
                 key={index}
                 className="bg-white rounded-xl border border-gray-100 p-6 w-[320px] flex-shrink-0 relative"
               >
                 <div className="flex items-center mb-4">
                   <Image
-                    src={t.image}
-                    alt={t.name}
+                    src={tData.image}
+                    alt={tData.name}
                     width={50}
                     height={50}
                     className="rounded-full object-cover mr-4"
                   />
                   <div className="text-left">
-                    <p className="font-semibold text-gray-900">{t.name}</p>
-                    <p className="text-sm text-gray-500">{t.role}</p>
+                    <p className="font-semibold text-gray-900">{tData.name}</p>
+                    <p className="text-sm text-gray-500">{tData.role}</p>
                   </div>
                 </div>
                 <p className="text-gray-700 leading-relaxed relative z-10">
                   <span className="text-3xl text-gray-300 absolute top-[-10px] left-[-10px] z-0">
                     &ldquo;
                   </span>
-                  {t.text}
+                  {tData.text}
                 </p>
               </div>
             ))}
@@ -86,9 +90,8 @@ export default function ClientTestimonials() {
         </div>
 
         <div className="mt-12">
-          <button 
-            className="bg-[#2BC3F1] m-auto hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition">
-            Scale your business
+          <button className="bg-[#2BC3F1] m-auto hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition">
+            {t("scaleBusiness")}
           </button>
         </div>
       </div>

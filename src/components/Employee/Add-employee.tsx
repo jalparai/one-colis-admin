@@ -32,7 +32,7 @@ export function AddEmployee({ onEmployeeAdded }: { onEmployeeAdded?: () => void 
       const token = localStorage.getItem("token");
 
       const res = await axios.post(
-        "http://localhost:8000/api/admin/create-employee",
+        "https://cod-ecommerce-two.vercel.app/api/admin/create-employee",
         { name, email, password, role: "employee" },
         { headers: { Authorization: `Bearer ${token}` } }
       );

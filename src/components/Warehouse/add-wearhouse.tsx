@@ -32,7 +32,7 @@ export function AddWearhouse({ onwearHouseAdded }: { onwearHouseAdded?: () => vo
       const token = localStorage.getItem("token");
 
       const res = await axios.post(
-        "http://localhost:8000/api/warehouse/create",
+        "https://cod-ecommerce-two.vercel.app/api/warehouse/create",
         { name, email, password},
         { headers: { Authorization: `Bearer ${token}` } }
       );

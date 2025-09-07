@@ -39,7 +39,7 @@ export function EditEmployee({
     try {
       const token = localStorage.getItem("token")
       await axios.put(
-        `http://localhost:8000/api/admin/employees/${employee._id}`,
+        `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
         { name, password },
         { headers: { Authorization: `Bearer ${token}` } }
       )

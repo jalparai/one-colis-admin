@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import axios from "axios";
-
+import Image from "next/image";
+import Logo from "../../public/images/One-Colis.png"
 export function SignupForm({
   className,
   ...props
@@ -32,7 +33,7 @@ export function SignupForm({
     setLoading(true);
 
     try {
-      const res = await axios.post("http://localhost:8000/api/auth/register", {
+      const res = await axios.post("https://cod-ecommerce-two.vercel.app/api/auth/register", {
         name,
         email,
         password,
@@ -48,7 +49,7 @@ export function SignupForm({
 
       // ✅ Redirect after signup (to dashboard or login)
       setTimeout(() => {
-        router.push(`/${locale}/dashboard`);
+        router.push(`/${locale}/login`);
       }, 1500);
     } catch (err: any) {
       if (axios.isAxiosError(err)) {
@@ -129,11 +130,11 @@ export function SignupForm({
           </form>
 
           {/* Side Image */}
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src="/placeholder.svg"
+          <div className="bg-muted relative hidden md:flex justify-center items-center">
+            <Image
+              src={Logo}
               alt="Image"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+              className=" inset-0 h-auto w-[200px] block object-cover dark:brightness-[0.2] dark:grayscale"
             />
           </div>
         </CardContent>

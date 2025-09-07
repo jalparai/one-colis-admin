@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import axios from "axios";
-
+import Image from "next/image";
+import Logo from "../../public/images/One-Colis.png"
 export function LoginForm({
   className,
   ...props
@@ -23,34 +24,37 @@ export function LoginForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setError("");
   setLoading(true);
 
   try {
-    const res = await axios.post("http://localhost:8000/api/auth/login", {
-      email,
-      password,
-    });
+    const res = await axios.post(
+      "https://cod-ecommerce-two.vercel.app/api/auth/login",
+      { email, password }
+    );
 
     const data = res.data;
 
-    // Debug logs
-    console.log("🔑 Login Response:", data);
-
-    // ✅ Save token & user
+    // Save token & user
     localStorage.setItem("token", data.data.token);
     localStorage.setItem("user", JSON.stringify(data.data.user));
 
-    // ✅ Check role
+    // Check role
     const role = data.data.user.role;
-    console.log("👤 User role:", role);
 
     if (role === "admin") {
       router.push(`/${locale}/admin`);
     } else if (role === "seller") {
-      router.push(`/${locale}/seller`);
+      // ✅ Show loading before opening new tab
+      setTimeout(() => {
+        window.open(
+          "https://docs.google.com/forms/d/e/1FAIpQLScrR6wNd8Sn4qsRBZ1-abcmgKqaw-awmc1KAIiBT1gsZ_DqFQ/viewform",
+          "_blank"
+        );
+        setLoading(false); // stop loading after opening tab
+      }, 1000); // 1 second loading delay
     } else if (role === "employee") {
       router.push(`/${locale}/employee`);
     } else {
@@ -62,10 +66,10 @@ export function LoginForm({
     } else {
       setError("An unexpected error occurred");
     }
-  } finally {
     setLoading(false);
   }
 };
+
 
 
   return (
@@ -133,13 +137,13 @@ export function LoginForm({
           </form>
 
           {/* Side Image */}
-          <div className="bg-muted relative hidden md:block">
-            <img
-              src="/placeholder.svg"
-              alt="Image"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
-            />
-          </div>
+        <div className="bg-muted relative hidden md:flex justify-center items-center">
+                    <Image
+                      src={Logo}
+                      alt="Image"
+                      className=" inset-0 h-auto w-[200px] block object-cover dark:brightness-[0.2] dark:grayscale"
+                    />
+                  </div>
         </CardContent>
       </Card>
     </div>

@@ -32,7 +32,7 @@ export function AddAgent({ ondeliveryAdded }: { ondeliveryAdded?: () => void }) 
       const token = localStorage.getItem("token");
 
       const res = await axios.post(
-        "http://localhost:8000/api/delivery-agent/register",
+        "https://cod-ecommerce-two.vercel.app/api/delivery-agent/register",
         { name, email, password, role: "delivery" },
         { headers: { Authorization: `Bearer ${token}` } }
       );

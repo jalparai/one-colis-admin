@@ -1,4 +1,190 @@
 {
   "greeting": "Bonjour",
-  "employees": "Employés"
+  "employees": "Employés",
+  
+ "about_title": "Partenaire avec <span class='text-[#E0B660]'>OneColis</span>",
+  "about_heading": "Réussir ensemble 🚚",
+  "about_paragraph1": "Chez <strong>OneColis</strong>, nous allons au-delà de la logistique. Nous créons des partenariats qui permettent aux vendeurs marocains de commerce électronique de se développer en toute confiance. Du paiement à la livraison fiable au suivi avancé, nous veillons à ce que votre entreprise progresse toujours.",
+  "about_paragraph2": "Simplifions l’expédition, libérons la croissance et construisons l’avenir de la logistique marocaine — ensemble.",
+  "about_button": "Devenir partenaire",
+  
+  
+  "warehouseAlt": "Arrière-plan de l'entrepôt",
+  "accelerateYour": "Accélérez votre",
+  "ecommerce": "E-commerce",
+  "growth": "croissance",
+  "with": "avec",
+  "smartShipping": "livraison intelligente",
+  "technology": "technologie",
+  "cashCollection": "Encaissement garanti",
+  "realTimeTracking": "Suivi en temps réel",
+  "nextDayPayouts": "Paiements le lendemain",
+  "enterTrackingNumber": "Entrez votre numéro de suivi...",
+  "trackNow": "Suivre",
+  "orderId": "Numéro de commande",
+  "status": "Statut",
+  "estimatedDelivery": "Livraison estimée",
+  "location": "Emplacement",
+  "inTransit": "En transit",
+  "orderNotFound": "Commande introuvable. Veuillez vérifier votre numéro.",
+  "shippingProcessTitle": "Processus complet d'expédition",
+  "shippingProcessDescription": "De la création de la commande à l'encaissement – découvrez comment OneColis gère chaque étape de votre expédition",
+  "shippingAlt": "Expédition",
+  "happyCustomers": "Clients satisfaits",
+  "createShipment": "Vous créez l'envoi",
+  "wePickUp": "Nous récupérons",
+  "smartRouting": "Routage intelligent",
+  "liveTracking": "Suivi en direct",
+  "codCollection": "Encaissement à la livraison",
+  "instantNotification": "Notification instantanée",
+  "nextDayPayout": "Paiement le lendemain",
+  "infrastructure": {
+    "title": {
+      "part1": "Infrastructure réelle,",
+      "part2": "Résultats réels"
+    },
+    "subtitle": "Entrepôts physiques, agents de livraison formés et véhicules modernes à travers le Maroc.",
+    "cards": {
+      "warehouses": {
+        "title": "Entrepôts stratégiques",
+        "desc": "Installations climatisées à travers le Maroc"
+      },
+      "fleet": {
+        "title": "Flotte moderne",
+        "desc": "Véhicules suivis par GPS pour une livraison fiable"
+      },
+      "professionals": {
+        "title": "Professionnels qualifiés",
+        "desc": "Agents certifiés pour une collecte COD sécurisée"
+      }
+    },
+    "commitments": {
+      "title": "Nous nous engageons aussi"
+    }
+  },
+  "commitments": {
+    "title": "Nous nous engageons aussi",
+    "items": {
+      "delivery": {
+        "title": "Livraison en 24 heures",
+        "desc": "Nous assurons une livraison le lendemain dans tout le Maroc"
+      },
+      "returns": {
+        "title": "Retours des marchandises",
+        "desc": "Gérez vos retours en ligne en cas d'injoignabilité ou d'annulation"
+      },
+      "exchange": {
+        "title": "Échange de marchandises",
+        "desc": "Nous gérons vos échanges de colis pour une meilleure satisfaction client."
+      },
+      "cash": {
+        "title": "Collecte de paiement & retour des fonds",
+        "desc": "De manière sûre et fluide"
+      },
+      "warehouse": {
+        "title": "Entrepôt & stockage",
+        "desc": "Solution 100% digitale pour gérer vos stocks en toute transparence"
+      }
+    }
+  }
+,
+
+  "shippingSection": {
+    "shipping_title": "Expédition dans tout le Maroc",
+    "shipping_subtitle": "Livraison rapide, fiable et abordable vers toutes les grandes villes.",
+    "dashboard_title": "Tableau de bord et analyses puissants",
+    "dashboard_subtitle": "Aperçus en temps réel et contrôle total de vos opérations de livraison",
+    "order_management": "Gestion des commandes",
+    "active_orders": "Commandes actives",
+    "delivery_rate": "Taux de livraison",
+    "pending_pickup": "En attente de collecte",
+    "in_transit": "En transit",
+    "delivered": "Livré",
+    "financial_overview": "Aperçu financier",
+    "cod_collected": "Paiement à la livraison collecté",
+    "pending_payout": "Paiement en attente",
+    "todays_collection": "Encaissement du jour",
+    "commission_rate": "Taux de commission",
+    "next_payout": "Prochain paiement",
+    "tomorrow": "Demain",
+    "real_time_tracking": "Suivi en temps réel",
+    "real_time_tracking_desc": "Suivi GPS en direct de tous les envois avec notifications clients",
+    "advanced_analytics": "Analyses avancées",
+    "advanced_analytics_desc": "Rapports détaillés sur les performances, les revenus et la satisfaction client",
+    "secure_payments": "Paiements sécurisés",
+    "secure_payments_desc": "Encaissement automatique du paiement à la livraison avec paiements le lendemain et transparence totale"
+  }
+,
+ 
+
+  "whatClientsSay": "Ce que disent nos clients",
+  "testimonialIntro": "Des histoires réelles d'entreprises réelles. Découvrez comment nous avons aidé à transformer la livraison, la trésorerie et la satisfaction des clients de nos partenaires à travers le Maroc.",
+  "scaleBusiness": "Développez votre entreprise",
+
+  "casablancaBoutique": "Casablanca (Boutique de mode)",
+  "agadirArtisan": "Agadir (Produits artisanaux)",
+  "rabatElectronics": "Rabat (Magasin d'électronique)",
+  "fesBeauty": "Fès (Beauté & Cosmétiques)",
+  "tangierHomeDecor": "Tanger (Décoration d'intérieur)",
+  "marrakechHandmade": "Marrakech (Produits faits main)",
+
+  "testimonial1": "Nous sommes passés de 30 à plus de 200 commandes par mois grâce à leurs outils d’expédition groupée. Ce qui prenait 3 heures prend maintenant 15 minutes !",
+  "testimonial2": "Trouver une livraison fiable en contre-remboursement pour les clients ruraux était impossible. Maintenant, nous expédions dans chaque coin du Maroc avec la même confiance que pour les commandes en ville.",
+  "testimonial3": "Avant OneColis, j'attendais des semaines pour les paiements en contre-remboursement. Maintenant, je suis payé le lendemain – ma trésorerie s’est tellement améliorée que j’ai enfin pu embaucher un assistant !",
+  "testimonial4": "Le support client est excellent. Chaque fois que j’ai une question, ils répondent rapidement et efficacement. J’adore travailler avec eux !",
+  "testimonial5": "Les livraisons sont toujours à l’heure et le traitement du contre-remboursement est rapide. Un vrai changement pour les petites entreprises comme la mienne.",
+  "testimonial6": "Nous avons doublé nos commandes mensuelles en 2 mois après le changement. Le tableau de bord analytique est également très utile."
+
+,
+  "faqTitle": "Questions Fréquemment Posées",
+  "faqIntro": "Vous avez des questions ? Nous avons les réponses. Parcourez nos questions les plus fréquentes pour en savoir plus sur nos services, nos politiques et la façon dont nous soutenons votre entreprise à chaque étape.",
+
+  "faq1Q": "À quelle vitesse pouvez-vous livrer les commandes COD à travers le Maroc ?",
+  "faq1A": "Notre routage intelligent permet une livraison en 1 à 2 jours (villes principales) et 2 à 3 jours (au niveau national) – 40 % plus rapide que les transporteurs standards. Les vendeurs de Casablanca bénéficient souvent d'une livraison le jour même !",
+
+  "faq2Q": "Que se passe-t-il si un client refuse une commande COD ?",
+  "faq2A": "Aucun coût pour vous. Nous gérons gratuitement le retour et vous en informons immédiatement. La plupart des colis refusés vous sont retournés en moins de 48 heures.",
+
+  "faq3Q": "Quand recevrai-je mes paiements COD ?",
+  "faq3A": "Dépôts le jour ouvrable suivant sur votre compte bancaire – les plus rapides au Maroc. Suivez chaque dirham en temps réel via votre tableau de bord.",
+
+  "faq4Q": "Puis-je expédier des commandes en gros depuis Shopify ou Jumia ?",
+  "faq4A": "Oui ! Importez automatiquement les commandes depuis les principales plateformes. Notre système traite plus de 100 commandes en moins de 5 minutes avec le téléchargement en masse.",
+
+  "faq5Q": "Qu'est-ce qui rend votre suivi meilleur que celui des concurrents ?",
+  "faq5A": "Les clients reçoivent des alertes WhatsApp/SMS avec GPS et créneaux de livraison en temps réel (pas seulement des messages vagues 'en cours de livraison'). Les vendeurs voient l’emplacement exact du chauffeur."
+
+,
+  "contact": {
+    "title": "Vous avez une question, besoin d'aide ou souhaitez simplement nous contacter ?",
+    "subtitle": "Notre équipe est là pour vous aider. Contactez-nous à tout moment — nous serons ravis de vous répondre et de vous accompagner.",
+    "address": "Ahmed Tower (11ème étage), 28 & 30 Kamal Ataturk Avenue, Banani, Dhaka 1213",
+    "email": "support@autonemo.io",
+    "phone": "8801711506350",
+    "formTitle": "Écrivez-nous",
+    "firstName": "Prénom",
+    "lastName": "Nom",
+    "emailPlaceholder": "Adresse e-mail",
+    "subject": "Sujet",
+    "message": "Message",
+    "send": "Envoyer le message"
+  },
+  "footer": {
+    "about": "À propos",
+    "process": "Processus",
+    "services": "Services",
+    "testimonials": "Témoignages",
+    "pricing": "Tarifs",
+    "faq": "FAQ",
+    "contact": "Contactez-nous",
+    "rights": "© 2025 OneColis. Tous droits réservés."
+  }
+
+,
+"header": {
+  "getStarted": "Commencer"
+}
+,
+  "title_client": "Nos Clients"
+
 }

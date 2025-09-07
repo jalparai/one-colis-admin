@@ -95,7 +95,7 @@ export default function CityTable() {
             onClick={() => goToPage(num)}
             className={`px-3 py-1 rounded-md border ${
               currentPage === num
-                ? "bg-gray-800 text-white border-gray-800"
+                ? "bg-[#2BC3F1] text-white border-[#2BC3F1]"
                 : "border-gray-300 text-gray-700 hover:bg-gray-100"
             }`}
           >
@@ -107,7 +107,7 @@ export default function CityTable() {
           onClick={() => goToPage(currentPage + 1)}
           disabled={currentPage === totalPages}
           className={`px-3 py-1 border rounded-md ${
-            currentPage === totalPages ? "text-gray-400 border-gray-300" : "text-gray-800 border-blue-400 hover:bg-blue-100"
+            currentPage === totalPages ? "text-gray-400 border-gray-300" : "text-[#2BC3F1] border-blue-400 hover:bg-blue-100"
           }`}
         >
           Next

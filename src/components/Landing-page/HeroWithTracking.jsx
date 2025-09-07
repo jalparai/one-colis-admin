@@ -2,23 +2,26 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import warehouseImg from "../../../public/Shipping-track.jpg"; // Replace with your actual image
+import warehouseImg from "../../../public/images/bg-1.jpg";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function HeroWithTracking() {
   const [orderNumber, setOrderNumber] = useState("");
   const [orderDetails, setOrderDetails] = useState(null);
 
+  const { t } = useTranslation("common");
+
   const handleTrackOrder = () => {
     if (orderNumber === "12345") {
       setOrderDetails({
         orderId: "12345",
-        status: "In Transit",
+        status: t("inTransit"),
         estimatedDelivery: "Sep 10, 2025",
         location: "Casablanca, Morocco",
       });
     } else {
-      setOrderDetails({ error: "Order not found. Please check your number." });
+      setOrderDetails({ error: t("orderNotFound") });
     }
   };
 
@@ -27,7 +30,7 @@ export default function HeroWithTracking() {
       {/* Background Image */}
       <Image
         src={warehouseImg}
-        alt="Warehouse Background"
+        alt={t("warehouseAlt")}
         fill
         className="object-cover z-0"
         priority
@@ -38,18 +41,18 @@ export default function HeroWithTracking() {
       <div className="relative z-20 container mx-auto px-4 flex flex-col items-center justify-center text-center h-full">
         {/* Headline */}
         <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
-          Accelerate Your{" "}
-          <span className="text-sky-400">E-commerce</span> Growth <br />
-          With <span className="text-[#dbb160]">Smart Shipping</span> Technology
+          {t("accelerateYour")}{" "}
+          <span className="text-sky-400">{t("ecommerce")}</span> {t("growth")} <br />
+          {t("with")} <span className="text-[#dbb160]">{t("smartShipping")}</span> {t("technology")}
         </h1>
 
         {/* Feature Highlights */}
         <div className="flex flex-wrap justify-center items-center gap-4 text-white font-medium text-sm mb-8">
-          <span>📦 Guaranteed Cash Collection</span>
+          <span>📦 {t("cashCollection")}</span>
           <span className="text-gray-400">|</span>
-          <span>📲 Real-Time Tracking</span>
+          <span>📲 {t("realTimeTracking")}</span>
           <span className="text-gray-400">|</span>
-          <span>💰 Next-Day Payouts</span>
+          <span>💰 {t("nextDayPayouts")}</span>
         </div>
 
         {/* Tracking Bar */}
@@ -58,7 +61,7 @@ export default function HeroWithTracking() {
             type="text"
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
-            placeholder="Enter your tracking number..."
+            placeholder={t("enterTrackingNumber")}
             className="flex-1 bg-transparent px-5 py-3 text-white placeholder-gray-300 focus:outline-none"
           />
           <button
@@ -66,7 +69,7 @@ export default function HeroWithTracking() {
             className="bg-[#2BC3F1] hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition"
           >
             <Search className="w-4 h-4" />
-            Track now
+            {t("trackNow")}
           </button>
         </div>
 
@@ -77,17 +80,25 @@ export default function HeroWithTracking() {
               <p className="text-red-600 font-medium">{orderDetails.error}</p>
             ) : (
               <>
-                <p><strong>Order ID:</strong> {orderDetails.orderId}</p>
-                <p><strong>Status:</strong> {orderDetails.status}</p>
-                <p><strong>Estimated Delivery:</strong> {orderDetails.estimatedDelivery}</p>
-                <p><strong>Location:</strong> {orderDetails.location}</p>
+                <p>
+                  <strong>{t("orderId")}:</strong> {orderDetails.orderId}
+                </p>
+                <p>
+                  <strong>{t("status")}:</strong> {orderDetails.status}
+                </p>
+                <p>
+                  <strong>{t("estimatedDelivery")}:</strong> {orderDetails.estimatedDelivery}
+                </p>
+                <p>
+                  <strong>{t("location")}:</strong> {orderDetails.location}
+                </p>
               </>
             )}
           </div>
         )}
       </div>
 
-      {/* Optional Bottom Wave Overlay (using CSS or SVG) */}
+      {/* Optional Bottom Wave Overlay */}
       <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0] rotate-180 z-20">
         <svg
           className="relative block w-[calc(130%+1.3px)] h-[100px]"
@@ -97,7 +108,7 @@ export default function HeroWithTracking() {
         >
           <path
             d="M0,0V46.29c47.3,22,104,39.57,166,39.57,89.09,0,172.63-43.94,261-43.94,57.59,0,113,19.78,168,35.14,70,19,136.43,26.74,206,5.82,61.46-18.3,119.6-46.72,185-57.91V0Z"
-            fill="#0f172a"
+            fill="#2BC3F1"
           ></path>
         </svg>
       </div>
