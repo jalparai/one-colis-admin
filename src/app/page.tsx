@@ -7,7 +7,7 @@ export default function RedirectToDefaultLocale() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/en'); // Change to your default language
+    router.replace('/en'); // Default locale
   }, [router]);
 
   return null;
