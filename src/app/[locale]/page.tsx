@@ -48,16 +48,14 @@ import { notFound } from 'next/navigation';
 import FAQ from '@/components/Landing-page/Faqs';
 import AboutSection from '@/components/Landing-page/AboutSection';
 import ProcessSection from '@/components/Landing-page/ProcessSection';
-
 export default function HomePage({ params }: { params: { locale: string } }) {
   const locale = params.locale;
 
-  if (!['en', 'fr', 'ar'].includes(locale)) {
+  if (!["en", "fr", "ar"].includes(locale)) {
     notFound();
   }
 
-  const { t } = useTranslation('common'); // your translation hook
-
+  const { t } = useTranslation("common");
   
 
 const commitments = [
