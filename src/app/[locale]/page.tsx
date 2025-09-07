@@ -47,10 +47,10 @@ import FAQ from '@/components/Landing-page/Faqs';
 import AboutSection from '@/components/Landing-page/AboutSection';
 import ProcessSection from '@/components/Landing-page/ProcessSection';
 
-export default function HomePage({params}) {
+export default function HomePage({ params }: { params: { locale: string } }) {
   const locale = params.locale;
 
-  // Optional: validate locale, if invalid call notFound()
+  // ✅ Optional: validate locale
   if (!['en', 'fr', 'ar'].includes(locale)) {
     notFound();
   }
@@ -451,7 +451,7 @@ const commitments = [
         width="100%"
         height="500"
         style={{ border: 0 }}
-        allowFullScreen=""
+        // allowFullScreen=""
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
         className="rounded-lg shadow-md"
