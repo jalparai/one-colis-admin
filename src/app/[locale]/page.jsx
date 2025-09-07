@@ -56,13 +56,7 @@ export default function HomePage({params}) {
   }
 
   const { t } = useTranslation('common');
-  //   const [ready, setReady] = useState(false);
 
-  // useEffect(() => {
-  //   setReady(true);
-  // }, []);
-
-  // if (!ready) return null; // or a loading placeholder
 const commitments = [
   {
     icon: <Truck className="h-6 w-6 text-[#E0B660]" />,
