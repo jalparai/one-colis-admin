@@ -47,9 +47,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-
-import { EditAgent } from "./edit-agent"
-import { AddAgent } from "./add-agent"
+import { AddPayout } from "./Add-Payout"
+import { EditPayout } from "./Edit-Payout"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -58,7 +57,7 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export type delivery = {
+export type Payout = {
   _id: string
   name: string
   email: string
@@ -66,7 +65,7 @@ export type delivery = {
   createdAt: string
 }
 
-export const columns: ColumnDef<delivery>[] = [
+export const columns: ColumnDef<Payout>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -132,7 +131,7 @@ export const columns: ColumnDef<delivery>[] = [
   id: "actions",
   enableHiding: false,
   cell: ({ row, table }) => {
-    const delivery = row.original
+    const Payout = row.original
     const [editOpen, setEditOpen] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [loading, setLoading] = React.useState(false)
@@ -142,13 +141,13 @@ export const columns: ColumnDef<delivery>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `https://cod-ecommerce-two.vercel.app/api/delivery-agent/${delivery._id}`,
+          `https://cod-ecommerce-two.vercel.app/api/payout-manager/${Payout._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)
         table.options.meta?.refresh?.()
       } catch (err) {
-        console.error("❌ Failed to delete delivery", err)
+        console.error("❌ Failed to delete Payout", err)
       } finally {
         setLoading(false)
       }
@@ -176,8 +175,8 @@ export const columns: ColumnDef<delivery>[] = [
         </DropdownMenu>
 
         {/* ✏️ Edit modal */}
-        <EditAgent
-          delivery={delivery}
+        <EditPayout
+          Payout={Payout}
           open={editOpen}
           onClose={() => setEditOpen(false)}
           onUpdated={table.options.meta?.refresh || (() => {})}
@@ -188,10 +187,10 @@ export const columns: ColumnDef<delivery>[] = [
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Delete {delivery.name}?
+                Delete {Payout.name}?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. The delivery will be permanently
+                This action cannot be undone. The Payout will be permanently
                 removed from the system.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -214,34 +213,34 @@ export const columns: ColumnDef<delivery>[] = [
 
 ]
 
-export function DeliveryTable() {
-  const [deliverys, setdeliverys] = React.useState<delivery[]>([])
+export function PayoutTable() {
+  const [Payouts, setPayouts] = React.useState<Payout[]>([])
   const [loading, setLoading] = React.useState(true)
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
 
-  const fetchdeliverys = React.useCallback(async () => {
+  const fetchPayouts = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/delivery-agent/", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/payout-manager", {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setdeliverys(res.data.data || [])
+      setPayouts(res.data.data || [])
     } catch (err) {
-      console.error("Error fetching deliverys:", err)
+      console.error("Error fetching Payouts:", err)
     } finally {
       setLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    fetchdeliverys()
-  }, [fetchdeliverys])
+    fetchPayouts()
+  }, [fetchPayouts])
 
   const table = useReactTable({
-    data: deliverys,
+    data: Payouts,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -252,10 +251,10 @@ export function DeliveryTable() {
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
-    meta: { refresh: fetchdeliverys },
+    meta: { refresh: fetchPayouts },
   })
 
-  if (loading) return <p className="p-4">Loading deliverys...</p>
+  if (loading) return <p className="p-4">Loading Payouts...</p>
 
   return (
     <div className="w-full">
@@ -270,7 +269,7 @@ export function DeliveryTable() {
           className="max-w-sm"
         />
         <div className="flex gap-2">
-          <AddAgent ondeliveryAdded={fetchdeliverys} />
+          <AddPayout onPayoutAdded={fetchPayouts} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -329,7 +328,7 @@ export function DeliveryTable() {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No deliverys found.
+                  No Payouts found.
                 </TableCell>
               </TableRow>
             )}

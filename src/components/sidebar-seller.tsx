@@ -21,7 +21,7 @@ import Logo from "../../public/images/One-Colis.png"
 import Link from "next/link"
 import { cn } from "@/lib/utils" 
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const params = useParams()
   const pathname = usePathname()
   const locale = params.locale as string 
@@ -42,22 +42,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         title: "Seller",
         url: `/${locale}/admin/Seller`,
         icon: IconListDetails,
-      },
-      {
-        title: "Ware House",
-        url: `/${locale}/admin/Warehouses`,
-        icon: IconChartBar,
-      },
-      {
-        title: "Delivery Agents",
-        url: `/${locale}/admin/Delivery-Agents`,
-        icon: IconFolder,
-      },
-      {
-        title: "Payout Management",
-        url: `/${locale}/admin/Payout-manager`,
-        icon: IconUsers,
-      },
+      }
     ],
   }
 
