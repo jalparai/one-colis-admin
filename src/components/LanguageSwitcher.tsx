@@ -1,7 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-import { useParams } from 'next/navigation';
+import { usePathname, useRouter, useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
@@ -34,17 +33,18 @@ export default function LanguageSwitcher() {
       {/* Button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center bg-white px-4 py-2 rounded-full shadow-md hover:shadow-lg transition-all gap-2 min-w-[140px]"
+        className="flex items-center bg-white px-2 py-2 rounded-full shadow-md hover:shadow-lg transition-all gap-2 min-w-[40px] lg:min-w-[140px] lg:px-4"
       >
         <Image
           src={current.flag}
           alt={current.label}
-          width={20}
-          height={20}
-          className="rounded-full"
+          width={30}
+          height={30}
+          className="rounded-sm"
         />
-        <span className="text-gray-800 font-medium">{current.label}</span>
-        <ChevronDown className="w-4 h-4 text-gray-600" />
+        {/* Hide label & arrow on mobile */}
+        <span className="hidden lg:inline text-gray-800 font-medium">{current.label}</span>
+        <ChevronDown className="hidden lg:inline w-4 h-4 text-gray-600" />
       </button>
 
       {/* Dropdown */}
@@ -58,18 +58,19 @@ export default function LanguageSwitcher() {
                 switchLanguage(locale.code);
               }}
               disabled={locale.code === currentLocale}
-              className={`flex items-center w-full px-4 py-2 text-sm gap-2 hover:bg-gray-100 transition ${
+              className={`flex items-center w-full lg:px-4 justify-center lg:py-2 py-1 text-sm gap-2 hover:bg-gray-100 transition ${
                 locale.code === currentLocale ? 'text-gray-400 cursor-not-allowed' : 'text-gray-800'
               }`}
             >
-              <Image
-                src={locale.flag}
-                alt={locale.label}
-                width={18}
-                height={18}
-                className="rounded-full"
-              />
-              {locale.label}
+          <Image
+  src={locale.flag}
+  alt={locale.label}
+  width={24}  // default mobile size
+  height={24}
+  className="rounded-sm lg:w-[18px] lg:h-[18px]"
+/>
+
+              <span className="hidden lg:inline">{locale.label}</span>
             </button>
           ))}
         </div>

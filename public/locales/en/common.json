@@ -185,7 +185,7 @@
 
 ,
 "header": {
-  "getStarted": "Get Started"
+  "getStarted": "Register"
 }
 ,
 
@@ -193,8 +193,10 @@
 
 
 
-    "title_client": "Our Clients"
-
-
-
+    "title_client": "Our Clients",
+   "thankYouPage": {
+    "title": "Thank You for Signing Up!",
+    "message": "Our team will contact you soon. We appreciate your trust in us.",
+    "backToHome": "Back to Home"
+  }
 }

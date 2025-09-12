@@ -114,11 +114,33 @@ export const columns: ColumnDef<seller>[] = [
     ),
     cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
   },
+
   {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => <div>{row.getValue("role")}</div>,
-  },
+  accessorKey: "phoneNumber",
+  header: "Phone Number",
+  cell: ({ row }) => <div>{row.getValue("phoneNumber")}</div>,
+},
+{
+  accessorKey: "storeName",
+  header: "Store Name",
+  cell: ({ row }) => <div>{row.getValue("storeName")}</div>,
+},
+{
+  accessorKey: "estimatedMonthlyOrders",
+  header: "Est. Monthly Orders",
+  cell: ({ row }) => <div>{row.getValue("estimatedMonthlyOrders")}</div>,
+},
+{
+  accessorKey: "isCurrentlySellingOnline",
+  header: "Selling Online?",
+  cell: ({ row }) =>
+    row.getValue("isCurrentlySellingOnline") ? (
+      <span className="text-green-600 font-medium">Yes</span>
+    ) : (
+      <span className="text-red-600 font-medium">No</span>
+    ),
+},
+
   {
     accessorKey: "createdAt",
     header: "Registered Date",
@@ -141,7 +163,7 @@ export const columns: ColumnDef<seller>[] = [
         setLoading(true)
         const token = localStorage.getItem("token")
         await axios.delete(
-          `http://localhost:8000/api/admin/delete-seller/${seller._id}`,
+          `https://cod-ecommerce-two.vercel.app/api/admin/delete-seller/${seller._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
         setDeleteOpen(false)

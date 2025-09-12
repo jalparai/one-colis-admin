@@ -8,39 +8,29 @@ export default function ClientTestimonials() {
 
   const testimonials = [
     {
-      name: "Salma T",
+      name: "Ali M",
       role: t("casablancaBoutique"),
       image: "/client-profile-1.png",
       text: t("testimonial1"),
     },
-    {
-      name: "Ahmed S.",
-      role: t("agadirArtisan"),
-      image: "/client-profile-2.png",
-      text: t("testimonial2"),
-    },
+   
     {
       name: "Youssef L",
       role: t("rabatElectronics"),
-      image: "/client-profile-3.png",
+      image: "/client-profile-4.jpg",
       text: t("testimonial3"),
     },
+   
     {
-      name: "Nadia B",
-      role: t("fesBeauty"),
-      image: "/client-profile-2.png",
-      text: t("testimonial4"),
-    },
-    {
-      name: "Karim E.",
+      name: "John.",
       role: t("tangierHomeDecor"),
-      image: "/client-profile-2.png",
+      image: "/client-profile-6.jpg",
       text: t("testimonial5"),
     },
     {
       name: "Laila M",
       role: t("marrakechHandmade"),
-      image: "/client-profile-2.png",
+      image: "/client-profile-5.jpg",
       text: t("testimonial6"),
     },
   ];
@@ -66,13 +56,16 @@ export default function ClientTestimonials() {
                 className="bg-white rounded-xl border border-gray-100 p-6 w-[320px] flex-shrink-0 relative"
               >
                 <div className="flex items-center mb-4">
-                  <Image
-                    src={tData.image}
-                    alt={tData.name}
-                    width={50}
-                    height={50}
-                    className="rounded-full object-cover mr-4"
-                  />
+              <div className="w-12 h-12 mr-4 rounded-full overflow-hidden flex-shrink-0">
+  <Image
+    src={tData.image}
+    alt={tData.name}
+    width={48}
+    height={48}
+    className="w-full h-full object-cover"
+  />
+</div>
+
                   <div className="text-left">
                     <p className="font-semibold text-gray-900">{tData.name}</p>
                     <p className="text-sm text-gray-500">{tData.role}</p>

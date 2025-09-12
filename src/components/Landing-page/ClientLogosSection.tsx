@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useTranslation } from "react-i18next";
 
 const logos = [
-  "/client-1.png",
+  "/client.png",
   "/client-2.png",
   "/client-3.png",
   "/client-4.png",

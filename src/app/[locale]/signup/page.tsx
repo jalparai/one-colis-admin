@@ -1,5 +1,12 @@
-import "../globals.css"
+import "../../globals.css"
 import { SignupForm } from "@/components/signup-form"
+export async function generateStaticParams() {
+  return [
+    { locale: "en" },
+    { locale: "fr" },
+      { locale: "ar" },
+  ];
+}
 export default function SIgnupPage() {
   return (
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center p-6 md:p-10">

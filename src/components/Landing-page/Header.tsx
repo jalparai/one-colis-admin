@@ -26,7 +26,7 @@ export default function Header() {
               className="h-10 w-10 lg:h-16 lg:w-auto"
               priority
             />
-            <h1 className="ml-2 lg:text-3xl text-xl font-bold tracking-wide">
+            <h1 className="lg:ml-2 lg:text-3xl text-xl font-bold tracking-wide">
               <span className="text-[#2BC3F1]">One</span>
               <span className="text-[#E0B660]">Colis</span>
             </h1>
@@ -50,17 +50,19 @@ export default function Header() {
               {t("footer.contact")}
             </a>
           </nav>
-
-          {/* CTA Button (lg and up) */}
+<div className="flex gap-2">
+ {/* CTA Button (lg and up) */}
           <Link
             href={`/${locale}/signup`}
-            className="bg-[#2BC3F1] hover:bg-sky-400 hidden lg:inline-block text-white px-4 lg:px-6 py-2 lg:py-3 rounded-full font-semibold transition"
+            className="bg-[#2BC3F1] hover:bg-sky-400 text-[14px] lg:text-[16px] inline-block text-white px-3 lg:px-6 py-2 lg:py-2 rounded-full font-semibold transition"
           >
             {t("header.getStarted", "Get Started")}
           </Link>
 
           {/* Language Switcher */}
           <LanguageSwitcher />
+</div>
+         
 
           {/* Mobile Menu Button (below lg) */}
           <button
@@ -92,13 +94,13 @@ export default function Header() {
               </a>
 
               {/* CTA inside mobile menu */}
-              <Link
+              {/* <Link
                 href={`/${locale}/signup`}
                 onClick={() => setIsOpen(false)}
                 className="bg-[#2BC3F1] hover:bg-sky-600 text-white px-6 py-3 rounded-full font-semibold text-center transition"
               >
                 {t("header.getStarted", "Get Started")}
-              </Link>
+              </Link> */}
             </nav>
           </div>
         )}

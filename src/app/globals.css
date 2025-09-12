@@ -122,26 +122,28 @@
 }
 
 
-.bgImg{
-  background-image: url(../../../public/images/bg-1.jpg);
+.bgImg {
+  background-image: url('/public/images/bg-1.jpg');
   width: 100%;
   background-repeat: no-repeat;
   background-size: cover;
 }
+
 html {
   scroll-behavior: smooth;
 }
-.bgImage{
-   background-image: url(../../../public/tracker.jpg);
+
+.bgImage {
+  background-image: url('/public/tracker.jpg');
   width: 100%;
   background-repeat: no-repeat;
   background-size: cover;
 }
-.bgCityTable{
-    background-image: url(../../../public/city-table.jpeg);
+
+.bgCityTable {
+  background-image: url('/public/city-table.jpeg');
   width: 100%;
- background-size: 100% auto;  /* 100% width, automatic height */
+  background-size: 100% auto; /* 100% width, automatic height */
   background-repeat: no-repeat;
   background-position: top right center;
-
 }

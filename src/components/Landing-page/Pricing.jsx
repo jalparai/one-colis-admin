@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from "react";
 
 const cityData = [
   { city: "El Helhal", book: "30.00 Dh", back: "0.00 Dh" },
@@ -20,8 +20,12 @@ export default function CityTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  const filteredCities = cityData.filter(({ city }) =>
-    city.toLowerCase().includes(search.toLowerCase())
+  const filteredCities = useMemo(
+    () =>
+      cityData.filter(({ city }) =>
+        city.toLowerCase().includes(search.toLowerCase())
+      ),
+    [search]
   );
 
   const totalPages = Math.ceil(filteredCities.length / itemsPerPage);
@@ -29,33 +33,26 @@ export default function CityTable() {
   const currentCities = filteredCities.slice(startIndex, startIndex + itemsPerPage);
 
   const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
-  };
-
-  const handleSearch = (e) => {
-    setSearch(e.target.value);
-    setCurrentPage(1);
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
   return (
     <div className="lg:w-[70%] mt-10 p-6 bg-white rounded-sm shadow-md">
-    
       <input
         type="text"
         placeholder="Search for a city"
         value={search}
-        onChange={handleSearch}
+        onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
         className="w-full px-4 py-2 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+        aria-label="Search for a city"
       />
 
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b text-gray-800 font-semibold">
-            <th className="py-2">City</th>
-            <th className="py-2">Book</th>
-            <th className="py-2">Back</th>
+            <th scope="col" className="py-2">City</th>
+            <th scope="col" className="py-2">Book</th>
+            <th scope="col" className="py-2">Back</th>
           </tr>
         </thead>
         <tbody>
