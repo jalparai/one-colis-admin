@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -9,7 +9,7 @@ import warehouseImg from "../../../public/images/bg-1.jpg";
 export default function HeroWithTracking() {
   const [orderNumber, setOrderNumber] = useState("");
   const [orderDetails, setOrderDetails] = useState(null);
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
 
   // Simulated tracking API
   const handleTrackOrder = () => {
@@ -25,8 +25,13 @@ export default function HeroWithTracking() {
     }
   };
 
+  const isArabic = i18n.language === "ar";
+
   return (
-    <section className="relative h-[90vh] w-full overflow-hidden text-white">
+    <section
+      className="relative h-[90vh] w-full overflow-hidden text-white"
+      dir={isArabic ? "rtl" : "ltr"}
+    >
       {/* Background Image */}
       <Image
         src={warehouseImg}
@@ -39,16 +44,40 @@ export default function HeroWithTracking() {
       <div className="absolute inset-0 bg-black/40 z-10" />
 
       {/* Content */}
-      <div className="relative z-20 container mx-auto px-4 flex flex-col items-center justify-center text-center h-full">
-        {/* Headline */}
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
-          {t("accelerateYour")}{" "}
-          <span className="text-sky-400">{t("ecommerce")}</span> {t("growth")} <br />
-          {t("with")} <span className="text-[#dbb160]">{t("smartShipping")}</span> {t("technology")}
-        </h1>
+      <div
+        className={`relative z-20 container mx-auto px-4 flex flex-col items-center justify-center text-center h-full ${
+          isArabic ? "text-center" : "text-center"
+        }`}
+      >
+{/* <h1
+  className="text-3xl md:text-5xl text-white font-bold mb-2 leading-tight lg:w-[60%]"
+  // dir={i18n.language === "ar" ? "rtl" : "ltr"}
+>
+ {t("accelerateYour")}
+  
+  <span>{t("accelerateYour")} </span>
+  <span className="text-[#2BC3F1]">{t("growth")} </span>
+  <span className="text-[#E0B660]">{t("ecommerce")} </span>
+  <span>{t("smartShipping")}</span>
+</h1> */}
+
+<h1
+  className="text-3xl md:text-5xl font-bold mb-2 leading-tight lg:w-[60%]"
+  dangerouslySetInnerHTML={{
+    __html: t("accelerateYour"),
+  }}
+/>
+
+
+     {/* <h2 className="text-2xl md:text-3xl font-semibold mb-4 leading-snug"> {t("with")}{" "} 
+     <span className="text-[#dbb160]">{t("smartShipping")}</span> {t("technology")} </h2> */}
 
         {/* Feature Highlights */}
-        <div className="flex flex-wrap justify-center items-center gap-4 text-white font-medium text-sm lg:mb-8 mb-5">
+        <div
+          className={`flex flex-wrap items-center gap-4 text-white font-medium text-sm lg:mb-8 mb-5 ${
+            isArabic ? "justify-end" : "justify-center"
+          }`}
+        >
           <span>📦 {t("cashCollection")}</span>
           <span className="text-gray-400">|</span>
           <span>📲 {t("realTimeTracking")}</span>
@@ -77,41 +106,43 @@ export default function HeroWithTracking() {
         </div>
 
         {/* Tracking Result */}
-        {orderDetails && (
-          <TrackingResult orderDetails={orderDetails} />
-        )}
+        {orderDetails && <TrackingResult orderDetails={orderDetails} />}
       </div>
 
       {/* Bottom Wave Overlay */}
-      <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0] rotate-180 z-20">
-        <svg
-          className="relative block w-[calc(130%+1.3px)] h-[100px] bottom-[10px]"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 1200 120"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M0,0V46.29c47.3,22,104,39.57,166,39.57,89.09,0,172.63-43.94,261-43.94,57.59,0,113,19.78,168,35.14,70,19,136.43,26.74,206,5.82,61.46-18.3,119.6-46.72,185-57.91V0Z"
-            fill="#2BC3F1"
-          ></path>
-        </svg>
-      </div>
+    {/* <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0] rotate-180 z-20 lg:block hidden"> <svg className="relative block w-[calc(130%+1.3px)] h-[100px] bottom-[10px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none" > <path d="M0,0V46.29c47.3,22,104,39.57,166,39.57,89.09,0,172.63-43.94,261-43.94,57.59,0,113,19.78,168,35.14,70,19,136.43,26.74,206,5.82,61.46-18.3,119.6-46.72,185-57.91V0Z" fill="#2BC3F1" ></path> </svg> </div> */}
     </section>
   );
 }
 
 function TrackingResult({ orderDetails }) {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const isArabic = i18n.language === "ar";
+
   return (
-    <div className="mt-6 bg-white/90 text-gray-800 p-4 rounded-md shadow-sm max-w-md w-full text-left animate-fadeIn">
+    <div
+      className={`mt-6 bg-white/90 text-gray-800 p-4 rounded-md shadow-sm max-w-md w-full animate-fadeIn ${
+        isArabic ? "text-right" : "text-left"
+      }`}
+      dir={isArabic ? "rtl" : "ltr"}
+    >
       {orderDetails.error ? (
         <p className="text-red-600 font-medium">{orderDetails.error}</p>
       ) : (
         <>
-          <p><strong>{t("orderId")}:</strong> {orderDetails.orderId}</p>
-          <p><strong>{t("status")}:</strong> {orderDetails.status}</p>
-          <p><strong>{t("estimatedDelivery")}:</strong> {orderDetails.estimatedDelivery}</p>
-          <p><strong>{t("location")}:</strong> {orderDetails.location}</p>
+          <p>
+            <strong>{t("orderId")}:</strong> {orderDetails.orderId}
+          </p>
+          <p>
+            <strong>{t("status")}:</strong> {orderDetails.status}
+          </p>
+          <p>
+            <strong>{t("estimatedDelivery")}:</strong>{" "}
+            {orderDetails.estimatedDelivery}
+          </p>
+          <p>
+            <strong>{t("location")}:</strong> {orderDetails.location}
+          </p>
         </>
       )}
     </div>

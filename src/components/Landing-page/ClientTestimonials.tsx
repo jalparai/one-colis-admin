@@ -22,7 +22,7 @@ export default function ClientTestimonials() {
     },
    
     {
-      name: "John.",
+      name: "William",
       role: t("tangierHomeDecor"),
       image: "/client-profile-6.jpg",
       text: t("testimonial5"),

@@ -35,12 +35,12 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
     navMain: [
       {
         title: "Employee",
-        url: `/${locale}/admin/Employees`,
+        url: `/${locale}/seller/Employees`,
         icon: IconDashboard,
       },
       {
         title: "Seller",
-        url: `/${locale}/admin/Seller`,
+        url: `/${locale}/seller/Seller`,
         icon: IconListDetails,
       }
     ],
@@ -82,7 +82,7 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
 
       {/* ✅ Footer with user info */}
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

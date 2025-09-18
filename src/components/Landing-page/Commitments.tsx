@@ -65,7 +65,7 @@ const commitments = [
   },
 ];
   return (
-    <section className="p-6 pb-10 md:px-8 bg-[#2BC3F1]">
+    <section className="py-16 pb-10 md:px-8 px-3 bg-[#2BC3F1]" id="service">
           <div className="max-w-7xl mx-auto">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6 text-center">
               {t("infrastructure.commitments.title")}

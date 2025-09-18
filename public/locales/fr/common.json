@@ -2,60 +2,56 @@
   "greeting": "Bonjour",
   "employees": "Employés",
   
- "about_title": "Partenaire avec <span class='text-[#E0B660]'>OneColis</span>",
-  "about_heading": "Réussir ensemble 🚚",
-  "about_paragraph1": "Chez <strong>OneColis</strong>, nous allons au-delà de la logistique. Nous créons des partenariats qui permettent aux vendeurs marocains de commerce électronique de se développer en toute confiance. Du paiement à la livraison fiable au suivi avancé, nous veillons à ce que votre entreprise progresse toujours.",
-  "about_paragraph2": "Simplifions l’expédition, libérons la croissance et construisons l’avenir de la logistique marocaine — ensemble.",
-  "about_button": "Devenir partenaire",
+"about_heading": "Devenez partenaire avec OneColis",
+  "about_title": "Devenez partenaire avec <span class='text-[#E0B660]'>OneColis</span>",
+  "about_paragraph1": "Chez OneColis, nous allons au-delà de la logistique. Nous créons des partenariats qui permettent aux vendeurs de commerce électronique marocains de se développer en toute confiance. Du paiement à la livraison fiable au suivi avancé, nous veillons à ce que votre entreprise avance toujours.",
+  "about_paragraph2": "Simplifions l’expédition, libérons la croissance et construisons l’avenir de la logistique marocaine ensemble.",
+  "about_button": "Contactez-nous",
   
   
-  "warehouseAlt": "Arrière-plan de l'entrepôt",
-  "accelerateYour": "Accélérez votre",
-  "ecommerce": "E-commerce",
-  "growth": "croissance",
-  "with": "avec",
-  "smartShipping": "livraison intelligente",
-  "technology": "technologie",
-  "cashCollection": "Encaissement garanti",
+   "accelerateYour": "<span class='text-[#2BC3F1]'>Accélérez</span> la croissance de votre E-commerce avec une <span class='text-[#E0B660]'>technologie d'expédition intelligente</span>",
+  "cashCollection": "Collecte d'argent garantie",
   "realTimeTracking": "Suivi en temps réel",
   "nextDayPayouts": "Paiements le lendemain",
   "enterTrackingNumber": "Entrez votre numéro de suivi...",
-  "trackNow": "Suivre",
-  "orderId": "Numéro de commande",
+  "trackNow": "Suivre maintenant",
+  "orderId": "ID de commande",
   "status": "Statut",
   "estimatedDelivery": "Livraison estimée",
-  "location": "Emplacement",
+  "location": "Localisation",
   "inTransit": "En transit",
   "orderNotFound": "Commande introuvable. Veuillez vérifier votre numéro.",
-  "shippingProcessTitle": "Processus complet d'expédition",
-  "shippingProcessDescription": "De la création de la commande à l'encaissement – découvrez comment OneColis gère chaque étape de votre expédition",
-  "shippingAlt": "Expédition",
-  "happyCustomers": "Clients satisfaits",
-  "createShipment": "Vous créez l'envoi",
-  "wePickUp": "Nous récupérons",
-  "smartRouting": "Routage intelligent",
-  "liveTracking": "Suivi en direct",
-  "codCollection": "Encaissement à la livraison",
+  "warehouseAlt": "Image de fond d'entrepôt",
+ "shippingProcessTitle": "Processus d’expédition complet",
+  "shippingProcessDescription": "De la création de la commande à l’argent en main, découvrez comment OneColis gère chaque étape de votre parcours d’expédition",
+  "shippingAlt": "Processus d’expédition",
   "instantNotification": "Notification instantanée",
+  "codCollection": "Collecte du paiement à la livraison",
   "nextDayPayout": "Paiement le lendemain",
+  "liveTracking": "Suivi en direct",
+  "happyCustomers": "Clients satisfaits",
+  "smartRouting": "Routage intelligent",
+  "createShipment": "Vous créez l’expédition",
+  "wePickUp": "Nous récupérons",
+
   "infrastructure": {
-    "title": {
+  "title": {
       "part1": "Infrastructure réelle,",
-      "part2": "Résultats réels"
+      "part2": " résultats réels"
     },
     "subtitle": "Entrepôts physiques, agents de livraison formés et véhicules modernes à travers le Maroc.",
     "cards": {
       "warehouses": {
         "title": "Entrepôts stratégiques",
-        "desc": "Installations climatisées à travers le Maroc"
+        "desc": "Installations à climat contrôlé à travers le Maroc"
       },
       "fleet": {
         "title": "Flotte moderne",
         "desc": "Véhicules suivis par GPS pour une livraison fiable"
       },
       "professionals": {
-        "title": "Professionnels qualifiés",
-        "desc": "Agents certifiés pour une collecte COD sécurisée"
+        "title": "Professionnels formés",
+        "desc": "Agents certifiés pour une collecte sécurisée du paiement à la livraison"
       }
     },
     "commitments": {
@@ -91,28 +87,31 @@
 
   "shippingSection": {
     "shipping_title": "Expédition dans tout le Maroc",
-    "shipping_subtitle": "Livraison rapide, fiable et abordable vers toutes les grandes villes.",
-    "dashboard_title": "Tableau de bord et analyses puissants",
-    "dashboard_subtitle": "Aperçus en temps réel et contrôle total de vos opérations de livraison",
+    "shipping_subtitle": "Livraison rapide, fiable et abordable dans chaque ville",
+    "dashboard_title": "Ville",
+    "dashboard_subtitle": "Livré",
     "order_management": "Gestion des commandes",
     "active_orders": "Commandes actives",
     "delivery_rate": "Taux de livraison",
-    "pending_pickup": "En attente de collecte",
+    "pending_pickup": "En attente de ramassage",
     "in_transit": "En transit",
     "delivered": "Livré",
-    "financial_overview": "Aperçu financier",
+    "financial_overview": "Vue d'ensemble financière",
     "cod_collected": "Paiement à la livraison collecté",
     "pending_payout": "Paiement en attente",
-    "todays_collection": "Encaissement du jour",
+    "todays_collection": "Collecte du jour",
     "commission_rate": "Taux de commission",
     "next_payout": "Prochain paiement",
     "tomorrow": "Demain",
     "real_time_tracking": "Suivi en temps réel",
-    "real_time_tracking_desc": "Suivi GPS en direct de tous les envois avec notifications clients",
+    "real_time_tracking_desc": "Suivez chaque expédition en temps réel avec des mises à jour détaillées",
     "advanced_analytics": "Analyses avancées",
-    "advanced_analytics_desc": "Rapports détaillés sur les performances, les revenus et la satisfaction client",
+    "advanced_analytics_desc": "Prenez des décisions éclairées avec des tableaux de bord puissants",
     "secure_payments": "Paiements sécurisés",
-    "secure_payments_desc": "Encaissement automatique du paiement à la livraison avec paiements le lendemain et transparence totale"
+    "secure_payments_desc": "Votre argent est toujours en sécurité avec des paiements le lendemain",
+    "table_city": "Ville",
+    "table_delivered": "Livré",
+    "table_returned": "Retourné"
   }
 ,
  
@@ -160,7 +159,7 @@
     "subtitle": "Notre équipe est là pour vous aider. Contactez-nous à tout moment — nous serons ravis de vous répondre et de vous accompagner.",
     "address": "E49 Magasin 3 Lot Riad Zitoun TR/B Meknès",
     "email": "contact@onecolis.net",
-    "phone": "0653746612",
+    "phone": "0772786048 | 0772786247",
     "formTitle": "Écrivez-nous",
     "firstName": "Prénom",
     "lastName": "Nom",
@@ -185,6 +184,61 @@
   "getStarted": "S’inscrire"
 }
 ,
-  "title_client": "Nos Clients"
+  "title_client": "Nos Clients",
+"thankYouPage": {
+  "title": "Merci pour votre inscription !",
+  "message": "Notre équipe vous contactera bientôt. Nous apprécions votre confiance.",
+  "backToHome": "Retour à l'accueil"
+},
+
+  "signup": {
+    "title": "Créez votre compte",
+    "subtitle": "Veuillez remplir toutes les informations requises pour compléter votre inscription. Des détails exacts nous aideront à vérifier rapidement votre compte vendeur.",
+    "name": "Nom",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "phone": "Numéro de téléphone",
+    "storeName": "Nom du magasin",
+    "monthlyOrders": "Commandes mensuelles estimées",
+    "sellingOnline": "Vendez-vous actuellement en ligne ?",
+    "button": "S'inscrire",
+    "loading": "Inscription en cours...",
+    "alreadyHave": "Vous avez déjà un compte ?",
+    "login": "Se connecter",
+    "agreement": "En cliquant sur continuer, vous acceptez nos",
+    "terms": "Conditions d'utilisation",
+    "privacy": "Politique de confidentialité",
+    "success": "Inscription réussie ! Redirection...",
+    "failed": "Échec de l'inscription",
+    "unexpected": "Une erreur inattendue est survenue",
+      "city": "Ville"
+  },
+  "common": {
+    "yes": "Oui",
+    "no": "Non",
+    "and": "et"
+  },
+"login": {
+  "title": "Bon retour",
+  "subtitle": "Connectez-vous à votre compte",
+  "email": "E-mail",
+  "password": "Mot de passe",
+  "forgot": "Mot de passe oublié ?",
+  "button": "Se connecter",
+  "loading": "Connexion...",
+  "noAccount": "Vous n'avez pas de compte ?",
+  "signup": "S'inscrire"
+}
+
+,
+  "cityTable": {
+    "city": "Ville",
+    "book": "Livré",
+    "back": "Retourné",
+    "searchCity": "Rechercher une ville",
+    "noCities": "Aucune ville trouvée.",
+    "previous": "Précédent",
+    "next": "Suivant"
+  }
 
 }

@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 
 export default function AboutSection() {
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  const isArabic = i18n.language === "ar"; // detect Arabic
 
   const cards = useMemo(
     () => [
@@ -30,7 +31,7 @@ export default function AboutSection() {
 
   return (
     <section
-      id="infrastructure"
+      dir={isArabic ? "rtl" : "ltr"}
       className="pt-24 px-4 relative overflow-hidden bg-white"
     >
       <div className="container mx-auto relative z-10 lg:w-[90%] w-[95%]">
@@ -38,7 +39,9 @@ export default function AboutSection() {
         <div className="text-center mb-20">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
             {t("infrastructure.title.part1")}{" "}
-            <span className="text-gray-800">{t("infrastructure.title.part2")}</span>
+            <span className="text-gray-800">
+              {t("infrastructure.title.part2")}
+            </span>
           </h2>
           <p className="text-lg md:text-xl text-gray-700 max-w-3xl mx-auto">
             {t("infrastructure.subtitle")}
@@ -61,8 +64,11 @@ export default function AboutSection() {
                 loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent group-hover:via-black/50 transition-all"></div>
-              <div className="absolute bottom-6 left-6 text-white">
-                <h3 className="text-2xl font-bold mb-1">{card.title}</h3>
+<div
+  className={`absolute bottom-6 ${
+    isArabic ? "right-3" : "left-6"
+  } text-white`}
+>                <h3 className="text-2xl font-bold mb-1">{card.title}</h3>
                 <p className="text-sm opacity-90">{card.desc}</p>
               </div>
             </div>

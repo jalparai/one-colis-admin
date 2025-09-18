@@ -8,14 +8,9 @@ export async function generateStaticParams() {
       { locale: "ar" },
   ];
 }
-export default function HomePage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
-  const { locale } = React.use(params); // ✅ unwrap
-
+export default function ThankYoupage(){
   return (
+   
    <ThankYouPage />
   )
 }

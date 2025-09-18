@@ -20,6 +20,7 @@ import Image from "next/image"
 import Logo from "../../public/images/One-Colis.png"
 import Link from "next/link"
 import { cn } from "@/lib/utils" 
+import { HomeIcon, PersonStandingIcon, Warehouse } from "lucide-react"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const params = useParams()
@@ -33,20 +34,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       avatar: "/avatars/shadcn.jpg",
     },
     navMain: [
+       {
+        title: "Home",
+        url: `/${locale}/admin`,
+        icon: HomeIcon,
+      },
       {
         title: "Employee",
         url: `/${locale}/admin/Employees`,
-        icon: IconDashboard,
+        icon: PersonStandingIcon,
       },
       {
         title: "Seller",
         url: `/${locale}/admin/Seller`,
-        icon: IconListDetails,
+        icon: IconUsers,
       },
       {
         title: "Ware House",
         url: `/${locale}/admin/Warehouses`,
-        icon: IconChartBar,
+        icon: Warehouse,
       },
       {
         title: "Delivery Agents",
@@ -58,6 +64,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: `/${locale}/admin/Payout-manager`,
         icon: IconUsers,
       },
+        {
+        title: "Orders",
+        url: `/${locale}/admin/Order`,
+        icon: IconUsers,
+      },
     ],
   }
 
@@ -66,9 +77,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         {/* ✅ Logo */}
         <div className="flex items-center justify-start py-6">
-          <Link href={`/${locale}`}>
-            <Image src={Logo} alt="Logo" className="w-40" priority />
-          </Link>
+      <Link href={`/${locale}/admin/`}>
+                  <Image src={Logo} alt="Logo" className="w-40" priority />
+
+      </Link>
+          
         </div>
 
         {/* ✅ Main Nav */}
@@ -96,9 +109,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       {/* ✅ Footer with user info */}
-      <SidebarFooter>
-        <NavUser user={data.user} />
-      </SidebarFooter>
+  <SidebarFooter>
+<NavUser/>
+</SidebarFooter>
     </Sidebar>
   )
 }

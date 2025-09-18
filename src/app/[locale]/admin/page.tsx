@@ -1,6 +1,8 @@
 import React from "react";
 // import { DataTable } from "@/components/data-table";
 import { SectionCards } from "@/components/section-cards";
+import Analyis from "@/components/analysis";
+import ProtectedRoute from "@/components/ProtectedRoute";
 // import data from "./data.json";
 export async function generateStaticParams() {
   return [
@@ -12,9 +14,10 @@ export async function generateStaticParams() {
 function AdminIndexPage() {
   return (
     <>
-      <SectionCards />
-      <div>
-      </div>
+      {/* <SectionCards /> */}
+    <ProtectedRoute allowedRoles={["admin"]}>
+        <Analyis />
+    </ProtectedRoute>
       {/* <DataTable data={data} /> */}
     </>
   );

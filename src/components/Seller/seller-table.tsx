@@ -1,21 +1,22 @@
-"use client"
-
-import * as React from "react"
-import axios from "axios"
+"use client";
+import * as React from "react";
+import axios from "axios";
 import {
   ColumnDef,
   ColumnFiltersState,
   SortingState,
   VisibilityState,
+  RowData,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-  RowData,
   flexRender,
-} from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react"
+  HeaderContext,
+  CellContext,
+} from "@tanstack/react-table";
+import { ArrowUpDown, ChevronDown, MoreHorizontal } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +26,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -36,8 +37,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -45,44 +46,47 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
+import { AddSeller } from "./Add-seller";
+import { AddStockDialog } from "./AddStockDialog";
 
-// import { Addseller } from "./Add-seller"
-// import { Editseller } from "./Editseller"
+// Seller type
+export type Seller = {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  storeName: string;
+  estimatedMonthlyOrders: string;
+  isCurrentlySellingOnline: boolean;
+  createdAt: string;
+  city?: string; // ✅ Added city field
+};
 
-// ✅ Extend TableMeta so we can use refresh()
+// Extend TableMeta to include refresh function
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
-    refresh?: () => void
+    refresh?: () => void;
   }
 }
 
-export type seller = {
-  _id: string
-  name: string
-  email: string
-  role: string
-  createdAt: string
-}
-
-export const columns: ColumnDef<seller>[] = [
+// Columns
+export const columns: ColumnDef<Seller>[] = [
   {
     id: "select",
-    header: ({ table }) => (
+    header: ({ table }: HeaderContext<Seller, unknown>) => (
       <Checkbox
         checked={
           table.getIsAllPageRowsSelected() ||
           (table.getIsSomePageRowsSelected() && "indeterminate")
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
       />
     ),
-    cell: ({ row }) => (
+    cell: ({ row }: CellContext<Seller, unknown>) => (
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
       />
     ),
     enableSorting: false,
@@ -90,191 +94,236 @@ export const columns: ColumnDef<seller>[] = [
   },
   {
     accessorKey: "name",
-    header: ({ column }) => (
+    header: ({ column }: HeaderContext<Seller, unknown>) => (
       <Button
         variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
       >
-        Name
-        <ArrowUpDown className="ml-2 h-4 w-4" />
+        Name <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <div>{row.getValue("name")}</div>,
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div>{row.getValue("name")}</div>
+    ),
   },
   {
     accessorKey: "email",
-    header: ({ column }) => (
+    header: ({ column }: HeaderContext<Seller, unknown>) => (
       <Button
         variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
       >
-        Email
-        <ArrowUpDown className="ml-2 h-4 w-4" />
+        Email <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
-  },
-
-  {
-  accessorKey: "phoneNumber",
-  header: "Phone Number",
-  cell: ({ row }) => <div>{row.getValue("phoneNumber")}</div>,
-},
-{
-  accessorKey: "storeName",
-  header: "Store Name",
-  cell: ({ row }) => <div>{row.getValue("storeName")}</div>,
-},
-{
-  accessorKey: "estimatedMonthlyOrders",
-  header: "Est. Monthly Orders",
-  cell: ({ row }) => <div>{row.getValue("estimatedMonthlyOrders")}</div>,
-},
-{
-  accessorKey: "isCurrentlySellingOnline",
-  header: "Selling Online?",
-  cell: ({ row }) =>
-    row.getValue("isCurrentlySellingOnline") ? (
-      <span className="text-green-600 font-medium">Yes</span>
-    ) : (
-      <span className="text-red-600 font-medium">No</span>
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div className="lowercase">{row.getValue("email")}</div>
     ),
-},
-
+  },
+  {
+    accessorKey: "phoneNumber",
+    header: "Phone Number",
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div>{row.getValue("phoneNumber")}</div>
+    ),
+  },
+  {
+    accessorKey: "storeName",
+    header: "Store Name",
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div>{row.getValue("storeName")}</div>
+    ),
+  },
+  {
+    accessorKey: "city", // ✅ New column
+    header: "City",
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div>{row.getValue("city") || "N/A"}</div>
+    ),
+  },
+  {
+    accessorKey: "estimatedMonthlyOrders",
+    header: "Est. Monthly Orders",
+    cell: ({ row }: CellContext<Seller, unknown>) => (
+      <div>{row.getValue("estimatedMonthlyOrders")}</div>
+    ),
+  },
+  {
+    accessorKey: "isCurrentlySellingOnline",
+    header: "Selling Online?",
+    cell: ({ row }: CellContext<Seller, unknown>) =>
+      row.getValue("isCurrentlySellingOnline") ? (
+        <span className="text-green-600 font-medium">Yes</span>
+      ) : (
+        <span className="text-red-600 font-medium">No</span>
+      ),
+  },
   {
     accessorKey: "createdAt",
-    header: "Registered Date",
-    cell: ({ row }) => {
-      const dateStr = row.getValue("createdAt") as string
-      return <div>{new Date(dateStr).toLocaleDateString()}</div>
+    header: ({ column }: HeaderContext<Seller, unknown>) => (
+      <Button
+        variant="ghost"
+        onClick={() =>
+          column.toggleSorting(column.getIsSorted() === "asc")
+        }
+      >
+        Registered Date <ArrowUpDown className="ml-2 h-4 w-4" />
+      </Button>
+    ),
+    cell: ({ row }: CellContext<Seller, unknown>) => {
+      const dateStr = row.getValue("createdAt") as string;
+      return <div>{new Date(dateStr).toLocaleDateString()}</div>;
     },
   },
   {
-  id: "actions",
-  enableHiding: false,
-  cell: ({ row, table }) => {
-    const seller = row.original
-    const [editOpen, setEditOpen] = React.useState(false)
-    const [deleteOpen, setDeleteOpen] = React.useState(false)
-    const [loading, setLoading] = React.useState(false)
+    id: "actions",
+    enableHiding: false,
+    cell: ({ row, table }: CellContext<Seller, unknown>) => {
+      const seller = row.original;
+      const [deleteOpen, setDeleteOpen] = React.useState(false);
+      const [loading, setLoading] = React.useState(false);
+const [stockOpen, setStockOpen] = React.useState(false);
+const [stockDialogOpen, setStockDialogOpen] = React.useState(false);
 
-    const handleDelete = async () => {
-      try {
-        setLoading(true)
-        const token = localStorage.getItem("token")
-        await axios.delete(
-          `https://cod-ecommerce-two.vercel.app/api/admin/delete-seller/${seller._id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        setDeleteOpen(false)
-        table.options.meta?.refresh?.()
-      } catch (err) {
-        console.error("❌ Failed to delete seller", err)
-      } finally {
-        setLoading(false)
-      }
-    }
+      const handleDelete = async () => {
+        try {
+          setLoading(true);
+          const token = localStorage.getItem("token");
+          await axios.delete(
+            `https://cod-ecommerce-two.vercel.app/api/admin/delete-seller/${seller._id}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          setDeleteOpen(false);
+          table.options.meta?.refresh?.();
+        } catch (err) {
+          console.error("Failed to delete seller", err);
+        } finally {
+          setLoading(false);
+        }
+      };
 
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-         
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      return (
+        <>
+           <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setStockDialogOpen(true)}>
+  Add Stock
+</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
 
-        {/* ✏️ Edit modal */}
-        {/* <Editseller
-          seller={seller}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          onUpdated={table.options.meta?.refresh || (() => {})}
-        /> */}
+    {/* Add Stock Dialog */}
+  <AddStockDialog
+  sellerId={seller._id}
+  open={stockDialogOpen}
+  onOpenChange={setStockDialogOpen}
+  onStockAdded={() => table.options.meta?.refresh?.()}
+/>
 
-        {/* 🗑 Delete confirmation popup */}
-        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Delete {seller.name}?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. The seller will be permanently
-                removed from the system.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </>
-    )
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {seller.name}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={loading}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      );
+    },
   },
-}
-
-]
+];
 
 export function SellerTable() {
-  const [sellers, setsellers] = React.useState<seller[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [sellers, setSellers] = React.useState<Seller[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
+    []
+  );
+  const [columnVisibility, setColumnVisibility] =
+    React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({});
 
-  const fetchsellers = React.useCallback(async () => {
+  const fetchSellers = React.useCallback(async () => {
     try {
-      const token = localStorage.getItem("token")
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/sellers", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setsellers(res.data.data || [])
+      const token = localStorage.getItem("token");
+      const res = await axios.get(
+        "https://cod-ecommerce-two.vercel.app/api/admin/sellers",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setSellers(res.data.data || []);
     } catch (err) {
-      console.error("Error fetching sellers:", err)
+      console.error("Error fetching sellers:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   React.useEffect(() => {
-    fetchsellers()
-  }, [fetchsellers])
+    fetchSellers();
+  }, [fetchSellers]);
 
   const table = useReactTable({
     data: sellers,
     columns,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+      rowSelection,
+    },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
-    meta: { refresh: fetchsellers },
-  })
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    meta: { refresh: fetchSellers },
+    initialState: {
+      pagination: {
+        pageIndex: 0,
+        pageSize: 50, // ✅ Show 50 rows per page
+      },
+    },
+  });
 
-  if (loading) return <p className="p-4">Loading sellers...</p>
+  if (loading) return <p className="p-4">Loading sellers...</p>;
 
   return (
     <div className="w-full">
@@ -283,12 +332,13 @@ export function SellerTable() {
         <Input
           placeholder="Filter emails..."
           value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("email")?.setFilterValue(event.target.value)
+          onChange={(e) =>
+            table.getColumn("email")?.setFilterValue(e.target.value)
           }
           className="max-w-sm"
         />
         <div className="flex gap-2">
+          <AddSeller onSellerAdded={fetchSellers} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -304,7 +354,9 @@ export function SellerTable() {
                     key={column.id}
                     className="capitalize"
                     checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                    onCheckedChange={(value) =>
+                      column.toggleVisibility(!!value)
+                    }
                   >
                     {column.id}
                   </DropdownMenuCheckboxItem>
@@ -336,17 +388,26 @@ export function SellerTable() {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
                   No sellers found.
                 </TableCell>
               </TableRow>
@@ -365,6 +426,14 @@ export function SellerTable() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
+            {"<<"} First
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -378,8 +447,18 @@ export function SellerTable() {
           >
             Next
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              table.setPageIndex(table.getPageCount() - 1)
+            }
+            disabled={!table.getCanNextPage()}
+          >
+            Last {">>"}
+          </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

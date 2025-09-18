@@ -16,21 +16,31 @@ export default function Header() {
 
   return (
     <div className="border-b border-border bg-white sticky top-0 z-50">
-      <header className="container mx-auto max-w-7xl px-4 lg:px-6">
-        <div className="flex items-center justify-between h-20">
-          {/* Logo */}
-          <div className="flex items-center">
-            <Image
-              src={Logo}
-              alt="Logo"
-              className="h-10 w-10 lg:h-16 lg:w-auto"
-              priority
-            />
-            <h1 className="lg:ml-2 lg:text-3xl text-xl font-bold tracking-wide">
-              <span className="text-[#2BC3F1]">One</span>
-              <span className="text-[#E0B660]">Colis</span>
-            </h1>
-          </div>
+    <header
+  className={`container mx-auto max-w-7xl px-4 lg:px-6 ${
+    locale === "ar" ? "text-right" : "text-left"
+  }`}
+  dir={locale === "ar" ? "rtl" : "ltr"}
+>
+  <div className="flex items-center justify-between h-20">
+    {/* Logo */}
+    <div
+      className={`flex items-center ${
+        locale === "ar" ? "flex-row-reverse" : ""
+      }`}
+    >
+      <Image
+        src={Logo}
+        alt="Logo"
+        className="h-10 w-10 lg:h-16 lg:w-auto"
+        priority
+      />
+      <h1 className="lg:ml-2 lg:text-3xl text-xl font-bold tracking-wide">
+        <span className="text-[#2BC3F1]">One</span>
+        <span className="text-[#E0B660]">Colis</span>
+      </h1>
+    </div>
+
 
           {/* Desktop Nav (lg and up) */}
           <nav className="hidden lg:flex items-center space-x-6">
@@ -40,7 +50,7 @@ export default function Header() {
             <a href="#process" className="text-gray-800 hover:text-foreground transition-colors">
               {t("footer.process")}
             </a>
-            <a href="#infrastructure" className="text-gray-800 hover:text-foreground transition-colors">
+            <a href="#service" className="text-gray-800 hover:text-foreground transition-colors">
               {t("footer.services")}
             </a>
             <a href="#pricing" className="text-gray-800 hover:text-foreground transition-colors">
@@ -83,7 +93,7 @@ export default function Header() {
               <a href="#process" onClick={() => setIsOpen(false)} className="text-gray-800 hover:text-foreground transition-colors">
                 {t("footer.process")}
               </a>
-              <a href="#infrastructure" onClick={() => setIsOpen(false)} className="text-gray-800 hover:text-foreground transition-colors">
+              <a href="#service" onClick={() => setIsOpen(false)} className="text-gray-800 hover:text-foreground transition-colors">
                 {t("footer.services")}
               </a>
               <a href="#pricing" onClick={() => setIsOpen(false)} className="text-gray-800 hover:text-foreground transition-colors">

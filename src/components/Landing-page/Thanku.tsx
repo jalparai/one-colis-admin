@@ -12,7 +12,8 @@ export function ThankYouPage({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
   const params = useParams();
-  const locale = (params?.locale as string) || "en";  const { t } = useTranslation("common");
+  const locale = (params?.locale as string) || "en"; 
+   const { t } = useTranslation("common");
 
   return (
     <section className="relative h-[100vh] w-full flex items-center justify-center bg-gradient-to-br from-sky-500 via-sky-600 to-sky-700 text-white">
