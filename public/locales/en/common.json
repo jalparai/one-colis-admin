@@ -640,7 +640,46 @@
   "Tizounine_Tata": "Tizounine Tata",
   "Atlite_Tata": "Atlite Tata",
   "Igherm_Taroudant": "Igherm Taroudant",
-  "Source": "Source"
+  "Source": "Source",
+
+
+  "sellerSidebar": {
+    "home": "Home",
+    "orders": "Orders",
+    "stocks": "My Stocks",
+    "tickets": "Tickets",
+    "myPickups": "My Pickups",
+    "invoices": "Invoices",
+    "deliveryCollection": "Delivery Collection",
+    "cityFee": "Check City Fee",
+    "sellerReports": "Seller Reports",
+    "navigation": "Main navigation",
+    "estimatedDelivery": "Estimated Delivery"
+  },
+  "employeeSidebar": {
+  "navigation": "Main navigation",
+  "home": "Home",
+  "sellers": "Sellers",
+  "managePickups": "Manage Pickups",
+  "orders": "Orders",
+  "deliveryAgents": "Delivery Agents",
+  "warehouses": "Ware Houses",
+  "stocks": "Stocks",
+  "payoutManager": "Payout Manager",
+  "payout": "Payout",
+  "tickets": "Tickets"
+},
+  "agentSidebar": {
+    "home": "Home",
+    "myOrders": "My Orders",
+    "navigation": "Main navigation"
+  }
+,
+
+  "payoutSidebar": {
+    "home": "Home",
+    "myPayout": "My Payouts"
+  }
 
 
 }

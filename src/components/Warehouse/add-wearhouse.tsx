@@ -58,14 +58,14 @@ export function AddWearhouse({ onwearHouseAdded }: { onwearHouseAdded?: () => vo
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button>+ Add wearHouse</Button>
+        <Button>+ Add Ware House</Button>
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Add wearHouse</SheetTitle>
           <SheetDescription>Fill in the details to create a new wearHouse.</SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleAddwearHouse} className="grid flex-1 auto-rows-min gap-6 px-4">
+        <form onSubmit={handleAddwearHouse} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll">
           <div className="grid gap-3">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />

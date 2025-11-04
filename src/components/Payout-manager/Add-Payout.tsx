@@ -58,14 +58,14 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button>+ Add Payout</Button>
+        <Button>+ Add Payout Manager</Button>
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Add Payout</SheetTitle>
           <SheetDescription>Fill in the details to create a new Payout.</SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleAddPayout} className="grid flex-1 auto-rows-min gap-6 px-4">
+        <form onSubmit={handleAddPayout} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll">
           <div className="grid gap-3">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />

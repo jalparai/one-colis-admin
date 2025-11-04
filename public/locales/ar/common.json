@@ -635,8 +635,45 @@
 "Agadir_Lhénna_Tata":"أكادير الهنّا (طاطا)",
 "Atlite_Tata": "أطليط طاطا",
 "Igherm_Taroudant": "إغيرم تارودانت",
-"Source": "المنبع"
-
+"Source": "المنبع",
+  "sellerSidebar": {
+    "home": "الرئيسية",
+    "orders": "الطلبات",
+    "stocks": "المخزون",
+    "tickets": "التذاكر",
+    "myPickups": "طلبات الاستلام",
+    "invoices": "الفواتير",
+    "deliveryCollection": "تحصيل التوصيل",
+    "cityFee": "تحقق من رسوم المدينة",
+    "sellerReports": "تقارير البائع",
+    "navigation": "التنقل الرئيسي",
+    "estimatedDelivery": "الوقت المتوقع للتسليم"
+  }
+,
+"employeeSidebar": {
+  "navigation": "القائمة الرئيسية",
+  "home": "الرئيسية",
+  "sellers": "البائعون",
+  "managePickups": "إدارة عمليات الالتقاط",
+  "orders": "الطلبات",
+  "deliveryAgents": "وكلاء التوصيل",
+  "warehouses": "المستودعات",
+  "stocks": "المخزون",
+  "payoutManager": "مدير المدفوعات",
+  "payout": "المدفوعات",
+  "tickets": "التذاكر"
+}
+,
+  "agentSidebar": {
+    "home": "الرئيسية",
+    "myOrders": "طلباتي",
+    "navigation": "التنقل الرئيسي"
+  }
+  ,
+    "payoutSidebar": {
+ "home": "الصفحة الرئيسية",
+  "myPayout": "مدفوعاتي"
+  }
 
 
 }

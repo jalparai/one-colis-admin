@@ -49,6 +49,8 @@ import {
 
 import { EdidWareHouse } from "./EditWareHouse"
 import { AddWearhouse } from "./add-wearhouse"
+import { ImportExportButtons } from "@/components/ui/import-export-buttons"
+import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -126,90 +128,109 @@ export const columns: ColumnDef<wearHouse>[] = [
       const dateStr = row.getValue("createdAt") as string
       return <div>{new Date(dateStr).toLocaleDateString()}</div>
     },
+    filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
+      if (!filterValue) return true
+      const date = new Date(row.getValue(columnId) as string)
+      const from = filterValue.from ? new Date(filterValue.from) : null
+      const to = filterValue.to ? new Date(filterValue.to) : null
+
+      if (from && date < from) return false
+      if (to && date > to) return false
+      return true
+    },
   },
   {
-  id: "actions",
-  enableHiding: false,
-  cell: ({ row, table }) => {
-    const wearHouse = row.original
-    const [editOpen, setEditOpen] = React.useState(false)
-    const [deleteOpen, setDeleteOpen] = React.useState(false)
-    const [loading, setLoading] = React.useState(false)
+    id: "actions",
+    enableHiding: false,
+    cell: ({ row, table }) => {
+      // ... your actions code
+    },
+  }
 
-    const handleDelete = async () => {
-      try {
-        setLoading(true)
-        const token = localStorage.getItem("token")
-        await axios.delete(
-          `https://cod-ecommerce-two.vercel.app/api/warehouse/${wearHouse._id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        setDeleteOpen(false)
-        table.options.meta?.refresh?.()
-      } catch (err) {
-        console.error("❌ Failed to delete wearHouse", err)
-      } finally {
-        setLoading(false)
+  ,
+  {
+    id: "actions",
+    enableHiding: false,
+    cell: ({ row, table }) => {
+      const wearHouse = row.original
+      const [editOpen, setEditOpen] = React.useState(false)
+      const [deleteOpen, setDeleteOpen] = React.useState(false)
+      const [loading, setLoading] = React.useState(false)
+
+      const handleDelete = async () => {
+        try {
+          setLoading(true)
+          const token = localStorage.getItem("token")
+          await axios.delete(
+            `https://cod-ecommerce-two.vercel.app/api/warehouse/${wearHouse._id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          setDeleteOpen(false)
+          table.options.meta?.refresh?.()
+        } catch (err) {
+          console.error("❌ Failed to delete wearHouse", err)
+        } finally {
+          setLoading(false)
+        }
       }
-    }
 
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      return (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* ✏️ Edit modal */}
-        <EdidWareHouse
-          wearHouse={wearHouse}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          onUpdated={table.options.meta?.refresh || (() => {})}
-        />
+          {/* ✏️ Edit modal */}
+          <EdidWareHouse
+            wearHouse={wearHouse}
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            onUpdated={table.options.meta?.refresh || (() => { })}
+          />
 
-        {/* 🗑 Delete confirmation popup */}
-        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Delete {wearHouse.name}?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. The Ware house will be permanently
-                removed from the system.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </>
-    )
-  },
-}
+          {/* 🗑 Delete confirmation popup */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {wearHouse.name}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. The Ware house will be permanently
+                  removed from the system.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )
+    },
+  }
 
 ]
 
@@ -220,6 +241,7 @@ export function WearHouseTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [dateFilter, setDateFilter] = React.useState<"all" | "weekly" | "monthly">("all");
 
   const fetchwearHouse = React.useCallback(async () => {
     try {
@@ -238,28 +260,78 @@ export function WearHouseTable() {
   React.useEffect(() => {
     fetchwearHouse()
   }, [fetchwearHouse])
+  const filteredWareHouse = React.useMemo(() => {
+    if (dateFilter === "all") return wearHouse;
+    const now = new Date();
+    return wearHouse.filter((seller) => {
+      const createdAt = new Date(seller.createdAt);
+      if (dateFilter === "weekly") {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(now.getDate() - 7);
+        return createdAt >= oneWeekAgo;
+      }
+      if (dateFilter === "monthly") {
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(now.getMonth() - 1);
+        return createdAt >= oneMonthAgo;
+      }
+      return true;
+    });
+  }, [wearHouse, dateFilter]);
 
   const table = useReactTable({
-    data: wearHouse,
+    data: filteredWareHouse, // ✅ works here
     columns,
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     meta: { refresh: fetchwearHouse },
-  })
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
 
   if (loading) return <p className="p-4">Loading wearHouse...</p>
+
+  const exportEndpoints = [
+    // { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
+    // { label: "Export Sellers", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/seller/export/excal" },
+    { label: "Export Warehouses", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/warehouse/export/excel" },
+    //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
+    //   { label: "Export Delivery Agents", url: "/api/adminb/bulk/delivery-agents/export/excel" },
+  ];
+
+const handleExport = async (url: string): Promise<void> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to export data");
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = "export.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error(error);
+    alert("Error exporting file!");
+  }
+};
+
 
   return (
     <div className="w-full">
       {/* Top bar */}
-      <div className="flex justify-between items-center py-4">
+      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide">
         <Input
           placeholder="Filter emails..."
           value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
@@ -268,32 +340,96 @@ export function WearHouseTable() {
           }
           className="max-w-sm"
         />
+        <div className="flex items-center gap-2">
+          <label>From:</label>
+          <Input
+            type="date"
+            onChange={(e) =>
+              table.getColumn("createdAt")?.setFilterValue({
+                ...(table.getColumn("createdAt")?.getFilterValue() as any),
+                from: e.target.value,
+              })
+            }
+          />
+          <label>To:</label>
+          <Input
+            type="date"
+            onChange={(e) =>
+              table.getColumn("createdAt")?.setFilterValue({
+                ...(table.getColumn("createdAt")?.getFilterValue() as any),
+                to: e.target.value,
+              })
+            }
+          />
+        </div>
+
         <div className="flex gap-2">
-          <AddWearhouse onwearHouseAdded={fetchwearHouse} />
+          <ImportExportButtons
+            entityType="warehouse"
+            config={ENTITY_CONFIGS.warehouse}
+            onImportSuccess={fetchwearHouse}
+            onExportSuccess={() => { }}
+          />
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                Columns <ChevronDown />
+                Filter: {dateFilter} <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
+              {["all", "weekly", "monthly"].map((option) => (
+                <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <AddWearhouse onwearHouseAdded={fetchwearHouse} />
         </div>
       </div>
+      {Object.keys(rowSelection).length > 0 && (
+        <Button
+          variant="destructive"
+          className="mb-2"
+          onClick={async () => {
+            const selectedIds = table.getSelectedRowModel().rows.map(
+              (row) => row.original._id
+            )
+            if (!selectedIds.length) return
+
+            try {
+              const token = localStorage.getItem("token")
+              await Promise.all(
+                selectedIds.map((id) =>
+                  axios.delete(
+                    `https://cod-ecommerce-two.vercel.app/api/warehouse/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  )
+                )
+              )
+              table.resetRowSelection()
+              fetchwearHouse()
+            } catch (err) {
+              console.error("❌ Failed bulk delete", err)
+            }
+          }}
+        >
+          Delete Selected ({Object.keys(rowSelection).length})
+        </Button>
+      )}
+
+      {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} Excal
+        </Button>
+      ))}
 
       {/* Table */}
       <div className="overflow-hidden rounded-md border">
@@ -306,9 +442,9 @@ export function WearHouseTable() {
                     {header.isPlaceholder
                       ? null
                       : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
                   </TableHead>
                 ))}
               </TableRow>

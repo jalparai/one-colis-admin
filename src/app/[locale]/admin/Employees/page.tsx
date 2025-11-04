@@ -1,9 +1,7 @@
-import { useTranslation } from 'react-i18next';
-import { EmployeesTable } from '@/components/Employee/employee-table'
-import { AddEmployee } from '@/components/Employee/Add-employee'
 import { Button } from '@/components/ui/button'
 import React from 'react'
-import LanguageSwitcher from '@/components/LanguageSwitcher'
+
+import { EmployeesTable } from '@/components/Employee/employee-table';
 export async function generateStaticParams() {
   return [
     { locale: "en" },
@@ -18,7 +16,7 @@ function EmployeesPage() {
     <>
     <div className=''>
       <div className='flex justify-between'>
-<LanguageSwitcher />
+{/* <LanguageSwitcher /> */}
         {/* <h1 className="text-2xl font-bold">{t("employees")}</h1> */}
         {/* <Button>+ Add Employee</Button> */}
         {/* <AddEmployee /> */}

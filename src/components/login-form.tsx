@@ -30,44 +30,61 @@ export function LoginForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
 
-    try {
-      const res = await axios.post(
-        "https://cod-ecommerce-two.vercel.app/api/auth/login",
-        { email, password }
-      );
+  try {
+    const res = await axios.post(
+      "https://cod-ecommerce-two.vercel.app/api/auth/login",
+      { email, password }
+    );
 
-      const data = res.data;
+    const data = res.data;
+    const user = data.data.user;
+    const token = data.data.token;
 
-      localStorage.setItem("token", data.data.token);
-      localStorage.setItem("user", JSON.stringify(data.data.user));
+    // console.log("Login response:", data); // ✅ See what backend returns
 
-      const role = data.data.user.role;
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(user));
+if (user.role === "employee") {
+  localStorage.setItem("employee", JSON.stringify(user));
+}
 
-      // Redirect based on role
-      if (role === "admin") {
-        router.push(`/${locale}/admin`);
-      } else if (role === "seller") {
-        router.push(`/${locale}/thankyou`);
-      } else if (role === "employee") {
-        router.push(`/${locale}/employee`);
-      } else {
-        router.push(`/${locale}/login`);
-      }
-    } catch (err: any) {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || t("login.failed"));
-      } else {
-        setError(t("login.unexpected"));
-      }
-    } finally {
-      setLoading(false);
+    if (user.role === "employee") {
+      localStorage.setItem("permissions", JSON.stringify(user.permissions || {}));
     }
-  };
+
+    const role = user.role;
+
+    if (role === "admin") {
+      router.push(`/${locale}/admin`);
+    } else if (role === "seller") {
+      router.push(`/${locale}/seller`);
+    } else if (role === "employee") {
+      router.push(`/${locale}/employee`);
+    } else if (role === "deliveryagent") {
+      router.push(`/${locale}/agent`);
+    } else if (role === "warehouse") {
+      router.push(`/${locale}/warehouse`);
+    } else if (role === "payoutmanager") {
+      router.push(`/${locale}/payout`);
+    } else {
+      router.push(`/${locale}/login`);
+    }
+  } catch (err: any) {
+    if (axios.isAxiosError(err)) {
+      setError(err.response?.data?.message || t("login.failed"));
+    } else {
+      setError(t("login.unexpected"));
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div

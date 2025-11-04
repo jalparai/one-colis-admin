@@ -50,6 +50,8 @@ import {
 
 import { EditAgent } from "./edit-agent"
 import { AddAgent } from "./add-agent"
+import { ImportExportButtons } from "@/components/ui/import-export-buttons"
+import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -120,14 +122,24 @@ export const columns: ColumnDef<delivery>[] = [
     header: "Role",
     cell: ({ row }) => <div>{row.getValue("role")}</div>,
   },
-  {
-    accessorKey: "createdAt",
-    header: "Registered Date",
-    cell: ({ row }) => {
-      const dateStr = row.getValue("createdAt") as string
-      return <div>{new Date(dateStr).toLocaleDateString()}</div>
-    },
+ {
+  accessorKey: "createdAt",
+  header: "Registered Date",
+  cell: ({ row }) => {
+    const dateStr = row.getValue("createdAt") as string
+    return <div>{new Date(dateStr).toLocaleDateString()}</div>
   },
+  filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
+    if (!filterValue) return true
+    const date = new Date(row.getValue(columnId) as string)
+    const from = filterValue.from ? new Date(filterValue.from) : null
+    const to = filterValue.to ? new Date(filterValue.to) : null
+    if (from && date < from) return false
+    if (to && date > to) return false
+    return true
+  },
+},
+
   {
   id: "actions",
   enableHiding: false,
@@ -221,11 +233,12 @@ export function DeliveryTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [dateFilter, setDateFilter] = React.useState<"all" | "weekly" | "monthly">("all");
 
   const fetchdeliverys = React.useCallback(async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/delivery-agent/", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents/", {
         headers: { Authorization: `Bearer ${token}` },
       })
       setdeliverys(res.data.data || [])
@@ -240,27 +253,76 @@ export function DeliveryTable() {
     fetchdeliverys()
   }, [fetchdeliverys])
 
+
+    const filteredEmpoyee = React.useMemo(() => {
+    if (dateFilter === "all") return deliverys;
+    const now = new Date();
+    return deliverys.filter((seller) => {
+      const createdAt = new Date(seller.createdAt);
+      if (dateFilter === "weekly") {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(now.getDate() - 7);
+        return createdAt >= oneWeekAgo;
+      }
+      if (dateFilter === "monthly") {
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(now.getMonth() - 1);
+        return createdAt >= oneMonthAgo;
+      }
+      return true;
+    });
+  }, [deliverys, dateFilter]);
+
   const table = useReactTable({
-    data: deliverys,
+    data: filteredEmpoyee, // ✅ works here
     columns,
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     meta: { refresh: fetchdeliverys },
-  })
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
 
   if (loading) return <p className="p-4">Loading deliverys...</p>
+
+  const exportEndpoints = [
+    // { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
+    // { label: "Export Sellers", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/seller/export/excal" },
+  //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
+  //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
+    { label: "Export Delivery Agents", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/delivery-agents/export/excel" },
+  ];
+  
+const handleExport = async (url: RequestInfo): Promise<void> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to export data");
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = "export.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error(error);
+    alert("Error exporting file!");
+  }
+};
+
 
   return (
     <div className="w-full">
       {/* Top bar */}
-      <div className="flex justify-between items-center py-4">
+      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide">
         <Input
           placeholder="Filter emails..."
           value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
@@ -269,32 +331,96 @@ export function DeliveryTable() {
           }
           className="max-w-sm"
         />
+<div className="flex items-center gap-2">
+  <label>From:</label>
+  <Input
+    type="date"
+    onChange={(e) =>
+      table.getColumn("createdAt")?.setFilterValue({
+        ...(table.getColumn("createdAt")?.getFilterValue() as any),
+        from: e.target.value,
+      })
+    }
+  />
+  <label>To:</label>
+  <Input
+    type="date"
+    onChange={(e) =>
+      table.getColumn("createdAt")?.setFilterValue({
+        ...(table.getColumn("createdAt")?.getFilterValue() as any),
+        to: e.target.value,
+      })
+    }
+  />
+</div>
+
         <div className="flex gap-2">
-          <AddAgent ondeliveryAdded={fetchdeliverys} />
+          <ImportExportButtons
+            entityType="delivery"
+            config={ENTITY_CONFIGS.delivery}
+            onImportSuccess={fetchdeliverys}
+            onExportSuccess={() => {}}
+          />
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                Columns <ChevronDown />
+                Filter: {dateFilter} <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
+              {["all", "weekly", "monthly"].map((option) => (
+                <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          
+          <AddAgent ondeliveryAdded={fetchdeliverys} />
         </div>
       </div>
+{Object.keys(rowSelection).length > 0 && (
+  <Button
+    variant="destructive"
+    className="mb-2"
+    onClick={async () => {
+      const selectedIds = table.getSelectedRowModel().rows.map(
+        (row) => row.original._id
+      )
+      if (!selectedIds.length) return
+
+      try {
+        const token = localStorage.getItem("token")
+        await Promise.all(
+          selectedIds.map((id) =>
+            axios.delete(
+              `https://cod-ecommerce-two.vercel.app/api/delivery-agent/${id}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
+          )
+        )
+        table.resetRowSelection()
+        fetchdeliverys()
+      } catch (err) {
+        console.error("❌ Failed bulk delete", err)
+      }
+    }}
+  >
+    Delete Selected ({Object.keys(rowSelection).length})
+  </Button>
+)}
+
+      {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} Excal
+        </Button>
+      ))}
 
       {/* Table */}
       <div className="overflow-hidden rounded-md border">

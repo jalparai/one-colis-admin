@@ -30,8 +30,6 @@ export default function CityTable() {
        { city: t("Mdiq"), book: "45.00 Dh", back: "0.00 Dh" }
    
    ,
-     { city: t("Berrechid"), book: "35.00 Dh", back: "0.00 Dh" },
-  { city: t("Mohammadia"), book: "35.00 Dh", back: "0.00 Dh" },
   { city: t("Tangier"), book: "35.00 Dh", back: "0.00 Dh" },
   { city: t("Kenitra"), book: "35.00 Dh", back: "0.00 Dh" },
   { city: t("Dirty"), book: "35.00 Dh", back: "0.00 Dh" },
@@ -416,22 +414,29 @@ export default function CityTable() {
     }
   };
 
-  const paginationButtons = () => {
-    const pages = [];
-    const maxPagesToShow = 5;
-    let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+const paginationButtons = () => {
+  const pages = [];
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+  const maxPagesToShow = isMobile ? 3 : 5; // fewer pages on mobile
 
-    if (startPage > 1) pages.push(1, "...");
-    for (let i = startPage; i <= endPage; i++) pages.push(i);
-    if (endPage < totalPages) pages.push("...", totalPages);
+  let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-    return pages;
-  };
+  if (endPage - startPage + 1 < maxPagesToShow) {
+    startPage = Math.max(1, endPage - maxPagesToShow + 1);
+  }
+
+  if (startPage > 1) pages.push(1, "...");
+  for (let i = startPage; i <= endPage; i++) pages.push(i);
+  if (endPage < totalPages) pages.push("...", totalPages);
+
+  return pages;
+};
+
 
   return (
     <div
-      className={`lg:w-[70%] mt-10 p-6 bg-white rounded-sm shadow-md`}
+      className={`lg:w-[70%] mt-10 lg:p-6 p-4 bg-white rounded-sm shadow-md`}
       dir={isArabic ? "rtl" : "ltr"}
     >
       {/* Search */}
@@ -479,45 +484,49 @@ export default function CityTable() {
       </table>
 
       {/* Pagination */}
-      <div
-        className={`flex justify-center items-center space-x-2 mt-6 ${isArabic ? "flex-row-reverse space-x-reverse" : ""
-          }`}
+   <div
+  className={`flex flex-wrap justify-center items-center gap-2 mt-6
+    ${isArabic ? "flex-row-reverse" : ""}`}
+>
+  {/* Previous */}
+  <button
+    onClick={() => goToPage(currentPage - 1)}
+    disabled={currentPage === 1}
+    className="px-2 sm:px-3 py-1 border rounded-md text-gray-800 border-blue-400 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {t("cityTable.previous")}
+  </button>
+
+  {/* Numbers */}
+  {paginationButtons().map((num, idx) =>
+    num === "..." ? (
+      <span key={idx} className="px-2 sm:px-3 py-1 text-gray-500">
+        ...
+      </span>
+    ) : (
+      <button
+        key={idx}
+        onClick={() => goToPage(num)}
+        className={`px-2 sm:px-3 py-1 rounded-md border transition 
+          ${currentPage === num
+            ? "bg-[#2BC3F1] text-white border-[#2BC3F1]"
+            : "border-gray-300 text-gray-700 hover:bg-gray-100"}`}
       >
-        <button
-          onClick={() => goToPage(currentPage - 1)}
-          disabled={currentPage === 1}
-          className="px-3 py-1 border rounded-md text-gray-800 border-blue-400 hover:bg-blue-100"
-        >
-          {t("cityTable.previous")}
-        </button>
+        {num}
+      </button>
+    )
+  )}
 
-        {paginationButtons().map((num, idx) =>
-          num === "..." ? (
-            <span key={idx} className="px-3 py-1 text-gray-500">
-              ...
-            </span>
-          ) : (
-            <button
-              key={idx}
-              onClick={() => goToPage(num)}
-              className={`px-3 py-1 rounded-md border ${currentPage === num
-                ? "bg-[#2BC3F1] text-white border-[#2BC3F1]"
-                : "border-gray-300 text-gray-700 hover:bg-gray-100"
-                }`}
-            >
-              {num}
-            </button>
-          )
-        )}
+  {/* Next */}
+  <button
+    onClick={() => goToPage(currentPage + 1)}
+    disabled={currentPage === totalPages}
+    className="px-2 sm:px-3 py-1 border rounded-md text-[#2BC3F1] border-blue-400 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    {t("cityTable.next")}
+  </button>
+</div>
 
-        <button
-          onClick={() => goToPage(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className="px-3 py-1 border rounded-md text-[#2BC3F1] border-blue-400 hover:bg-blue-100"
-        >
-          {t("cityTable.next")}
-        </button>
-      </div>
     </div>
   );
 }

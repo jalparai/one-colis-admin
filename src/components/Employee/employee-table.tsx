@@ -47,8 +47,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { AddEmployee } from "./Add-employee"
 import { EditEmployee } from "./EditEmployee"
+import { AddEmployee } from "./Add-employee"
+import { ImportExportButtons } from "@/components/ui/import-export-buttons"
+import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -126,91 +128,106 @@ export const columns: ColumnDef<Employee>[] = [
       const dateStr = row.getValue("createdAt") as string
       return <div>{new Date(dateStr).toLocaleDateString()}</div>
     },
+    // ✅ custom date filter function
+    filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
+      const date = new Date(row.getValue(columnId) as string)
+      const from = filterValue?.from ? new Date(filterValue.from) : null
+      const to = filterValue?.to ? new Date(filterValue.to) : null
+
+      if (from && date < from) return false
+      if (to && date > to) return false
+      return true
+    },
   },
   {
-  id: "actions",
-  enableHiding: false,
-  cell: ({ row, table }) => {
-    const employee = row.original
-    const [editOpen, setEditOpen] = React.useState(false)
-    const [deleteOpen, setDeleteOpen] = React.useState(false)
-    const [loading, setLoading] = React.useState(false)
+    id: "actions",
+    enableHiding: false,
+    cell: ({ row, table }) => {
+      const employee = row.original
+      const [editOpen, setEditOpen] = React.useState(false)
+      const [deleteOpen, setDeleteOpen] = React.useState(false)
+      const [loading, setLoading] = React.useState(false)
 
-    const handleDelete = async () => {
-      try {
-        setLoading(true)
-        const token = localStorage.getItem("token")
-        await axios.delete(
-          `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        setDeleteOpen(false)
-        table.options.meta?.refresh?.()
-      } catch (err) {
-        console.error("❌ Failed to delete employee", err)
-      } finally {
-        setLoading(false)
+      const handleDelete = async () => {
+        try {
+          setLoading(true)
+          const token = localStorage.getItem("token")
+          await axios.delete(
+            `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          setDeleteOpen(false)
+          table.options.meta?.refresh?.()
+        } catch (err) {
+          console.error("❌ Failed to delete employee", err)
+        } finally {
+          setLoading(false)
+        }
       }
-    }
 
-    return (
-      <>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      return (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* ✏️ Edit modal */}
-        <EditEmployee
-          employee={employee}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
-          onUpdated={table.options.meta?.refresh || (() => {})}
-        />
+          {/* ✏️ Edit modal */}
+          <EditEmployee
+            employee={employee}
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            onUpdated={() => {
+              // Safely trigger table refresh if available
+              if (table?.options?.meta?.refresh) {
+                table.options.meta.refresh();
+              }
+            }}
+          />
 
-        {/* 🗑 Delete confirmation popup */}
-        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Delete {employee.name}?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                This action cannot be undone. The employee will be permanently
-                removed from the system.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </>
-    )
+
+          {/* 🗑 Delete confirmation popup */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {employee.name}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. The employee will be permanently
+                  removed from the system.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )
+    },
   },
-}
-
 ]
 
 export function EmployeesTable() {
@@ -220,6 +237,9 @@ export function EmployeesTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [dateFilter, setDateFilter] = React.useState<
+    "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth" | "weekly" | "monthly"
+  >("all");
 
   const fetchEmployees = React.useCallback(async () => {
     try {
@@ -238,62 +258,222 @@ export function EmployeesTable() {
   React.useEffect(() => {
     fetchEmployees()
   }, [fetchEmployees])
+  const filteredEmployees = React.useMemo(() => {
+    if (dateFilter === "all") return employees;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    return employees.filter((employee) => {
+      const createdAt = new Date(employee.createdAt);
+
+      switch (dateFilter) {
+        case "today":
+          return createdAt >= today && createdAt <= now;
+        case "yesterday": {
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          return (
+            createdAt >= yesterday &&
+            createdAt < today
+          );
+        }
+        case "thisWeek":
+          return createdAt >= startOfWeek && createdAt <= endOfWeek;
+        case "lastWeek": {
+          const lastWeekStart = new Date(startOfWeek);
+          lastWeekStart.setDate(startOfWeek.getDate() - 7);
+          const lastWeekEnd = new Date(startOfWeek);
+          lastWeekEnd.setDate(startOfWeek.getDate() - 1);
+          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
+        }
+        case "thisMonth": {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          return createdAt >= startOfMonth && createdAt <= now;
+        }
+        case "lastMonth": {
+          const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+          return createdAt >= startOfLastMonth && createdAt <= endOfLastMonth;
+        }
+        default:
+          return true;
+      }
+    });
+  }, [employees, dateFilter]);
 
   const table = useReactTable({
-    data: employees,
+    data: filteredEmployees, // ✅ works here
     columns,
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     meta: { refresh: fetchEmployees },
-  })
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
 
   if (loading) return <p className="p-4">Loading employees...</p>
+  
+  const exportEndpoints = [
+    { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
+  //   { label: "Export Sellers", url: "/api/adminb/bulk/seller/export/excal" },
+  //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
+  //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
+  //   { label: "Export Delivery Agents", url: "/api/adminb/bulk/delivery-agents/export/excel" },
+  ];
+  
+const handleExport = async (url: string): Promise<void> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to export data");
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = "export.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error(error);
+    alert("Error exporting file!");
+  }
+};
 
   return (
     <div className="w-full">
       {/* Top bar */}
-      <div className="flex justify-between items-center py-4">
-        <Input
-          placeholder="Filter emails..."
-          value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("email")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-4 items-center">
+          <Input
+            placeholder="Filter emails..."
+            value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn("email")?.setFilterValue(event.target.value)
+            }
+            className="max-w-sm"
+          />
+          {/* ✅ Date filters */}
+          <div className="flex gap-2 items-center">
+            <label>From:</label>
+            <Input
+              type="date"
+              onChange={(e) =>
+                table.getColumn("createdAt")?.setFilterValue({
+                  ...(table.getColumn("createdAt")?.getFilterValue() as any),
+                  from: e.target.value,
+                })
+              }
+            />
+            <label>To:</label>
+            <Input
+              type="date"
+              onChange={(e) =>
+                table.getColumn("createdAt")?.setFilterValue({
+                  ...(table.getColumn("createdAt")?.getFilterValue() as any),
+                  to: e.target.value,
+                })
+              }
+            />
+          </div>
+        </div>
+
         <div className="flex gap-2">
-          <AddEmployee onEmployeeAdded={fetchEmployees} />
+          <ImportExportButtons
+            entityType="employees"
+            config={ENTITY_CONFIGS.employees}
+            onImportSuccess={fetchEmployees}
+            onExportSuccess={() => {}}
+          />
+          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                Columns <ChevronDown />
+                Filter: {dateFilter} <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                ))}
+              {[
+                "all",
+                "today",
+                "yesterday",
+                "thisWeek",
+                "lastWeek",
+                "thisMonth",
+                "lastMonth",
+              ].map((option) => (
+                <DropdownMenuItem
+                  key={option}
+                  onClick={() => setDateFilter(option as any)}
+                >
+                  {option
+                    .replace(/([A-Z])/g, " $1")
+                    .replace(/^./, (str) => str.toUpperCase())}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <AddEmployee onEmployeeAdded={fetchEmployees} />
+
         </div>
       </div>
+      {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} Excal
+        </Button>
+      ))}
+
+      {/* ✅ Bulk delete button */}
+      {Object.keys(rowSelection).length > 0 && (
+        <Button
+          variant="destructive"
+          className="mb-2"
+          onClick={async () => {
+            const selectedIds = table.getSelectedRowModel().rows.map(
+              (row) => row.original._id
+            )
+            if (!selectedIds.length) return
+            try {
+              const token = localStorage.getItem("token")
+              await Promise.all(
+                selectedIds.map((id) =>
+                  axios.delete(
+                    `https://cod-ecommerce-two.vercel.app/api/admin/employees/${id}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  )
+                )
+              )
+              table.resetRowSelection()
+              fetchEmployees()
+            } catch (err) {
+              console.error("Failed to bulk delete", err)
+            }
+          }}
+        >
+          Delete Selected ({Object.keys(rowSelection).length})
+        </Button>
+      )}
 
       {/* Table */}
       <div className="overflow-hidden rounded-md border">
@@ -306,9 +486,9 @@ export function EmployeesTable() {
                     {header.isPlaceholder
                       ? null
                       : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
                   </TableHead>
                 ))}
               </TableRow>

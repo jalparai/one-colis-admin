@@ -15,13 +15,18 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
+interface AddSellerProps {
+  onSellerAdded?: () => void;
+  onCancel?: () => void; // ✅ Add this for cross/close action
+}
+
+export function AddSeller({ onSellerAdded, onCancel }: AddSellerProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [storeName, setStoreName] = useState("");
-  const [city, setCity] = useState(""); // ✅ New city state
+  const [city, setCity] = useState("");
   const [estimatedMonthlyOrders, setEstimatedMonthlyOrders] = useState("");
   const [isCurrentlySellingOnline, setIsCurrentlySellingOnline] = useState(false);
 
@@ -44,7 +49,7 @@ export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
           password,
           phoneNumber,
           storeName,
-          city, // ✅ Include city in API call
+          city,
           estimatedMonthlyOrders: Number(estimatedMonthlyOrders),
           isCurrentlySellingOnline,
           role: "Seller",
@@ -54,13 +59,13 @@ export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
 
       setMessage(`✅ Seller ${res.data?.data?.name || "created"} successfully!`);
 
-      // reset form
+      // Reset form
       setName("");
       setEmail("");
       setPassword("");
       setPhoneNumber("");
       setStoreName("");
-      setCity(""); // ✅ reset city
+      setCity("");
       setEstimatedMonthlyOrders("");
       setIsCurrentlySellingOnline(false);
 
@@ -84,14 +89,10 @@ export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Add Seller</SheetTitle>
-          <SheetDescription>
-            Fill in the details to create a new Seller.
-          </SheetDescription>
+          <SheetDescription>Fill in the details to create a new Seller.</SheetDescription>
         </SheetHeader>
-        <form
-          onSubmit={handleAddSeller}
-          className="grid flex-1 auto-rows-min gap-6 px-4"
-        >
+
+        <form onSubmit={handleAddSeller} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll">
           <Input
             id="name"
             value={name}
@@ -132,7 +133,7 @@ export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
             value={city}
             onChange={(e) => setCity(e.target.value)}
             placeholder="City"
-          /> 
+          />
           <Input
             id="estimatedMonthlyOrders"
             type="number"
@@ -169,12 +170,17 @@ export function AddSeller({ onSellerAdded }: { onSellerAdded?: () => void }) {
 
           {message && <p className="text-sm text-red-500">{message}</p>}
 
-          <SheetFooter>
+          <SheetFooter className="flex justify-between">
             <Button type="submit" disabled={loading}>
               {loading ? "Saving..." : "Save changes"}
             </Button>
             <SheetClose asChild>
-              <Button type="button" variant="outline">
+              <Button
+                type="button"
+                variant="outline"
+                className="cursor-pointer"
+                onClick={onCancel} // ✅ Call onCancel when closing
+              >
                 Close
               </Button>
             </SheetClose>

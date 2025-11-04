@@ -1,6 +1,6 @@
 
 import React from 'react'
-import { DeliveryTable } from '@/components/Delivery-agent/delivery-agent-table'
+import { PayoutTable } from '@/components/Payout-manager/payout-table';
 export async function generateStaticParams() {
   return [
     { locale: "en" },
@@ -18,7 +18,7 @@ function PayoutPage() {
 
         
       </div>
-        <DeliveryTable />
+        <PayoutTable />
     </div>
     </>
   )

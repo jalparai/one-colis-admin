@@ -1,276 +1,809 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import axios from "axios"
+import * as React from "react";
+import axios from "axios";
 import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+  type VisibilityState,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-  RowData,
+  type RowData,
   flexRender,
-} from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+} from "@tanstack/react-table";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import toast from "react-hot-toast";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "../ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AddOrder } from "./AddOrder";
+import { ImportReadyOrdersButton } from "@/components/ui/import-ready-orders";
+import { AddReadyOrder } from "./AddReadyOrder";
+import EditOrder from "./EditOrder";
 
-// ✅ Order type
+// ---------- Types ----------
+// NOTE: items now include optional productId so frontend passes productId when editing/creating
 export type Order = {
-  id: string
-  seller: string
-  sellerEmail: string
-  items: {
-    productName: string
-    quantity: number
-    unitPrice: number
-    total: number
-  }[]
-  itemsTotal: number
-  totalAmount: number
-  status: string
-  notes: string
-  createdAt: string
-  updatedAt: string
-}
+  id: string; // normalized id (from o.id ?? o._id)
+  seller: string;
+  orderId: string;
 
-// ✅ Extend TableMeta to allow refresh
+  sellerEmail?: string;
+  items: {
+    productId?: string | null;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total?: number;
+  }[];
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    postalCode?: string;
+  };
+  itemsTotal?: number;
+  totalAmount: number;
+  status: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type Agent = {
+  id: string;
+  name: string;
+  email?: string;
+};
+
+// Extend TableMeta for refresh callback
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
-    refresh?: () => void
+    refresh?: () => void;
   }
 }
 
-// ✅ Columns definition (sortable headers like Employee table)
-export const orderColumns: ColumnDef<Order>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: "seller",
-    header: "Seller",
-    cell: ({ row }) => <div>{row.getValue("seller")}</div>,
-  },
-  {
-    accessorKey: "sellerEmail",
-    header: "Email",
-    cell: ({ row }) => <div className="lowercase">{row.getValue("sellerEmail")}</div>,
-  },
-  {
-    accessorKey: "items",
-    header: "Items",
-    cell: ({ row }) => {
-      const items = row.original.items
-      return (
+// ---------- Status options ----------
+const statuses = [
+  "pending",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "ready",
+  "confirmed",
+  "returned",
+  "collected",
+];
+
+// ---------- Columns factory (pass callbacks) ----------
+export const getOrderColumns = (
+  onStatusUpdate: (id: string, status: string) => Promise<void>,
+  onDelete: (id: string) => Promise<void>,
+  onUpdated?: () => void
+): ColumnDef<Order>[] => [
+    {
+      accessorKey: "orderId",
+      header: "# Order ID",
+      cell: ({ row }) => {
+        const orderId = row.getValue("orderId") as string;
+        return <div className="font-mono text-xs text-muted-foreground">{orderId}</div>;
+      },
+    },
+    {
+      accessorKey: "seller",
+      header: "Seller",
+      cell: ({ row }) => <div>{row.getValue("seller")}</div>,
+    },
+    {
+      accessorKey: "sellerEmail",
+      header: "Email",
+      cell: ({ row }) => <div className="lowercase">{row.getValue("sellerEmail")}</div>,
+    },
+    {
+      accessorKey: "items",
+      header: "Items",
+      cell: ({ row }) => (
         <ul className="list-none pl-0">
-          {items.map((item, idx) => (
-            <li key={idx}>
-              {item.productName} 
-            </li>
+          {row.original.items.map((item, idx) => (
+            <li key={idx}>{item.productName}</li>
           ))}
         </ul>
-      )
+      ),
     },
-  },
-  {
-    accessorKey: "itemsTotal",
-    header: "Items Total",
-    cell: ({ row }) => <div>{row.getValue("itemsTotal")}</div>,
-  },
-  {
-    accessorKey: "totalAmount",
-    header: "Order Total",
-    cell: ({ row }) => <div>{row.getValue("totalAmount")}</div>,
-  },
-{
-  accessorKey: "status",
-  header: "Status",
-  cell: ({ row }) => {
-    const status = row.getValue("status") as string
 
-    const getStatusColor = (status: string) => {
-      switch (status.toLowerCase()) {
-        case "pending":
-          return "bg-yellow-100 text-yellow-800"
-        case "confirmed":
-          return "bg-blue-100 text-blue-800"
-        case "shipped":
-          return "bg-green-100 text-green-800"
-        case "cancelled":
-          return "bg-red-100 text-red-800"
-        default:
-          return "bg-gray-100 text-gray-800"
+    // --- Customer columns ---
+    {
+      id: "customer_name",
+      header: "Customer Name",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.name ?? "—"}</div>,
+    },
+    {
+      id: "customer_phone",
+      header: "Phone",
+      accessorKey: "customer",
+      cell: ({ row }) => <div className="font-mono text-sm">{row.original.customer?.phone ?? "—"}</div>,
+    },
+    {
+      id: "customer_address",
+      header: "Address",
+      accessorKey: "customer",
+      cell: ({ row }) => <div className="truncate max-w-xs">{row.original.customer?.address ?? "—"}</div>,
+    },
+    {
+      id: "customer_city",
+      header: "City",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.city ?? "—"}</div>,
+    },
+    {
+      id: "customer_postal",
+      header: "Postal Code",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.postalCode ?? "—"}</div>,
+    },
+
+
+    {
+      accessorKey: "quantity",
+      header: "Quantity",
+      cell: ({ row }) => (
+        <ul className="list-none pl-0">
+          {row.original.items.map((item, idx) => (
+            <li key={idx}>{item.quantity}</li>
+          ))}
+        </ul>
+      ),
+    },
+    {
+      accessorKey: "totalAmount",
+      header: "Total Amount",
+      cell: ({ row }) => <div>{row.getValue("totalAmount")}</div>,
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = (row.getValue("status") ?? "") as string;
+        const getStatusColor = (s: string) => {
+          switch (s.toLowerCase()) {
+            case "pending":
+              return "bg-yellow-50 text-yellow-700";
+            case "confirmed":
+              return "bg-indigo-50 text-indigo-700";
+            case "shipped":
+            case "delivered":
+              return "bg-green-50 text-green-700";
+            case "cancelled":
+              return "bg-rose-50 text-rose-700";
+            default:
+              return "bg-gray-50 text-gray-700";
+          }
+        };
+        return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>;
+      },
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => <div>{row.getValue("notes") ?? "—"}</div>,
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Date",
+      cell: ({ row }) => <div>{new Date(row.getValue("createdAt") as string).toLocaleDateString()}</div>,
+    },
+
+    // Actions column — uses callbacks passed in
+    {
+      header: "Action",
+      id: "actions",
+      cell: ({ row, table }) => {
+        const order = row.original;
+        const [statusOpen, setStatusOpen] = React.useState(false);
+        const [deleteOpen, setDeleteOpen] = React.useState(false);
+        const [selectedStatus, setSelectedStatus] = React.useState<string>(order.status);
+        const [loading, setLoading] = React.useState(false);
+        const [pickupLoading, setPickupLoading] = React.useState(false);
+        const [editOpen, setEditOpen] = React.useState(false);
+        const [selectedOrder, setSelectedOrder] = React.useState<Order | null>(null);
+
+        const isReady = order.status === "ready";
+
+        const handleUpdate = async () => {
+          if (!selectedStatus) {
+            toast.error("Select a status first");
+            return;
+          }
+          setLoading(true);
+          try {
+            await onStatusUpdate(order.id, selectedStatus);
+            onUpdated?.();
+            table.options.meta?.refresh?.();
+            toast.success("Status saved");
+            setStatusOpen(false);
+          } catch (err) {
+            toast.error("Could not update status");
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const handleDeleteLocal = async () => {
+          setLoading(true);
+          try {
+            await onDelete(order.id);
+            onUpdated?.();
+            table.options.meta?.refresh?.();
+            setDeleteOpen(false);
+          } catch (err) {
+            console.error("Delete error:", err);
+            toast.error("Could not delete order");
+          } finally {
+            setLoading(false);
+          }
+        };
+
+        const handlePickupRequest = async () => {
+          try {
+            setPickupLoading(true);
+            const res = await axios.post(
+              `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order.id}/request-pickup`,
+              {},
+              { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+            );
+            alert(res.data.message || "Pickup requested successfully");
+            // Use the API's expected status string
+            await onStatusUpdate(order.id, "pickup_request");
+            onUpdated?.();
+          } catch (err: any) {
+            alert(err.response?.data?.message || "Error requesting pickup");
+          } finally {
+            setPickupLoading(false);
+          }
+        };
+
+        return (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    // ensure selectedOrder contains normalized items with productId
+                    setSelectedOrder(order);
+                    setEditOpen(true);
+                  }}
+                >
+                  Edit Order
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem onClick={() => setDeleteOpen(true)}>Delete Order</DropdownMenuItem>
+                {isReady && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={pickupLoading}
+                      onClick={handlePickupRequest}
+                    >
+                      {pickupLoading ? "Requesting..." : "Pickup Request"}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <EditOrder
+              order={selectedOrder}
+              open={editOpen}
+              onOpenChange={(v) => setEditOpen(v)}
+              onOrderUpdated={() => {
+                // refresh parent table or re-fetch whatever is needed
+                onUpdated?.();
+                table.options.meta?.refresh?.();
+              }}
+            />
+
+            {/* Status Dialog */}
+            <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Update Order Status</DialogTitle>
+                  <div className="text-sm text-muted-foreground mt-1">Select the new status for this order.</div>
+                </DialogHeader>
+                <div className="py-4">
+                  <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setStatusOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUpdate} disabled={loading}>
+                    {loading ? "Saving..." : "Save"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete confirm */}
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Order with {order.items.map((i) => i.productName).join(", ")}?</AlertDialogTitle>
+                  <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteLocal} disabled={loading} className="bg-red-600 hover:bg-red-700">
+                    {loading ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        );
+      },
+    },
+  ];
+
+// ---------- OrdersTable component ----------
+export function OrdersTable() {
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({});
+  const [globalFilter, setGlobalFilter] = React.useState("");
+  const [dateFilter, setDateFilter] = React.useState<
+    "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
+  >("all");
+  const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
+
+  const fetchOrders = React.useCallback(async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Normalize IDs and ensure items include productId + productName + quantity + unitPrice
+      const raw = res.data?.data || [];
+      const normalized = raw.map((o: any) => {
+        const itemsRaw = Array.isArray(o.items) ? o.items : [];
+        const items = itemsRaw.map((it: any) => {
+          // Attempt to pick productId from several possible shapes returned by backend
+          const productId = it.productId ?? it.product?._id ?? it._id ?? null;
+          const productName = it.productName ?? it.product?.name ?? it.name ?? "";
+          const quantity = Number(it.quantity ?? it.qty ?? 0);
+          const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
+          const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
+          return {
+            productId,
+            productName,
+            quantity,
+            unitPrice,
+            total,
+          };
+        });
+
+        const customer = (o.customer && typeof o.customer === "object") ? {
+          name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
+          phone: o.customer.phone ?? o.customer.mobile ?? undefined,
+          address: o.customer.address ?? o.customer.addr ?? undefined,
+          city: o.customer.city ?? undefined,
+          postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
+        } : undefined;
+
+        return {
+          id: o.id ?? o._id ?? String(Math.random()),
+          orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : undefined) ?? "",
+          seller:
+            typeof o.seller === "object" ? (o.seller.name ?? o.seller.company ?? o.seller._id) : o.seller ?? o.sellerName ?? "",
+          sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
+          items,
+          customer,
+          itemsTotal: o.itemsTotal ?? o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          status: o.status ?? "",
+          notes: o.notes ?? "",
+          createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
+        } as Order;
+      });
+
+      setOrders(normalized);
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Update status API -> **admin** endpoint using normalized `id`
+  const handleStatusUpdate = async (id: string, status: string) => {
+    if (!id) {
+      toast.error("Missing order id");
+      return;
+    }
+
+    const prev = orders.find((o) => o.id === id);
+    // optimistic UI
+    if (prev) setOrders((p) => p.map((o) => (o.id === id ? { ...o, status } : o)));
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.error("No auth token found. Please login.");
+      // rollback
+      if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
+      return;
+    }
+
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const attempts = [
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/${id}/status`,
+        body: { status },
+      },
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/status`,
+        body: { orderId: id, status },
+      },
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/${id}/status`,
+        body: { status },
+      },
+    ];
+
+    let succeeded = false;
+    const errors: any[] = [];
+
+    for (const a of attempts) {
+      try {
+        console.info("[status-update] trying:", a.method.toUpperCase(), a.url, a.body);
+        const res =
+          a.method === "patch"
+            ? await axios.patch(a.url, a.body, { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true })
+            : await axios.post(a.url, a.body, { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true });
+
+        console.info("[status-update] response:", a.url, res.status, res.data);
+
+        if (res.status >= 200 && res.status < 300) {
+          succeeded = true;
+          toast.success("Order status updated");
+          // refresh authoritative data
+          await fetchOrders();
+          break;
+        } else {
+          errors.push({ url: a.url, status: res.status, data: res.data });
+          // if auth problem, surface and stop
+          if (res.status === 401 || res.status === 403) {
+            toast.error(`Auth error (${res.status}). Make sure you are using an admin token for admin endpoints.`);
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.error("[status-update] network error for", a.url, err);
+        errors.push({ url: a.url, error: err?.message ?? err });
       }
     }
 
-    return (
-      <span
-        className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-          status
-        )}`}
-      >
-        {status}
-      </span>
-    )
-  },
-},
+    if (!succeeded) {
+      console.error("[status-update] all attempts failed:", errors);
+      toast.error("Status update failed — check console network logs.");
+      // rollback optimistic UI
+      if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
+    }
+  };
 
-  {
-    accessorKey: "notes",
-    header: "Notes",
-    cell: ({ row }) => <div>{row.getValue("notes")}</div>,
-  },
-{
-  accessorKey: "createdAt",
-  header: ({ column }) => (
-    <Button
-      variant="ghost"
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-    >
-      Date
-      <ArrowUpDown className="ml-2 h-4 w-4" />
-    </Button>
-  ),
-  cell: ({ row }) => {
-    const dateStr = row.getValue("createdAt") as string
-    return <div>{new Date(dateStr).toLocaleDateString()}</div>
-  },
-},
+  // Delete API (admin)
+  const handleDelete = async (id: string) => {
+    if (!id) {
+      toast.error("Missing order id");
+      return;
+    }
 
-]
+    const prev = orders.find((o) => o.id === id);
+    // optimistic UI
+    setOrders((p) => p.filter((o) => o.id !== id));
 
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.error("No auth token found. Please login.");
+      // rollback
+      if (prev) setOrders((p) => [prev, ...p]);
+      return;
+    }
 
-// ✅ OrdersTable component
-export function OrdersTable() {
-  const [orders, setOrders] = React.useState<Order[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = React.useState({})
-  const [globalFilter, setGlobalFilter] = React.useState("")
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const attempts = [
+      { method: "delete" as const, url: `${base}/api/admin/delete-order/${id}` },
+    ];
 
-const fetchOrders = React.useCallback(async () => {
-  try {
-    const token = localStorage.getItem("token")
-    const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    let succeeded = false;
+    const errors: any[] = [];
 
-    // ✅ Map data
-    const mapped = (res.data.data || []).map((order: any) => ({
-      id: order.id,
-      seller: order.seller,
-      sellerEmail: order.sellerEmail,
-      items: order.items,
-      itemsTotal: order.itemsTotal,
-      totalAmount: order.totalAmount,
-      status: order.status,
-      notes: order.notes,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-    }))
+    for (const a of attempts) {
+      try {
+        console.info("[delete-order] trying:", a.method.toUpperCase(), a.url);
+        const res = await axios.delete(a.url, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
 
-    setOrders(mapped)
-  } catch (err) {
-    console.error("Error fetching orders:", err)
-  } finally {
-    setLoading(false)
-  }
-}, [])
+        console.info("[delete-order] response:", a.url, res.status, res.data);
 
-  React.useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+        if (res.status >= 200 && res.status < 300) {
+          succeeded = true;
+          toast.success("Order deleted");
+          // refresh authoritative list
+          await fetchOrders();
+          break;
+        } else {
+          errors.push({ url: a.url, status: res.status, data: res.data });
+          if (res.status === 401 || res.status === 403) {
+            toast.error(`Auth error (${res.status}). Make sure token has required admin permissions.`);
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.error("[delete-order] network error for", a.url, err);
+        errors.push({ url: a.url, error: err?.message ?? err });
+      }
+    }
 
-const table = useReactTable({
-  data: orders,
-  columns: orderColumns,
-  state: { sorting, columnFilters, columnVisibility, rowSelection, globalFilter },
-  onGlobalFilterChange: setGlobalFilter,
-  getCoreRowModel: getCoreRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
-  meta: { refresh: fetchOrders },
-})
+    if (!succeeded) {
+      console.error("[delete-order] all attempts failed:", errors);
+      toast.error("Delete failed — check console for network logs.");
+      // rollback optimistic removal
+      if (prev) setOrders((p) => [prev, ...p]);
+    }
+  };
 
+  // Date filtering logic (same as yours)
+  const filteredOrders = React.useMemo(() => {
+    if (dateFilter === "all") return orders;
 
-  if (loading) return <p className="p-4">Loading orders...</p>
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+    return orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+
+      switch (dateFilter) {
+        case "today":
+          return createdAt >= startOfDay(now) && createdAt <= endOfDay(now);
+
+        case "yesterday": {
+          const y = new Date(now);
+          y.setDate(now.getDate() - 1);
+          return createdAt >= startOfDay(y) && createdAt <= endOfDay(y);
+        }
+
+        case "thisWeek": {
+          const day = now.getDay(); // 0 = Sunday
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - day); // start of week
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= weekStart && createdAt <= weekEnd;
+        }
+
+        case "lastWeek":
+          const lastWeekStart = new Date(now);
+          lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+          lastWeekStart.setHours(0, 0, 0, 0);
+          const lastWeekEnd = new Date(lastWeekStart);
+          lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+          lastWeekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
+
+        case "thisMonth":
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          return createdAt >= thisMonthStart && createdAt <= thisMonthEnd;
+
+        case "lastMonth":
+          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+          return createdAt >= lastMonthStart && createdAt <= lastMonthEnd;
+
+        default:
+          return true;
+      }
+    });
+  }, [orders, dateFilter]);
+
+  // Apply range + search
+  const timeFilteredOrders = React.useMemo(() => {
+    return filteredOrders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      const from = rangeFilter.from ? new Date(rangeFilter.from) : null;
+      const to = rangeFilter.to ? new Date(rangeFilter.to) : null;
+      if (from && createdAt < from) return false;
+      if (to && createdAt > to) return false;
+      return true;
+    });
+  }, [filteredOrders, rangeFilter]);
+
+  const finalOrders = React.useMemo(() => {
+    if (!globalFilter.trim()) return timeFilteredOrders;
+    const q = globalFilter.toLowerCase();
+    return timeFilteredOrders.filter((o) => {
+      return (
+        (o.seller ?? "").toLowerCase().includes(q) ||
+        (o.sellerEmail ?? "").toLowerCase().includes(q) ||
+        (o.status ?? "").toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        (o.customer?.phone ?? "").toLowerCase().includes(q) ||
+        o.items.some(
+          (it) =>
+            it.productName.toLowerCase().includes(q) ||
+            String(it.quantity).includes(q) ||
+            String(it.unitPrice).includes(q)
+        )
+      );
+    });
+  }, [timeFilteredOrders, globalFilter]);
+
+  const table = useReactTable({
+    data: finalOrders,
+    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders),
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    meta: { refresh: fetchOrders },
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
+  });
+
+  const exportEndpoints = [
+    { label: "Export Orders", url: "http://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" },
+  ];
+
+  const handleExport = async (url: string): Promise<void> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to export data");
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = "export.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error(error);
+      alert("Error exporting file!");
+    }
+  };
+
+  if (loading) return <p className="p-4">Loading orders...</p>;
 
   return (
     <div className="w-full">
       {/* Top bar */}
-      <div className="flex justify-between items-center py-4">
-       <Input
-  placeholder="Search orders..."
-  value={globalFilter ?? ""}
-  onChange={(event) => setGlobalFilter(event.target.value)}
-  className="max-w-sm"
-/>
+      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
+        <Input placeholder="Search orders..." value={globalFilter ?? ""} onChange={(e) => setGlobalFilter(e.target.value)} className="max-w-sm" />
+
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-2">
+          <label>From:</label>
+          <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
+          <label>To:</label>
+          <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, to: e.target.value }))} />
+        </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              Columns <ChevronDown />
-            </Button>
+            <Button variant="outline">Filter: {dateFilter} <ChevronDown /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
+            {[
+              { key: "all", label: "All" },
+              { key: "today", label: "Today" },
+              { key: "yesterday", label: "Yesterday" },
+              { key: "thisWeek", label: "This Week" },
+              { key: "lastWeek", label: "Last Week" },
+              { key: "thisMonth", label: "This Month" },
+              { key: "lastMonth", label: "Last Month" },
+            ].map((option) => (
+              <DropdownMenuItem key={option.key} onClick={() => setDateFilter(option.key as typeof dateFilter)}>
+                {option.label}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <div className="flex gap-2">
+          <ImportReadyOrdersButton
+            endpoint="https://cod-ecommerce-two.vercel.app/api/admin/ready-order/bulk-upload"
+            label="Import Ready Orders"
+            onSuccess={fetchOrders}
+          />
+          <AddReadyOrder onOrderAdded={fetchOrders} />
+          <AddOrder onOrderAdded={fetchOrders} />
+        </div>
       </div>
+      {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} Excal
+        </Button>
+      ))}
 
       {/* Table */}
       <div className="overflow-hidden rounded-md border">
@@ -279,29 +812,24 @@ const table = useReactTable({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
+                  <TableHead key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
                 ))}
               </TableRow>
             ))}
           </TableHeader>
+
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={orderColumns.length} className="h-24 text-center">
+                <TableCell colSpan={10} className="h-24 text-center">
                   No orders found.
                 </TableCell>
               </TableRow>
@@ -310,31 +838,17 @@ const table = useReactTable({
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="text-muted-foreground flex-1 text-sm">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
+        <div className="text-muted-foreground flex-1 text-sm">{table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s) selected.</div>
         <div className="space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
             Previous
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
             Next
           </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

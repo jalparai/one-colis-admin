@@ -58,14 +58,14 @@ export function AddAgent({ ondeliveryAdded }: { ondeliveryAdded?: () => void }) 
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button>+ Add delivery</Button>
+        <Button>+ Add Agent</Button>
       </SheetTrigger>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Add delivery</SheetTitle>
           <SheetDescription>Fill in the details to create a new delivery.</SheetDescription>
         </SheetHeader>
-        <form onSubmit={handleAdddelivery} className="grid flex-1 auto-rows-min gap-6 px-4">
+        <form onSubmit={handleAdddelivery} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll overflow-scroll">
           <div className="grid gap-3">
             <Label htmlFor="name">Name</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />

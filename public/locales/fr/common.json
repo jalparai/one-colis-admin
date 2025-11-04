@@ -240,5 +240,42 @@
     "previous": "Précédent",
     "next": "Suivant"
   }
+  ,
+    "sellerSidebar": {
+    "home": "Accueil",
+    "orders": "Commandes",
+    "stocks": "Mes stocks",
+    "tickets": "Tickets",
+    "myPickups": "Mes collectes",
+    "invoices": "Factures",
+    "deliveryCollection": "Collecte de livraison",
+    "cityFee": "Vérifier les frais de la ville",
+    "sellerReports": "Rapports du vendeur",
+    "navigation": "Navigation principale",
+    "estimatedDelivery": "Livraison estimée"
+  }
+,
 
+  "employeeSidebar": {
+    "home": "Accueil",
+    "sellers": "Vendeurs",
+    "managePickups": "Gérer les collectes",
+    "orders": "Commandes",
+    "deliveryAgents": "Agents de livraison",
+    "wareHouses": "Entrepôts",
+    "stocks": "Stocks",
+    "payoutManager": "Gestionnaire de paiements",
+    "payout": "Paiement",
+    "tickets": "Tickets",
+    "navigation": "Navigation principale"
+  },
+  "agentSidebar": {
+    "home": "Accueil",
+    "myOrders": "Mes commandes",
+    "navigation": "Navigation principale"
+  },
+    "payoutSidebar": {
+    "home": "Accueil",
+    "myPayout": "Mes paiements"
+  }
 }

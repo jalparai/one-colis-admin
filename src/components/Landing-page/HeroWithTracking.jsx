@@ -8,20 +8,45 @@ import warehouseImg from "../../../public/images/bg-1.jpg";
 
 export default function HeroWithTracking() {
   const [orderNumber, setOrderNumber] = useState("");
-  const [orderDetails, setOrderDetails] = useState(null);
+  const [trackingData, setTrackingData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const { t, i18n } = useTranslation("common");
 
-  // Simulated tracking API
-  const handleTrackOrder = () => {
-    if (orderNumber === "12345") {
-      setOrderDetails({
-        orderId: "12345",
-        status: t("inTransit"),
-        estimatedDelivery: "Sep 10, 2025",
-        location: "Casablanca, Morocco",
-      });
-    } else {
-      setOrderDetails({ error: t("orderNotFound") });
+  const handleTrackOrder = async () => {
+    const trimmedOrder = orderNumber.trim();
+    if (!trimmedOrder) {
+      setErrorMessage(t("enterTrackingNumber"));
+      setTrackingData(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage("");
+    setTrackingData(null);
+
+    try {
+      const res = await fetch(
+        `https://cod-ecommerce-two.vercel.app/api/shared/track/${encodeURIComponent(trimmedOrder)}`,
+        { cache: "no-store" }
+      );
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = json?.message || t("orderNotFound");
+        setErrorMessage(message);
+        return;
+      }
+
+      if (json?.data) {
+        setTrackingData(json.data);
+      } else {
+        setErrorMessage(t("orderNotFound"));
+      }
+    } catch (err) {
+      setErrorMessage(t("somethingWentWrong") || "Something went wrong");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -98,15 +123,33 @@ export default function HeroWithTracking() {
           <button
             onClick={handleTrackOrder}
             aria-label={t("trackNow")}
-            className="bg-[#2BC3F1] lg:mt-0 text-center justify-center mt-2 lg:w-auto w-full hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition"
+            disabled={isLoading || !orderNumber.trim()}
+            aria-busy={isLoading}
+            className="bg-[#2BC3F1] lg:mt-0 text-center justify-center mt-2 lg:w-auto w-full hover:bg-sky-400 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition"
           >
-            <Search className="w-4 h-4" />
-            {t("trackNow")}
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                {t("loading") || "Loading"}
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                {t("trackNow")}
+              </>
+            )}
           </button>
         </div>
 
+        {errorMessage && (
+          <p className="mt-3 text-red-300 text-sm font-medium">{errorMessage}</p>
+        )}
+
         {/* Tracking Result */}
-        {orderDetails && <TrackingResult orderDetails={orderDetails} />}
+        {trackingData && <TrackingResult trackingData={trackingData} orderId={orderNumber.trim()} />}
       </div>
 
       {/* Bottom Wave Overlay */}
@@ -115,36 +158,74 @@ export default function HeroWithTracking() {
   );
 }
 
-function TrackingResult({ orderDetails }) {
+function TrackingResult({ trackingData, orderId }) {
   const { t, i18n } = useTranslation("common");
   const isArabic = i18n.language === "ar";
 
+  const formatDateTime = (iso) => {
+    try {
+      return new Date(iso).toLocaleString(i18n.language || undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (e) {
+      return iso;
+    }
+  };
+
+  const { status, statusHistory = [], lastUpdated } = trackingData || {};
+  const timeline = [...statusHistory].sort((a, b) => new Date(b.at) - new Date(a.at));
+
   return (
     <div
-      className={`mt-6 bg-white/90 text-gray-800 p-4 rounded-md shadow-sm max-w-md w-full animate-fadeIn ${
+      className={`mt-6 bg-white/90 text-gray-800 p-4 rounded-md shadow-sm w-full max-w-2xl animate-fadeIn ${
         isArabic ? "text-right" : "text-left"
       }`}
       dir={isArabic ? "rtl" : "ltr"}
     >
-      {orderDetails.error ? (
-        <p className="text-red-600 font-medium">{orderDetails.error}</p>
-      ) : (
-        <>
-          <p>
-            <strong>{t("orderId")}:</strong> {orderDetails.orderId}
-          </p>
-          <p>
-            <strong>{t("status")}:</strong> {orderDetails.status}
-          </p>
-          <p>
-            <strong>{t("estimatedDelivery")}:</strong>{" "}
-            {orderDetails.estimatedDelivery}
-          </p>
-          <p>
-            <strong>{t("location")}:</strong> {orderDetails.location}
-          </p>
-        </>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 text-sm">{t("orderId") || "Order ID"}:</span>
+          <span className="font-semibold">{orderId}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 text-sm">{t("status") || "Status"}:</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 border border-sky-200">
+            {status}
+          </span>
+        </div>
+      </div>
+
+      {lastUpdated && (
+        <p className="mt-1 text-xs text-gray-500">
+          {t("lastUpdated") || "Last updated"}: {formatDateTime(lastUpdated)}
+        </p>
       )}
+
+      <div className="mt-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">{t("statusHistory") || "Status history"}</h3>
+        <ol className="relative border-s border-gray-200 pl-4">
+          {timeline.length === 0 && (
+            <li className="text-sm text-gray-500">{t("noHistory") || "No history available"}</li>
+          )}
+          {timeline.map((item, idx) => (
+            <li key={item._id || idx} className="mb-3">
+              <div className="absolute -left-1.5 mt-1 h-3 w-3 rounded-full bg-sky-400 border border-white" />
+              <div className="text-sm">
+                <span className="font-medium text-gray-800">{item.from} → {item.to}</span>
+                <span className="ml-2 text-gray-500">{formatDateTime(item.at)}</span>
+              </div>
+              <div className="text-xs text-gray-500">
+                {(t("by") || "By")}: {item.by || "system"}
+                {item.reason ? ` • ${item.reason}` : ""}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }

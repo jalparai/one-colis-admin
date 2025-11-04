@@ -14,10 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface AddStockDialogProps {
-  sellerId: string;
+  sellerId?: string; // optional, because Quick Action may not provide it
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStockAdded?: () => void; // callback to refresh table
+  onCancel?: () => void;
 }
 
 export function AddStockDialog({
@@ -40,6 +41,11 @@ export function AddStockDialog({
   };
 
   const handleSubmit = async () => {
+    if (!sellerId) {
+      toast.error("Please select a seller before adding stock.");
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
@@ -112,7 +118,9 @@ export function AddStockDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              onOpenChange(false);
+            }}
             disabled={loading}
           >
             Cancel
