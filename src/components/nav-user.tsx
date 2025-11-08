@@ -99,7 +99,7 @@ export function NavUser() {
 
               {isSeller && (
                 <>
-                  <DropdownMenuItem className="font-semibold pl-4" onClick={() => setEditProfileOpen(true)}>Edit Profile</DropdownMenuItem>
+                  <DropdownMenuItem className="font-semibold pl-4" onClick={() => setEditProfileOpen(true)}>Settings</DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
               )}

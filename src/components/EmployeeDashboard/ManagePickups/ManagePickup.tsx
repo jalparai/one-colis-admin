@@ -242,7 +242,7 @@ export const orderColumns: ColumnDef<Order>[] = [
         try {
           setLoading(true)
           const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
-          await axios.delete(`https://cod-ecommerce-two.vercel.app/api/seller/orders/${row.original.id}`, {
+          await axios.delete(`https://cod-ecommerce-two.vercel.app/api/admin/delete-order/${row.original.id}`, {
             headers: { Authorization: `Bearer ${token}` },
           })
           setDeleteOpen(false)

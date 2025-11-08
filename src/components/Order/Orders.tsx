@@ -237,6 +237,95 @@ export const getOrderColumns = (
 
         const isReady = order.status === "ready";
 
+        // add these hooks near the top of the cell (where other hooks live)
+const [assignOpen, setAssignOpen] = React.useState(false);
+const [agents, setAgents] = React.useState<Agent[]>([]);
+const [selectedAgentId, setSelectedAgentId] = React.useState<string>(""); // default empty string
+const [assignLoading, setAssignLoading] = React.useState(false);
+
+// fetch agents when dialog opens
+React.useEffect(() => {
+  if (!assignOpen) return;
+  let cancelled = false;
+  const fetchAgents = async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents", {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      });
+      const raw = Array.isArray(res.data?.data) ? res.data.data : [];
+      const normalized: Agent[] = raw
+        .map((a: any) => ({
+          id: a?.id ?? a?._id,
+          name: a?.name ?? (a?.email ?? "Unnamed"),
+          email: a?.email ?? "",
+        }))
+        .filter((a: Agent) => Boolean(a.id));
+      if (!cancelled) setAgents(normalized);
+    } catch (err) {
+      console.error("Failed to fetch agents", err);
+      toast.error("Could not load agents");
+    }
+  };
+  fetchAgents();
+  return () => {
+    cancelled = true;
+  };
+}, [assignOpen]);
+
+// assign handler
+// ensure selectedAgentId state is: const [selectedAgentId, setSelectedAgentId] = React.useState<string>("");
+
+const handleAssignToAgent = async () => {
+  if (!selectedAgentId) {
+    toast.error("Select an agent first");
+    return;
+  }
+  setAssignLoading(true);
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const res = await axios.post(
+      `${base}/api/admin/assign/orders/${selectedAgentId}`,
+      { orderIds: [order.id] },
+      { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
+    );
+
+    if (res.status >= 200 && res.status < 300) {
+      // After successful assign, update status to assigned_to_agent via your existing callback
+      try {
+        await onStatusUpdate(order.id, "assigned_to_agent");
+      } catch (err) {
+        // console.error("Failed to update status after assign:", err);
+        // still treat assign as success but warn user
+        toast.success("Order assigned to agent — but failed to update status. Refresh to verify.");
+        setAssignOpen(false);
+        setSelectedAgentId("");
+        onUpdated?.();
+        table.options.meta?.refresh?.();
+        return;
+      }
+
+      toast.success("Order assigned to agent and status updated");
+      setAssignOpen(false);
+      setSelectedAgentId("");
+      onUpdated?.();
+      table.options.meta?.refresh?.();
+    } else {
+      // surface server message when available
+      const msg = res.data?.message ?? `Assign failed (${res.status})`;
+      toast.error(msg);
+    }
+  } catch (err: any) {
+    console.error("Assign error", err);
+    toast.error(err?.response?.data?.message ?? "Network error while assigning");
+  } finally {
+    setAssignLoading(false);
+  }
+};
+
+
         const handleUpdate = async () => {
           if (!selectedStatus) {
             toast.error("Select a status first");
@@ -293,44 +382,56 @@ export const getOrderColumns = (
         return (
           <>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
+  <DropdownMenuTrigger asChild>
+    <Button variant="ghost" className="h-8 w-8 p-0">
+      <span className="sr-only">Open menu</span>
+      <MoreHorizontal className="h-4 w-4" />
+    </Button>
+  </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+  <DropdownMenuContent align="end">
+    <DropdownMenuLabel>Actions</DropdownMenuLabel>
 
-                <DropdownMenuItem
-                  onClick={() => {
-                    // ensure selectedOrder contains normalized items with productId
-                    setSelectedOrder(order);
-                    setEditOpen(true);
-                  }}
-                >
-                  Edit Order
-                </DropdownMenuItem>
+    <DropdownMenuItem
+      onClick={() => {
+        setSelectedOrder(order);
+        setEditOpen(true);
+      }}
+    >
+      Edit Order
+    </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
+    <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
 
-                <DropdownMenuSeparator />
+    <DropdownMenuSeparator />
 
-                <DropdownMenuItem onClick={() => setDeleteOpen(true)}>Delete Order</DropdownMenuItem>
-                {isReady && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={pickupLoading}
-                      onClick={handlePickupRequest}
-                    >
-                      {pickupLoading ? "Requesting..." : "Pickup Request"}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+    {/* Assign to agent: only allow if order is ready */}
+    <DropdownMenuItem
+      onClick={() => {
+        if (!isReady) {
+          toast.error("Only orders with 'ready' status can be assigned");
+          return;
+        }
+        setAssignOpen(true);
+      }}
+    >
+      Assign to Agent
+    </DropdownMenuItem>
+
+    <DropdownMenuSeparator />
+
+    <DropdownMenuItem onClick={() => setDeleteOpen(true)}>Delete Order</DropdownMenuItem>
+
+    {isReady && (
+      <>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={pickupLoading} onClick={handlePickupRequest}>
+          {pickupLoading ? "Requesting..." : "Pickup Request"}
+        </DropdownMenuItem>
+      </>
+    )}
+  </DropdownMenuContent>
+</DropdownMenu>
 
             <EditOrder
               order={selectedOrder}
@@ -343,7 +444,49 @@ export const getOrderColumns = (
               }}
             />
 
-            {/* Status Dialog */}
+          {/* Assign Dialog */}
+<Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Assign Order to Agent</DialogTitle>
+      <div className="text-sm text-muted-foreground mt-1">Pick a delivery agent to assign this ready order.</div>
+    </DialogHeader>
+
+    <div className="py-4">
+<Select value={selectedAgentId} onValueChange={(v) => setSelectedAgentId(String(v))}>
+  <SelectTrigger>
+    <SelectValue placeholder={agents.length ? "Select agent" : "No agents available"} />
+  </SelectTrigger>
+  <SelectContent>
+    {agents.length ? (
+      agents.map((a) => (
+        <SelectItem key={a.id} value={a.id}>
+          {a.name} {a.email ? `(${a.email})` : ""}
+        </SelectItem>
+      ))
+    ) : (
+      // use a non-empty value and disable it so user cannot select it
+      <SelectItem key="no-agents" value="__no_agents" disabled>
+        No agents
+      </SelectItem>
+    )}
+  </SelectContent>
+</Select>
+
+
+    </div>
+
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setAssignOpen(false)} disabled={assignLoading}>
+        Cancel
+      </Button>
+      <Button onClick={handleAssignToAgent} disabled={assignLoading}>
+        {assignLoading ? "Assigning..." : "Assign"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+  {/* Status Dialog */}
             <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
               <DialogContent>
                 <DialogHeader>

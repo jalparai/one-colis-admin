@@ -30,7 +30,15 @@ type Item = {
   unitPrice: number
 }
 
-export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
+export function AddReadyOrder({
+  onOrderAdded,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+}: {
+  onOrderAdded?: () => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   const [sellerId, setSellerId] = useState("")
   const [sellers, setSellers] = useState<Seller[]>([])
 
@@ -145,11 +153,14 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   }
 
   return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button>+ Add Ready Order</Button>
-      </SheetTrigger>
-      <SheetContent>
+  <Sheet open={externalOpen} onOpenChange={externalOnOpenChange}>
+  {/* Only show the internal trigger when this component is used standalone
+          (i.e. parent didn't pass `open` prop). */}
+      {typeof externalOpen === "undefined" && (
+        <SheetTrigger asChild>
+          <Button>+ Add Ready Order</Button>
+        </SheetTrigger>
+      )}      <SheetContent>
         <SheetHeader>
           <SheetTitle>Create Ready Order</SheetTitle>
           <SheetDescription>Fill in the details to create a ready order.</SheetDescription>

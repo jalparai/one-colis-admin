@@ -187,7 +187,7 @@ export function EditOrder({
       sku: (it as any).sku ?? undefined,
       productId: (it as any).productId ?? (it as any)._id ?? null,
       productName: it.productName ?? (it as any).name ?? "",
-      quantity: Number(it.quantity ?? it.qty ?? 1),
+      quantity: Number(it.quantity ?? 1),
       unitPrice: Number((it as any).unitPrice ?? (it as any).price ?? 0),
       available: (it as any).available,
     }));
@@ -277,143 +277,143 @@ export function EditOrder({
 
   const removeItem = (index: number) => setItems((s) => s.filter((_, i) => i !== index));
 
-// inside your EditOrder component: replace the handleSave function with this
-const handleSave = async (e?: React.FormEvent) => {
-  if (e) e.preventDefault();
-  setMessage("");
-  setLoading(true);
+  // inside your EditOrder component: replace the handleSave function with this
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setMessage("");
+    setLoading(true);
 
-  try {
-    if (!order) {
-      toast.error("No order selected");
-      setLoading(false);
-      return;
-    }
-    if (!items.length) {
-      toast.error("Order must contain at least one item");
-      setLoading(false);
-      return;
-    }
-
-    // Validate items quickly before sending
-    const invalid: { idx: number; reason: string }[] = [];
-    const productIds = new Set(products.map((p) => getStockId(p)));
-
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      if (!it.productId || !String(it.productId).trim()) {
-        invalid.push({ idx: i, reason: "No product selected" });
-        continue;
+    try {
+      if (!order) {
+        toast.error("No order selected");
+        setLoading(false);
+        return;
       }
-      if (!productIds.has(it.productId)) {
-        invalid.push({ idx: i, reason: `Unknown productId ${it.productId}` });
-        continue;
+      if (!items.length) {
+        toast.error("Order must contain at least one item");
+        setLoading(false);
+        return;
       }
-      if (!it.quantity || Number(it.quantity) <= 0) {
-        invalid.push({ idx: i, reason: `Invalid quantity ${it.quantity}` });
-      }
-    }
 
-    if (invalid.length) {
-      const first = invalid[0];
-      toast.error(`Item ${first.idx + 1}: ${first.reason}`);
-      setLoading(false);
-      return;
-    }
+      // Validate items quickly before sending
+      const invalid: { idx: number; reason: string }[] = [];
+      const productIds = new Set(products.map((p) => getStockId(p)));
 
-    const token = getToken();
-    if (!token) {
-      toast.error("No auth token found. Please login.");
-      setLoading(false);
-      return;
-    }
-
-    // Build payload exactly as your backend expects
-    const payload = {
-      notes: notes ?? "",
-      items: items.map((it) => ({ productId: it.productId!.trim(), quantity: Number(it.quantity) })),
-      customer: {
-        name: customer?.name ?? undefined,
-        phone: customer?.phone ?? undefined,
-        address: customer?.address ?? undefined,
-        city: customer?.city ?? undefined,
-        postalCode: customer?.postalCode ?? undefined,
-      },
-      meta: { ignoreStock: Boolean(forceUpdate) },
-    };
-
-    // IMPORTANT: use DB id (_id) for the route. fallback to id only if _id missing.
-    const dbId = String(order._id ?? order.id ?? "").trim();
-    if (!dbId) {
-      toast.error("Order database id (_id) is missing. Cannot update.");
-      setLoading(false);
-      return;
-    }
-    const idForRoute = encodeURIComponent(dbId);
-
-    // Try the most likely single method: PUT to seller namespace first (server expects PUT + db id)
-    const attempts = [
-      { method: "put", url: `${API_BASE}/api/seller/orders/${idForRoute}` },
-      { method: "put", url: `${API_BASE}/api/admin/orders/${idForRoute}` },
-      { method: "put", url: `${API_BASE}/api/orders/${idForRoute}` },
-    ];
-
-    let ok = false;
-    const errors: any[] = [];
-    let lastRes: any = null;
-
-    for (const a of attempts) {
-      try {
-        const res = await axios.request({
-          url: a.url,
-          method: a.method as any,
-          data: payload,
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          timeout: 15000,
-          validateStatus: () => true,
-        });
-
-        lastRes = res;
-        console.log("[EditOrder] try", a.method.toUpperCase(), a.url, res.status, res.data);
-
-        if (res.status >= 200 && res.status < 300) {
-          ok = true;
-          break;
-        } else {
-          errors.push({ url: a.url, status: res.status, data: res.data });
-          // stop early on auth failure
-          if (res.status === 401 || res.status === 403) break;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it.productId || !String(it.productId).trim()) {
+          invalid.push({ idx: i, reason: "No product selected" });
+          continue;
         }
-      } catch (err: any) {
-        console.error("[EditOrder] request error for", a.url, err?.message ?? err);
-        errors.push({ url: a.url, error: err?.message ?? err });
+        if (!productIds.has(it.productId)) {
+          invalid.push({ idx: i, reason: `Unknown productId ${it.productId}` });
+          continue;
+        }
+        if (!it.quantity || Number(it.quantity) <= 0) {
+          invalid.push({ idx: i, reason: `Invalid quantity ${it.quantity}` });
+        }
       }
-    }
 
-    if (!ok) {
-      console.error("[EditOrder] all attempts failed", errors);
-      const firstErr = errors[0];
-      // prefer server message if any
-      const detail =
-        firstErr?.data?.message ?? firstErr?.data ?? firstErr?.error ? JSON.stringify(firstErr.data ?? firstErr.error) : lastRes?.data ?? "No response";
-      setMessage(`❌ Update failed — ${detail}`);
-      toast.error("Update failed — check console for network details");
+      if (invalid.length) {
+        const first = invalid[0];
+        toast.error(`Item ${first.idx + 1}: ${first.reason}`);
+        setLoading(false);
+        return;
+      }
+
+      const token = getToken();
+      if (!token) {
+        toast.error("No auth token found. Please login.");
+        setLoading(false);
+        return;
+      }
+
+      // Build payload exactly as your backend expects
+      const payload = {
+        notes: notes ?? "",
+        items: items.map((it) => ({ productId: it.productId!.trim(), quantity: Number(it.quantity) })),
+        customer: {
+          name: customer?.name ?? undefined,
+          phone: customer?.phone ?? undefined,
+          address: customer?.address ?? undefined,
+          city: customer?.city ?? undefined,
+          postalCode: customer?.postalCode ?? undefined,
+        },
+        meta: { ignoreStock: Boolean(forceUpdate) },
+      };
+
+      // IMPORTANT: use DB id (_id) for the route. fallback to id only if _id missing.
+      const dbId = String(order._id ?? order.id ?? "").trim();
+      if (!dbId) {
+        toast.error("Order database id (_id) is missing. Cannot update.");
+        setLoading(false);
+        return;
+      }
+      const idForRoute = encodeURIComponent(dbId);
+
+      // Try the most likely single method: PUT to seller namespace first (server expects PUT + db id)
+      const attempts = [
+        { method: "put", url: `${API_BASE}/api/seller/orders/${idForRoute}` },
+        { method: "put", url: `${API_BASE}/api/admin/orders/${idForRoute}` },
+        { method: "put", url: `${API_BASE}/api/orders/${idForRoute}` },
+      ];
+
+      let ok = false;
+      const errors: any[] = [];
+      let lastRes: any = null;
+
+      for (const a of attempts) {
+        try {
+          const res = await axios.request({
+            url: a.url,
+            method: a.method as any,
+            data: payload,
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            timeout: 15000,
+            validateStatus: () => true,
+          });
+
+          lastRes = res;
+          console.log("[EditOrder] try", a.method.toUpperCase(), a.url, res.status, res.data);
+
+          if (res.status >= 200 && res.status < 300) {
+            ok = true;
+            break;
+          } else {
+            errors.push({ url: a.url, status: res.status, data: res.data });
+            // stop early on auth failure
+            if (res.status === 401 || res.status === 403) break;
+          }
+        } catch (err: any) {
+          console.error("[EditOrder] request error for", a.url, err?.message ?? err);
+          errors.push({ url: a.url, error: err?.message ?? err });
+        }
+      }
+
+      if (!ok) {
+        console.error("[EditOrder] all attempts failed", errors);
+        const firstErr = errors[0];
+        // prefer server message if any
+        const detail =
+          firstErr?.data?.message ?? firstErr?.data ?? firstErr?.error ? JSON.stringify(firstErr.data ?? firstErr.error) : lastRes?.data ?? "No response";
+        setMessage(`❌ Update failed — ${detail}`);
+        toast.error("Update failed — check console for network details");
+        setLoading(false);
+        return;
+      }
+
+      setMessage("✅ Order updated successfully");
+      toast.success("Order updated");
+      onUpdated && onUpdated();
+      setTimeout(() => onClose(), 500);
+    } catch (err: any) {
+      console.error("[EditOrder] unexpected error", err);
+      setMessage(err?.message ?? "❌ Unexpected error");
+      toast.error(err?.message ?? "Unexpected error");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setMessage("✅ Order updated successfully");
-    toast.success("Order updated");
-    onUpdated && onUpdated();
-    setTimeout(() => onClose(), 500);
-  } catch (err: any) {
-    console.error("[EditOrder] unexpected error", err);
-    setMessage(err?.message ?? "❌ Unexpected error");
-    toast.error(err?.message ?? "Unexpected error");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   return (
@@ -424,7 +424,7 @@ const handleSave = async (e?: React.FormEvent) => {
           <SheetDescription>Edit customer, pick products from your stock and adjust quantity. Order id (orderId) is display only.</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSave} className="grid gap-6 px-4">
+        <form onSubmit={handleSave} className="grid gap-6 px-4 overflow-scroll">
           <div className="grid gap-2">
             <Label>Order ID</Label>
             <Input value={order?.orderId ?? order?._id ?? order?.id ?? ""} disabled />
@@ -458,56 +458,94 @@ const handleSave = async (e?: React.FormEvent) => {
             </div>
           </fieldset>
 
-          <fieldset className="grid gap-2">
-            <legend className="font-medium">Items</legend>
+          <fieldset className="space-y-4 mt-4">
+            <legend className="font-medium mb-2">Items</legend>
 
             {items.map((it, idx) => (
-              <div key={it.uid ?? idx} className="grid grid-cols-6 gap-2 items-end">
-                <div className="col-span-2">
+              <div className="bg-gray-50 p-4 rounded-lg border">
+
+              <div
+                key={it.uid ?? idx}
+                className="grid grid-cols-12 gap-4 items-end"
+              >
+                {/* Product Select - 6 columns */}
+                <div className="col-span-12">
                   <Label>Product</Label>
                   {products.length ? (
-                    <Select value={it.productId ?? ""} onValueChange={(val) => onSelectProduct(idx, val)}>
+                    <Select
+                      value={it.productId ?? ""}
+                      onValueChange={(val) => onSelectProduct(idx, val)}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder={it.productName || "Select product"} />
+                        <SelectValue
+                          placeholder={it.productName || "Select product"}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {sellerProducts.map((p) => (
-                          <SelectItem key={getStockId(p) || p.name} value={getStockId(p)}>
-                            {getStockName(p)}{p.sku ? ` (${p.sku})` : ""}{typeof getStockAvailable(p) === "number" ? ` — stock: ${getStockAvailable(p)}` : ""}
+                          <SelectItem
+                            key={getStockId(p) || p.name}
+                            value={getStockId(p)}
+                          >
+                            {getStockName(p)}
+                            {p.sku ? ` (${p.sku})` : ""}
+                            {typeof getStockAvailable(p) === "number"
+                              ? ` — stock: ${getStockAvailable(p)}`
+                              : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <Input value={it.productName} onChange={(e) => updateItem(idx, { productName: e.target.value })} placeholder="Product name" />
-                  )}
+                  ) : null}
                 </div>
 
-                <div>
-                  <Label>Product ID / SKU</Label>
-                  <Input value={it.productId ?? it.sku ?? ""} onChange={(e) => updateItem(idx, { productId: e.target.value, sku: e.target.value })} />
-                </div>
-
-                <div>
+                {/* Quantity - 2 columns */}
+                <div className="col-span-6">
                   <Label>Qty</Label>
-                  <Input type="number" min={1} value={it.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) || 1 })} />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={it.quantity}
+                    onChange={(e) =>
+                      updateItem(idx, { quantity: Number(e.target.value) || 1 })
+                    }
+                  />
                 </div>
 
-                <div>
+                {/* Unit Price - 3 columns */}
+                <div className="col-span-5">
                   <Label>Unit Price</Label>
-                  <Input type="number" min={0} step="0.01" value={it.unitPrice ?? 0} onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) || 0 })} />
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={it.unitPrice ?? 0}
+                    onChange={(e) =>
+                      updateItem(idx, { unitPrice: Number(e.target.value) || 0 })
+                    }
+                  />
                 </div>
-
-                <div className="flex gap-2">
-                  <Button type="button" variant="destructive" onClick={() => removeItem(idx)} disabled={items.length === 1}>
+              </div>
+  {/* Remove Button - 1 column */}
+                <div className="col-span-1 flex justify-end mt-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => removeItem(idx)}
+                    disabled={items.length === 1}
+                  >
                     Remove
                   </Button>
                 </div>
+              
               </div>
+
             ))}
 
-            <div>
-              <Button type="button" onClick={addItem}>+ Add item</Button>
+            <div className="pt-2">
+              <Button type="button" onClick={addItem}>
+                + Add item
+              </Button>
             </div>
           </fieldset>
 

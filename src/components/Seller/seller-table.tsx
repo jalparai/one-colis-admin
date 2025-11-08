@@ -1,4 +1,5 @@
 "use client";
+
 import * as React from "react";
 import axios from "axios";
 import {
@@ -29,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -49,6 +49,13 @@ import { AddSeller } from "./Add-seller";
 import { AddStockDialog } from "./AddStockDialog";
 import { ImportExportButtons } from "@/components/ui/import-export-buttons";
 import { ENTITY_CONFIGS } from "@/lib/import-export-utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // Seller type
 export type Seller = {
@@ -70,7 +77,109 @@ declare module "@tanstack/react-table" {
   }
 }
 
-// Columns
+/* ---------------- SellerDetailsModal ---------------- */
+function SellerDetailsModal({ sellerId, open, onOpenChange }: { sellerId?: string | null; open: boolean; onOpenChange: (v: boolean) => void; }) {
+  const [loading, setLoading] = React.useState(false);
+  const [seller, setSeller] = React.useState<any | null>(null);
+
+  React.useEffect(() => {
+    if (!open || !sellerId) {
+      setSeller(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchSeller = async () => {
+      setLoading(true);
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await axios.get(`https://cod-ecommerce-two.vercel.app/api/admin/get-seller-by-id/${sellerId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          validateStatus: () => true,
+        });
+        if (cancelled) return;
+        if (res.data?.ok) setSeller(res.data.data ?? null);
+        else setSeller(res.data?.data ?? null);
+      } catch (err) {
+        console.error("Failed to load seller details", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchSeller();
+    return () => { cancelled = true; };
+  }, [open, sellerId]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl w-full max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Seller details</DialogTitle>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 px-4 py-3">
+          {loading ? (
+            <div className="p-4">Loading seller...</div>
+          ) : !seller ? (
+            <div className="p-4 text-sm text-muted-foreground">No seller data.</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Name</div>
+                <div className="font-medium">{seller.name}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground">Email</div>
+                <div className="font-medium lowercase">{seller.email}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground">Phone</div>
+                <div className="font-medium">{seller.phoneNumber}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground">Store</div>
+                <div className="font-medium">{seller.storeName}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground">City</div>
+                <div className="font-medium">{seller.city ?? "—"}</div>
+              </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground">Registered</div>
+                <div className="font-medium">{seller.createdAt ? new Date(seller.createdAt).toLocaleString() : "—"}</div>
+              </div>
+
+              {seller.bankDetails && (
+                <div className="pt-2">
+                  <div className="text-sm font-medium">Bank Details</div>
+                  <div className="grid grid-cols-1 gap-1 text-sm mt-2">
+                    <div>Account name: {seller.bankDetails.accountName ?? "—"}</div>
+                    <div>Account number: {seller.bankDetails.accountNumber ?? "—"}</div>
+                    <div>Bank: {seller.bankDetails.bankName ?? "—"}</div>
+                    <div>Bank code: {seller.bankDetails.bankCode ?? "—"}</div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t px-4 py-3 bg-white/60">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Columns (actions with View Details)
 export const columns: ColumnDef<Seller>[] = [
   {
     id: "select",
@@ -146,26 +255,25 @@ export const columns: ColumnDef<Seller>[] = [
         <span className="text-red-600 font-medium">No</span>
       ),
   },
- {
-  accessorKey: "createdAt",
-  header: "Registered Date",
-  cell: ({ row }) => {
-    const dateStr = row.getValue("createdAt") as string;
-    return <div>{new Date(dateStr).toLocaleDateString()}</div>;
-  },
-  filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
-    const date = new Date(row.getValue(columnId) as string);
-    const from = filterValue?.from ? new Date(filterValue.from) : null;
-    const to = filterValue?.to ? new Date(filterValue.to) : null;
+  {
+    accessorKey: "createdAt",
+    header: "Registered Date",
+    cell: ({ row }) => {
+      const dateStr = row.getValue("createdAt") as string;
+      return <div>{new Date(dateStr).toLocaleDateString()}</div>;
+    },
+    filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
+      const date = new Date(row.getValue(columnId) as string);
+      const from = filterValue?.from ? new Date(filterValue.from) : null;
+      const to = filterValue?.to ? new Date(filterValue.to) : null;
 
-    if (from && date < from) return false;
-    if (to && date > to) return false;
-    return true;
+      if (from && date < from) return false;
+      if (to && date > to) return false;
+      return true;
+    },
   },
-}
-,
-  {  header: "Action/Add Stocks",
-
+  {
+    header: "Action/Add Stocks",
     id: "actions",
     enableHiding: false,
     cell: ({ row, table }) => {
@@ -174,27 +282,33 @@ export const columns: ColumnDef<Seller>[] = [
       const [loading, setLoading] = React.useState(false);
       const [stockDialogOpen, setStockDialogOpen] = React.useState(false);
 
+      // local states to control seller details modal
+      const [detailsOpen, setDetailsOpen] = React.useState(false);
+      const [detailsSellerId, setDetailsSellerId] = React.useState<string | null>(null);
+
       const handleDelete = async () => {
         try {
           setLoading(true);
           const token = localStorage.getItem("token");
-          await axios.delete(
+          const res = await axios.delete(
             `https://cod-ecommerce-two.vercel.app/api/admin/delete-seller/${seller._id}`,
             {
               headers: { Authorization: `Bearer ${token}` },
+              validateStatus: () => true,
             }
           );
-          setDeleteOpen(false);
-          table.options.meta?.refresh?.();
+          if (res.status >= 200 && res.status < 300) {
+            table.options.meta?.refresh?.();
+            setDeleteOpen(false);
+          } else {
+            console.error("Delete failed", res.status, res.data);
+          }
         } catch (err) {
           console.error("Failed to delete seller", err);
         } finally {
           setLoading(false);
         }
       };
-
-
-    
 
       return (
         <>
@@ -208,6 +322,11 @@ export const columns: ColumnDef<Seller>[] = [
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
+
+              <DropdownMenuItem onClick={() => { setDetailsSellerId(seller._id); setDetailsOpen(true); }}>
+                View Details
+              </DropdownMenuItem>
+
               <DropdownMenuItem onClick={() => setStockDialogOpen(true)}>
                 Add Stock
               </DropdownMenuItem>
@@ -216,6 +335,9 @@ export const columns: ColumnDef<Seller>[] = [
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Seller details modal */}
+          <SellerDetailsModal sellerId={detailsSellerId} open={detailsOpen} onOpenChange={setDetailsOpen} />
 
           {/* Add Stock Dialog */}
           <AddStockDialog
@@ -265,8 +387,6 @@ const DATE_FILTERS = [
 
 type DateFilter = (typeof DATE_FILTERS)[number];
 
-
- 
 // inside SellerTable
 export function SellerTable() {
   const [sellers, setSellers] = React.useState<Seller[]>([]);
@@ -358,11 +478,7 @@ export function SellerTable() {
 
   if (loading) return <p className="p-4">Loading sellers...</p>;
   const exportEndpoints = [
-    // { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
     { label: "Export Sellers", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/sellers/export/excal" },
-  //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
-  //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
-  //   { label: "Export Delivery Agents", url: "/api/adminb/bulk/delivery-agents/export/excel" },
   ];
   
  const handleExport = async (url: string): Promise<void> => {

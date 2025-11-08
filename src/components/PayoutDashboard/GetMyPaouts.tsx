@@ -31,13 +31,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown } from "lucide-react";
 
-// ✅ Correct Payout type including seller info
+// Dialog imports (used for seller details modal)
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
+// Payout type — seller kept flexible to support different payload shapes
 type Payout = {
   _id: string;
-  seller: {
-    name: string;
-    email: string;
-  };
+  seller?: any;
   amount: number;
   fees: number;
   netAmount: number;
@@ -60,7 +66,16 @@ export function MyPayoutsTable() {
   >("all");
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
 
-  // ✅ Fetch payouts
+  // Seller details modal state
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const [detailsSellerId, setDetailsSellerId] = React.useState<string | null>(null);
+
+  // fetched seller data
+  const [sellerLoading, setSellerLoading] = React.useState(false);
+  const [sellerError, setSellerError] = React.useState<string | null>(null);
+  const [sellerData, setSellerData] = React.useState<any | null>(null);
+
+  // Fetch payouts
   const fetchPayouts = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -72,7 +87,6 @@ export function MyPayoutsTable() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // ✅ Correct data extraction
       setPayouts(res.data?.data || []);
     } catch (err) {
       console.error("Error fetching payouts:", err);
@@ -85,7 +99,54 @@ export function MyPayoutsTable() {
     fetchPayouts();
   }, [fetchPayouts]);
 
-  // ✅ Date filtering
+  // Fetch seller details when modal opens or sellerId changes
+  React.useEffect(() => {
+    if (!detailsOpen) return;
+
+    const id = detailsSellerId;
+    if (!id) {
+      setSellerError("Seller ID missing");
+      setSellerData(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchSeller = async () => {
+      setSellerLoading(true);
+      setSellerError(null);
+      setSellerData(null);
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await axios.get(
+          `https://cod-ecommerce-two.vercel.app/api/payouts-managers/get-seller-by-id/${id}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined, validateStatus: () => true }
+        );
+
+        if (cancelled) return;
+
+        if (res?.data?.ok) {
+          setSellerData(res.data.data ?? null);
+        } else {
+          setSellerData(res.data?.data ?? null);
+          setSellerError(res?.data?.message ?? "Failed to load seller details");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to fetch seller details", err);
+          setSellerError("Network error while loading seller");
+        }
+      } finally {
+        if (!cancelled) setSellerLoading(false);
+      }
+    };
+
+    fetchSeller();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailsOpen, detailsSellerId]);
+
+  // Date filtering
   const filteredByDate = React.useMemo(() => {
     const now = new Date();
     return payouts.filter((p) => {
@@ -128,7 +189,7 @@ export function MyPayoutsTable() {
     });
   }, [payouts, dateFilter]);
 
-  // ✅ Range filter
+  // Range filter
   const rangeFiltered = React.useMemo(() => {
     return filteredByDate.filter((p) => {
       const createdAt = new Date(p.createdAt);
@@ -140,45 +201,75 @@ export function MyPayoutsTable() {
     });
   }, [filteredByDate, rangeFilter]);
 
-  // ✅ Global filter (search)
+  // Global filter
   const finalData = React.useMemo(() => {
     if (!globalFilter.trim()) return rangeFiltered;
     const q = globalFilter.toLowerCase();
     return rangeFiltered.filter(
       (p) =>
-        p.status.toLowerCase().includes(q) ||
-        (p.notes && p.notes.toLowerCase().includes(q)) ||
+        (p.status ?? "").toLowerCase().includes(q) ||
+        (p.notes ?? "").toLowerCase().includes(q) ||
         p.amount.toString().includes(q) ||
-        p.seller.name.toLowerCase().includes(q) ||
-        p.seller.email.toLowerCase().includes(q)
+        (p.seller?.name ?? "").toLowerCase().includes(q) ||
+        (p.seller?.email ?? "").toLowerCase().includes(q)
     );
   }, [rangeFiltered, globalFilter]);
 
-  // ✅ Table columns
-  const columns: ColumnDef<Payout>[] = [
-    {
-      accessorKey: "seller.name",
-      header: "Seller Name",
-      cell: ({ row }) => row.original.seller?.name || "-",
-    },
-    {
-      accessorKey: "seller.email",
-      header: "Seller Email",
-      cell: ({ row }) => row.original.seller?.email || "-",
-    },
-    { accessorKey: "amount", header: "Amount" },
-    { accessorKey: "fees", header: "Fees" },
-    { accessorKey: "netAmount", header: "Net Amount" },
-    { accessorKey: "status", header: "Status" },
-    { accessorKey: "method", header: "Method" },
-    { accessorKey: "notes", header: "Notes" },
-    {
-      accessorKey: "createdAt",
-      header: "Created At",
-      cell: ({ row }) => new Date(row.original.createdAt).toLocaleString(),
-    },
-   
-  ];
+  // Table columns (includes View Seller action)
+  const columns: ColumnDef<Payout>[] = React.useMemo(
+    () => [
+      {
+        accessorKey: "seller.name",
+        header: "Seller Name",
+        cell: ({ row }) => row.original.seller?.name || "-",
+      },
+      {
+        accessorKey: "seller.email",
+        header: "Seller Email",
+        cell: ({ row }) => row.original.seller?.email || "-",
+      },
+      { accessorKey: "amount", header: "Amount" },
+      { accessorKey: "fees", header: "Fees" },
+      { accessorKey: "netAmount", header: "Net Amount" },
+      { accessorKey: "status", header: "Status" },
+      { accessorKey: "method", header: "Method" },
+      { accessorKey: "notes", header: "Notes" },
+      {
+        accessorKey: "createdAt",
+        header: "Created At",
+        cell: ({ row }) => new Date(row.original.createdAt).toLocaleString(),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const sellerObj = row.original.seller;
+          // try common id locations
+          const sid = sellerObj?._id ?? sellerObj?.id ?? (typeof sellerObj === "string" ? sellerObj : null);
+          const disabled = !sid;
+          return (
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={disabled}
+                title={disabled ? "Seller id missing — cannot view details" : "View seller details"}
+                onClick={() => {
+                  if (!disabled) {
+                    setDetailsSellerId(String(sid));
+                    setDetailsOpen(true);
+                  }
+                }}
+              >
+                View Seller
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
 
   const table = useReactTable({
     data: finalData,
@@ -198,7 +289,7 @@ export function MyPayoutsTable() {
 
   return (
     <div className="w-full">
-      {/* 🔹 Filters */}
+      {/* Filters */}
       <div className="flex flex-wrap justify-between items-center gap-4 py-4">
         <Input
           placeholder="Search payouts..."
@@ -220,25 +311,27 @@ export function MyPayoutsTable() {
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              Filter: {dateFilter} <ChevronDown />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {["all", "today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth"].map(
-              (option) => (
-                <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </DropdownMenuItem>
-              )
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                Filter: {dateFilter} <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {["all", "today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth"].map(
+                (option) => (
+                  <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </DropdownMenuItem>
+                )
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* 🔹 Table */}
+      {/* Table */}
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
@@ -276,7 +369,7 @@ export function MyPayoutsTable() {
         </Table>
       </div>
 
-      {/* 🔹 Pagination */}
+      {/* Pagination */}
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="text-muted-foreground flex-1 text-sm">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
@@ -301,6 +394,92 @@ export function MyPayoutsTable() {
           </Button>
         </div>
       </div>
+
+      {/* Seller Details Dialog */}
+      <Dialog
+        open={detailsOpen}
+        onOpenChange={(open) => {
+          setDetailsOpen(open);
+          if (!open) {
+            // clear stale state
+            setDetailsSellerId(null);
+            setSellerData(null);
+            setSellerError(null);
+            setSellerLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl w-full max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Seller details</DialogTitle>
+          </DialogHeader>
+
+          <div className="overflow-y-auto flex-1 px-4 py-3">
+            {sellerLoading ? (
+              <div className="p-4">Loading seller...</div>
+            ) : sellerError ? (
+              <div className="p-4 text-sm text-red-600">{sellerError}</div>
+            ) : !sellerData ? (
+              <div className="p-4 text-sm text-muted-foreground">No seller data.</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <div className="text-xs text-muted-foreground">Name</div>
+                  <div className="font-medium">{sellerData.name}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">Store Name</div>
+                  <div className="font-medium">{sellerData.storeName ?? "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">Email</div>
+                  <div className="font-medium lowercase">{sellerData.email}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">Phone</div>
+                  <div className="font-medium">{sellerData.phoneNumber ?? "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">Role</div>
+                  <div className="font-medium">{sellerData.role ?? "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">City</div>
+                  <div className="font-medium">{sellerData.city ?? "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground">Registered</div>
+                  <div className="font-medium">
+                    {sellerData.createdAt ? new Date(sellerData.createdAt).toLocaleString() : "—"}
+                  </div>
+                </div>
+
+                {sellerData.bankDetails && (
+                  <div className="pt-2 border-t">
+                    <div className="text-sm font-medium mb-2">Bank Details</div>
+                    <div className="grid grid-cols-1 gap-1 text-sm">
+                      <div><strong>Account name:</strong> {sellerData.bankDetails.accountName ?? "—"}</div>
+                      <div><strong>Account number:</strong> {sellerData.bankDetails.accountNumber ?? "—"}</div>
+                      <div><strong>Bank:</strong> {sellerData.bankDetails.bankName ?? "—"}</div>
+                      <div><strong>Bank code:</strong> {sellerData.bankDetails.bankCode ?? "—"}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t px-4 py-3 bg-white/60">
+            <Button variant="outline" onClick={() => setDetailsOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

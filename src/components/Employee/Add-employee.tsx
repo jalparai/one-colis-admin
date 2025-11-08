@@ -34,7 +34,6 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
     permissions: {
       addStock: false,
       manageOrders: false,
-      assignOrders: false,
       assignProducts: false,
       assignPayouts: false,
       assignPickups: false,
@@ -88,7 +87,6 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
         permissions: {
           addStock: false,
           manageOrders: false,
-          assignOrders: false,
           assignProducts: false,
           assignPayouts: false,
           assignPickups: false,

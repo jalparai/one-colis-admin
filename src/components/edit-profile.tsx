@@ -205,7 +205,7 @@ export function EditProfileDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
+          <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>

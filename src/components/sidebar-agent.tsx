@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useParams, usePathname } from "next/navigation";
-import { HomeIcon, ListIcon } from "lucide-react";
+import { FileIcon, HomeIcon, ListIcon } from "lucide-react";
 import { useTranslation } from "react-i18next"; // ✅ consistent with others
 
 import { NavUser } from "@/components/nav-user";
@@ -31,6 +31,16 @@ export function AppSidebarAgent({
       {
         title: t("agentSidebar.myOrders", { defaultValue: "My Orders" }),
         url: `/${locale}/agent/My-Orders`,
+        icon: ListIcon,
+      },
+       {
+        title: t("agentSidebar.returnNote", { defaultValue: "Return-Notes" }),
+        url: `/${locale}/agent/Return-Notes`,
+        icon: FileIcon,
+      },
+       {
+        title: t("agentSidebar.returnNote", { defaultValue: "My-Pickups" }),
+        url: `/${locale}/agent/My-Pickups`,
         icon: ListIcon,
       },
     ],

@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import axios from "axios"
+import toast from "react-hot-toast"
 import {
   IconPackage,
   IconShoppingBag,
@@ -35,54 +36,156 @@ import {
 } from "recharts"
 import { AddTicket } from "./SupportTickets/AddTicket"
 import { AddOrder } from "./Orders/AddOrder"
-import { toast } from "react-hot-toast"
 import { AddReadyOrder } from "./Orders/QuickOrder"
 import Link from "next/link"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
+import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
+
+export type Order = {
+  id: string
+  seller: string
+  sellerEmail: string
+  items: {
+    productName: string
+    quantity: number
+    unitPrice: number
+    total: number
+  }[]
+  itemsTotal: number
+  totalAmount: number
+  status: string
+  notes: string
+  createdAt: string
+  updatedAt: string,
+    customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+
+  };
+}
 
 export function HomeDashboard() {
+  // raw data
+  const [allOrders, setAllOrders] = useState<Order[]>([])
   const [totalStocks, setTotalStocks] = useState<number | null>(null)
-  const [totalOrders, setTotalOrders] = useState<number | null>(null)
+  const [revenueData, setRevenueData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // UI states
+  const [openAddOrder, setOpenAddOrder] = useState(false)
+  const [openAddReadyOrder, setOpenAddReadyOrder] = useState(false)
+  const [openAddTicket, setOpenAddTicket] = useState(false)
+const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
+
+  const [searchQuery, setSearchQuery] = useState("")
+  const [dateFilter, setDateFilter] = useState<
+    "all" | "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month"
+  >("all")
+
+  // derived counts
   const [processingOrders, setProcessingOrders] = useState<number>(0)
   const [pendingOrders, setPendingOrders] = useState<number>(0)
   const [readyOrders, setReadyOrders] = useState<number>(0)
   const [returnOrders, setReturnOrders] = useState<number>(0)
   const [deliveredOrders, setDeliveredOrders] = useState<number>(0)
   const [pickupOrders, setPickupOrders] = useState<number>(0)
-  const [revenueData, setRevenueData] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [openAddOrder, setOpenAddOrder] = useState(false)
-  const [openAddReadyOrder, setOpenAddReadyOrder] = useState(false)
-  const [openAddTicket, setOpenAddTicket] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [totalOrders, setTotalOrders] = useState<number | null>(null)
+  const [newOrdersToday, setNewOrdersToday] = useState<number | null>(null)
 
-  // helper: count items created since start of today
+  // color palette for pie
+  const COLORS = ["#60a5fa", "#facc15", "#34d399", "#f87171", "#a78bfa", "#fb923c"]
+
+  const filteredOrders = useMemo(() => {
+    if (!allOrders || allOrders.length === 0) return []
+
+    const nowLocal = new Date()
+    return allOrders.filter((order) => {
+      const created = new Date(order.createdAt)
+      const diffDays = Math.floor((nowLocal.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+
+      switch (dateFilter) {
+        case "today":
+          return created.toDateString() === nowLocal.toDateString()
+        case "yesterday":
+          return diffDays === 1
+        case "this_week": {
+          const startOfWeek = (d: Date) => {
+            const copy = new Date(d)
+            const day = copy.getDay()
+            copy.setDate(copy.getDate() - day)
+            copy.setHours(0, 0, 0, 0)
+            return copy
+          }
+          return startOfWeek(created).toDateString() === startOfWeek(nowLocal).toDateString()
+        }
+        case "last_week": {
+          const startOfWeek = (d: Date) => {
+            const copy = new Date(d)
+            const day = copy.getDay()
+            copy.setDate(copy.getDate() - day)
+            copy.setHours(0, 0, 0, 0)
+            return copy
+          }
+          const lastWeek = new Date(nowLocal)
+          lastWeek.setDate(nowLocal.getDate() - 7)
+          return startOfWeek(created).toDateString() === startOfWeek(lastWeek).toDateString()
+        }
+        case "this_month":
+          return created.getMonth() === nowLocal.getMonth() && created.getFullYear() === nowLocal.getFullYear()
+        case "last_month": {
+          const prevMonth = new Date(nowLocal)
+          prevMonth.setMonth(nowLocal.getMonth() - 1)
+          return created.getMonth() === prevMonth.getMonth() && created.getFullYear() === prevMonth.getFullYear()
+        }
+        default:
+          return true
+      }
+    })
+  }, [allOrders, dateFilter])
+
+  const readyOrdersList = useMemo(
+  () => filteredOrders.filter((o) => (o.status || "").toLowerCase() === "ready"),
+  [filteredOrders]
+)
+
+  // ---------- helpers ----------
+  const parseDate = (d?: string | number) => {
+    if (!d) return null
+    const parsed = new Date(d)
+    if (Number.isNaN(parsed.getTime())) return null
+    return parsed
+  }
+
+  const inRange = (d?: string | number, rangeKey?: typeof dateFilter) => {
+    if (!d) return false
+    if (!rangeKey || rangeKey === "all") return true
+    const dt = parseDate(d)
+    if (!dt) return false
+    return dt.toDateString() === new Date().toDateString()
+  }
+
   const countToday = (items: any[], dateField = "createdAt") => {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
     return items.filter((it) => {
-      const d = new Date(it[dateField])
-      return d >= start
+      const d = parseDate(it[dateField])
+      return d !== null && d >= start
     }).length
   }
 
+  // ---------- fetch logic ----------
   const fetchRevenueData = useCallback(async () => {
     const token = localStorage.getItem("token")
     if (!token) return
-
     try {
-      // Replace with your actual revenue endpoint
       const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/revenue", {
         headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (res.data && Array.isArray(res.data)) {
-        setRevenueData(res.data)
-      } else if (res.data && res.data.data) {
-        setRevenueData(res.data.data)
-      }
+      if (res.data && Array.isArray(res.data)) setRevenueData(res.data)
+      else if (res.data && res.data.data) setRevenueData(res.data.data)
     } catch (err) {
       console.error("Error fetching revenue data:", err)
-      // Fallback to mock data if API fails
       setRevenueData([
         { month: "Jan", revenue: 4000, profit: 2400 },
         { month: "Feb", revenue: 3000, profit: 1398 },
@@ -90,12 +193,10 @@ export function HomeDashboard() {
         { month: "Apr", revenue: 2780, profit: 3908 },
         { month: "May", revenue: 1890, profit: 4800 },
         { month: "Jun", revenue: 2390, profit: 3800 },
-        { month: "Jul", revenue: 3490, profit: 4300 },
       ])
     }
   }, [])
 
-  // central fetch that updates all dashboard numbers
   const fetchData = useCallback(async () => {
     setLoading(true)
     const token = localStorage.getItem("token")
@@ -121,36 +222,42 @@ export function HomeDashboard() {
         : 0
       setTotalStocks(totalQty)
 
-      // orders
       const orders = (ordersRes.data && (ordersRes.data.data || ordersRes.data)) || []
-      setTotalOrders(Array.isArray(orders) ? orders.length : 0)
+      const ordersArray = Array.isArray(orders) ? orders : []
+      setAllOrders(ordersArray)
 
-      const proc = Array.isArray(orders) ? orders.filter((o: any) => o.status === "processing").length : 0
-      const pend = Array.isArray(orders) ? orders.filter((o: any) => o.status === "pending").length : 0
-      const ready = Array.isArray(orders) ? orders.filter((o: any) => o.status === "ready").length : 0
-      const returned = Array.isArray(orders) ? orders.filter((o: any) => o.status === "returned").length : 0
-      const delivered = Array.isArray(orders) ? orders.filter((o: any) => o.status === "delivered").length : 0
-      const pickup = Array.isArray(orders) ? orders.filter((o: any) => o.status === "pickup").length : 0
-
-      setProcessingOrders(proc)
-      setPendingOrders(pend)
-      setReadyOrders(ready)
-      setReturnOrders(returned)
-      setDeliveredOrders(delivered)
-      setPickupOrders(pickup)
-
-      return { orders }
+      // set a fallback totalOrders (before filtering)
+      setTotalOrders(ordersArray.length)
     } catch (err) {
       console.error("Error loading dashboard:", err)
     } finally {
       setLoading(false)
     }
   }, [])
+const fetchSellerRevenue = useCallback(async () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+  if (!token) return
+  try {
+    const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/seller-revenue", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    // API returns object with totalRevenue, totalOrders, netProfit, breakdowns, etc.
+    setSellerRevenue(res.data || null)
+  } catch (err) {
+    console.error("Error fetching seller revenue:", err)
+    setSellerRevenue(null)
+  }
+}, [])
+useEffect(() => {
+  fetchData()
+  fetchRevenueData()
+  fetchSellerRevenue()
+}, [fetchData, fetchRevenueData, fetchSellerRevenue])
 
-  // expose small wrappers so AddOrder/AddTicket onOrderAdded/onTicketAdded can call them
+  // wrappers for child modals
   const fetchOrders = useCallback(async () => {
     await fetchData()
-    toast.success("Orders refreshed")
+    toast.success("Orders refreshed") // Use toast here
   }, [fetchData])
 
   const fetchTickets = useCallback(async () => {
@@ -158,13 +265,53 @@ export function HomeDashboard() {
   }, [fetchData])
 
   useEffect(() => {
-    // initial load
     fetchData()
     fetchRevenueData()
   }, [fetchData, fetchRevenueData])
 
-  const COLORS = ["#60a5fa", "#facc15", "#34d399", "#f87171", "#a78bfa", "#fb923c"]
+  // ---------- filtering derived state ----------
+  useEffect(() => {
+    // apply search + dateRange to get filtered orders then compute counts
+    const query = searchQuery.trim().toLowerCase()
+    const filtered = allOrders.filter((o) => {
+      // search against status or id or customer fields
+      const status = (o.status || "").toString().toLowerCase()
+      const id = (o.id || "").toString().toLowerCase()
+      const textMatch =
+        !query || status.includes(query) || id.includes(query) || JSON.stringify(o).toLowerCase().includes(query)
+      const dateMatch = dateFilter === "all" ? true : inRange(o.createdAt, dateFilter)
+      return textMatch && dateMatch
+    })
 
+    // compute counts from filtered set
+    const countBy = (s: string) => filtered.filter((o) => (o.status || "").toLowerCase() === s).length
+
+    setProcessingOrders(countBy("processing"))
+    setPendingOrders(countBy("pending"))
+    setReadyOrders(countBy("ready"))
+    setReturnOrders(countBy("returned"))
+    setDeliveredOrders(countBy("delivered"))
+    setPickupOrders(countBy("pickup"))
+    setTotalOrders(filtered.length)
+    setNewOrdersToday(countToday(filtered, "createdAt"))
+  }, [allOrders, searchQuery, dateFilter])
+
+  // ---------- small UI helpers ----------
+  const percent = (part: number, total: number) => {
+    if (!total || total <= 0) return 0
+    return Math.round((part / total) * 100)
+  }
+
+  const ProgressBar = ({ value }: { value: number }) => (
+    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+      <div
+        className="h-2 rounded-full transition-all"
+        style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: "linear-gradient(90deg,#60a5fa,#34d399)" }}
+      />
+    </div>
+  )
+
+  // chart data & orderData for pie/bar
   const orderData = [
     { name: "Processing", value: processingOrders },
     { name: "Pending", value: pendingOrders },
@@ -183,116 +330,175 @@ export function HomeDashboard() {
     { status: "Pickup", count: pickupOrders },
   ]
 
-  // helpers for progress visuals (avoid divide by zero)
-  const percent = (part: number, total: number) => {
-    if (!total || total <= 0) return 0
-    return Math.round((part / total) * 100)
-  }
+  // ---------- Quick actions array ----------
+  const quickActions = [
+    {
+      title: "Create New Order Based on Stock",
+      icon: IconShoppingBag,
+      color: "text-blue-600",
+      link: "/en/seller",
+      bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
+      action: () => setOpenAddOrder(true),
+    },
+  {
+  title: "Create New Ready Order",
+  icon: IconShoppingBag,
+  color: "text-blue-600",
+  bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
+  action: () => setOpenAddReadyOrder(true), // ✅ this opens modal
+},
+    {
+      title: "Create Support Ticket",
+      icon: IconTicket,
+      color: "text-green-600",
+      bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
+      action: () => setOpenAddTicket(true),
+    },
+    {
+      title: "Invoices",
+      icon: IconFile,
+      color: "text-green-600",
+      bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
+      link: "/en/seller/Invoices",
+    },
+     {
+      title: "My Pickups",
+      icon: IconFile,
+      color: "text-orange-600",
+      bg: "from-orange-50 to-orange-100 dark:from-green-900/20 dark:to-green-800/10",
+      link: "/en/seller/My-Pickups",
+    },
+  ]
 
-  // compute today counts for inline trend text (no new API call)
-  const [newOrdersToday, setNewOrdersToday] = useState<number | null>(null)
-  useEffect(() => {
-    let mounted = true
-    const token = localStorage.getItem("token")
-    if (!token) return
-    const getTodayCount = async () => {
-      try {
-        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/getMyOrders", {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { _t: Date.now() }, // cache buster
-        })
-        const orders = (res.data && (res.data.data || res.data)) || []
-        if (mounted) setNewOrdersToday(Array.isArray(orders) ? countToday(orders, "createdAt") : 0)
-      } catch (err) {
-        // ignore
-      }
-    }
-    getTodayCount()
-    return () => {
-      mounted = false
-    }
-  }, [processingOrders, pendingOrders, readyOrders, returnOrders, deliveredOrders, pickupOrders])
+  const orderColumns: ColumnDef<Order>[] = [
+ {
+      header: "Customer",
+      id: "customer_group",
+      // a compact customer cell that shows name + phone on two lines
+      cell: ({ row }) => (
+        <div className="text-sm">
+          <div className="font-medium">{row.original.customer?.name ?? "—"}</div>
+          <div className="text-xs text-muted-foreground">{row.original.customer?.phone ?? "—"}</div>
+        </div>
+      ),
+    },
+    {
+      header: "Address",
+      id: "customer_address",
+      cell: ({ row }) => (
+        <div className="text-sm truncate max-w-xs">{row.original.customer?.address ?? "—"}</div>
+      ),
+    },
+    {
+      header: "Total Amount",
+      accessorKey: "totalAmount",
+      cell: ({ row }) => <div>DH {row.original.totalAmount.toLocaleString()}</div>,
+    },
+    {
+      header: "Status",
+      accessorKey: "status",
+      cell: ({ row }) => {
+        const status = row.original.status
+        const color =
+          status === "Delivered"
+            ? "bg-green-100 text-green-800"
+            : status === "Returned"
+              ? "bg-red-100 text-red-800"
+              : "bg-gray-100 text-gray-700"
+        return <span className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}>{status}</span>
+      },
+    },
+    {
+      header: "Created",
+      accessorKey: "createdAt",
+      cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
+    },
+  ]
 
-  // small presentational progress bar
-  const ProgressBar = ({ value }: { value: number }) => (
-    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-      <div
-        className="h-2 rounded-full transition-all"
-        style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: "linear-gradient(90deg,#60a5fa,#34d399)" }}
-      />
-    </div>
-  )
-
-  const filteredChartData = chartData.filter((item) => item.status.toLowerCase().includes(searchQuery.toLowerCase()))
-
-  const filteredOrderData = orderData.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-
+const table = useReactTable({
+  data: readyOrdersList,
+  columns: orderColumns,
+  getCoreRowModel: getCoreRowModel(),
+})
   return (
     <div className="p-4 lg:p-6 space-y-6">
-    
-
-      {/* Top Cards */}
       {/* Quick Actions */}
       <Card className=":data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
+        <CardHeader className="items-center justify-between">
+          <CardTitle className="mb-2">Quick Actions</CardTitle>
+
+          {/* search + date filter */}
+          <div className="flex items-center gap-2">
+         
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="px-3 py-1 rounded-md border bg-white"
+              aria-label="Filter date range"
+            >
+              <option value="all">All</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This Week</option>
+              <option value="last_week">Last Week</option>
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+            </select>
+          </div>
         </CardHeader>
 
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[
-              {
-                title: "Create New Order Based on Stock",
-                icon: IconShoppingBag,
-                color: "text-blue-600",
-                link:"/en/seller",
-                bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-                action: () => setOpenAddOrder(true),
-              },
-              {
-                title: "Create New Ready Order",
-                icon: IconShoppingBag,
-                color: "text-blue-600",
-                bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-                link:"/en/seller",
-                action: () => setOpenAddReadyOrder(true),
-              },
-              {
-                title: "Create Support Ticket",
-                icon: IconTicket,
-                color: "text-green-600",
-                bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
-                link:"/en/seller",
-                action: () => setOpenAddTicket(true),
-              },
-               {
-                title: "Invoices",
-                icon: IconFile,
-                color: "text-green-600",
-                bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
-                link:"/en/seller/Invoices",
-              },
-            ].map((action, i) => (
-              <Card
-                key={i}
-                onClick={action.action}
-                className={`group border border-gray-200/40 dark:border-gray-800/40 bg-gradient-to-br ${action.bg} rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer`}
-              >
-                <Link href={`${action.link}`}>
-                <CardContent className="flex items-center justify-between p-5">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{action.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Open form →</p>
+          <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-4 gap-4">
+            {quickActions.map((act, i) => {
+              const CardIcon = act.icon!
+              const cardClasses = `group border border-gray-200/40 dark:border-gray-800/40 bg-gradient-to-br ${act.bg} rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer`
+
+              // modal opener
+              if (act.action) {
+                return (
+                  <div
+                    key={i}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        act.action && act.action()
+                      }
+                    }}
+                    onClick={() => act.action && act.action()}
+                    className={cardClasses}
+                  >
+                    <CardContent className="flex items-center justify-between p-5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{act.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Open form →</p>
+                      </div>
+                      <CardIcon className={`h-7 w-7 ${act.color} group-hover:scale-110 transition-transform`} />
+                    </CardContent>
                   </div>
-                  <action.icon className={`h-7 w-7 ${action.color} group-hover:scale-110 transition-transform`} />
-                </CardContent>
+                )
+              }
+
+              // navigation-only
+              return (
+                <Link key={i} href={act.link ?? "#"}>
+                  <div className={cardClasses}>
+                    <CardContent className="flex items-center justify-between p-5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{act.title}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Open →</p>
+                      </div>
+                      <CardIcon className={`h-7 w-7 ${act.color} group-hover:scale-110 transition-transform`} />
+                    </CardContent>
+                  </div>
                 </Link>
-              </Card>
-            ))}
+              )
+            })}
           </div>
         </CardContent>
 
-        {/* Modals (triggered by above cards) */}
+        {/* Modals */}
         <AddOrder
           open={openAddOrder}
           onOpenChange={setOpenAddOrder}
@@ -302,16 +508,19 @@ export function HomeDashboard() {
             toast.success("Order added successfully!")
           }}
         />
+{openAddReadyOrder && (
+  <AddReadyOrder
+    open={openAddReadyOrder}
+    onOpenChange={setOpenAddReadyOrder}
+    onOrderAdded={() => {
+      setOpenAddReadyOrder(false)
+      fetchOrders()
+      toast.success("Ready order added successfully!")
+    }}
+  />
+)}
 
-         <AddReadyOrder
-          open={openAddReadyOrder}
-          onOpenChange={setOpenAddReadyOrder}
-          onOrderAdded={() => {
-            setOpenAddReadyOrder(false)
-            fetchOrders()
-            toast.success("Order added successfully!")
-          }}
-        />
+
 
         <AddTicket
           open={openAddTicket}
@@ -323,7 +532,8 @@ export function HomeDashboard() {
         />
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-4 @5xl/main:grid-cols-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
+      {/* Stats grid */}
+      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-4 @5xl/main:grid-cols-4">
         {/* Total Stocks */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
@@ -332,7 +542,6 @@ export function HomeDashboard() {
             </div>
             <IconPackage className="text-blue-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{loading ? "..." : (totalStocks ?? 0)}</div>
@@ -351,7 +560,7 @@ export function HomeDashboard() {
             </div>
 
             <div className="mt-3">
-              <ProgressBar value={totalStocks ? Math.min(100, totalStocks % 100) : 0} />
+              <ProgressBar value={totalStocks ? Math.min(100, (totalStocks % 100) as number) : 0} />
             </div>
           </CardContent>
         </Card>
@@ -379,7 +588,7 @@ export function HomeDashboard() {
             <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                <span>+{totalOrders ? Math.round(totalOrders * 0.12) : 0}% this week</span>
+                <span>+{totalOrders ? Math.round((totalOrders as number) * 0.12) : 0}% this week</span>
               </div>
               <div className="text-xs">Orders total</div>
             </div>
@@ -391,8 +600,43 @@ export function HomeDashboard() {
             </div>
           </CardContent>
         </Card>
+<Card className="hover:shadow-lg transition-all duration-200">
+  <CardHeader className="flex items-center justify-between">
+    <div>
+      <CardTitle>Total Revenue</CardTitle>
+    </div>
+    <IconTrendingUp className="text-green-500 h-6 w-6" />
+  </CardHeader>
+  <CardContent>
+    <div className="flex items-baseline justify-between">
+      <div className="text-3xl font-semibold">
+        {sellerRevenue == null
+          ? "..."
+          : (
+              // format number with two decimals
+              Number(sellerRevenue.totalRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            )}
+      </div>
+      <div className="text-sm text-muted-foreground text-right">
+        <div>{sellerRevenue?.totalOrders != null ? `${sellerRevenue.totalOrders} orders` : "—"}</div>
+        <div className="text-xs mt-1">{sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}</div>
+      </div>
+    </div>
 
-        {/* Processing Orders */}
+    <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <IconArrowUpRight className="h-4 w-4 text-green-500" />
+        <span>{sellerRevenue?.breakdowns?.monthly?.length ? `${sellerRevenue.breakdowns.monthly.reduce((acc:any, m:any) => acc + (m.revenue||0), 0).toFixed(2)} this period` : ""}</span>
+      </div>
+      <div className="text-xs">Revenue</div>
+    </div>
+
+    <div className="mt-3">
+      <ProgressBar value={sellerRevenue?.totalRevenue ? Math.min(100, (sellerRevenue.totalRevenue % 100)) : 0} />
+    </div>
+  </CardContent>
+</Card>
+        {/* Processing */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -400,7 +644,6 @@ export function HomeDashboard() {
             </div>
             <IconLoader2 className="text-yellow-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{processingOrders}</div>
@@ -424,7 +667,7 @@ export function HomeDashboard() {
           </CardContent>
         </Card>
 
-        {/* Ready Orders */}
+        {/* Ready */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -457,10 +700,8 @@ export function HomeDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-4 @5xl/main:grid-cols-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
-        {/* Pending Orders */}
+      
+        {/* Pending */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -468,7 +709,6 @@ export function HomeDashboard() {
             </div>
             <IconLoader2 className="text-orange-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{pendingOrders}</div>
@@ -478,21 +718,13 @@ export function HomeDashboard() {
               </div>
             </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IconArrowUpRight className="h-4 w-4 text-orange-500" />
-                <span>+{pendingOrders ? Math.round(pendingOrders * 0.02) : 0} today</span>
-              </div>
-              <div className="text-xs">Queue</div>
-            </div>
-
             <div className="mt-3">
               <ProgressBar value={totalOrders ? percent(pendingOrders, Math.max(1, totalOrders)) : 0} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Delivered Orders */}
+        {/* Delivered */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -500,7 +732,6 @@ export function HomeDashboard() {
             </div>
             <IconTruckDelivery className="text-emerald-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{deliveredOrders}</div>
@@ -510,21 +741,13 @@ export function HomeDashboard() {
               </div>
             </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IconArrowUpRight className="h-4 w-4 text-emerald-500" />
-                <span>+{deliveredOrders ? Math.round(deliveredOrders * 0.08) : 0} this week</span>
-              </div>
-              <div className="text-xs">Completed</div>
-            </div>
-
             <div className="mt-3">
               <ProgressBar value={totalOrders ? percent(deliveredOrders, Math.max(1, totalOrders)) : 0} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Return Orders */}
+        {/* Returned */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -532,7 +755,6 @@ export function HomeDashboard() {
             </div>
             <IconRotate2 className="text-red-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{returnOrders}</div>
@@ -542,21 +764,13 @@ export function HomeDashboard() {
               </div>
             </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IconArrowDownRight className="h-4 w-4 text-red-500" />
-                <span>{returnOrders ? Math.round(returnOrders * 0.15) : 0} pending</span>
-              </div>
-              <div className="text-xs">Processing</div>
-            </div>
-
             <div className="mt-3">
               <ProgressBar value={totalOrders ? percent(returnOrders, Math.max(1, totalOrders)) : 0} />
             </div>
           </CardContent>
         </Card>
 
-        {/* Pickup Orders */}
+        {/* Pickup */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
             <div>
@@ -564,7 +778,6 @@ export function HomeDashboard() {
             </div>
             <IconMapPin className="text-purple-500 h-6 w-6" />
           </CardHeader>
-
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-3xl font-semibold">{pickupOrders}</div>
@@ -574,14 +787,6 @@ export function HomeDashboard() {
               </div>
             </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IconArrowUpRight className="h-4 w-4 text-purple-500" />
-                <span>+{pickupOrders ? Math.round(pickupOrders * 0.04) : 0} today</span>
-              </div>
-              <div className="text-xs">Locations</div>
-            </div>
-
             <div className="mt-3">
               <ProgressBar value={totalOrders ? percent(pickupOrders, Math.max(1, totalOrders)) : 0} />
             </div>
@@ -589,18 +794,17 @@ export function HomeDashboard() {
         </Card>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-2 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
-        {/* Pie Chart */}
+      {/* Charts */}
+      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-2">
         <Card className="h-[320px]">
           <CardHeader>
-            <CardTitle>Orders by Status {searchQuery && `(${filteredOrderData.length})`}</CardTitle>
+            <CardTitle>Orders by Status</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={filteredOrderData.length > 0 ? filteredOrderData : orderData}
+                  data={orderData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={60}
@@ -608,8 +812,8 @@ export function HomeDashboard() {
                   paddingAngle={5}
                   label
                 >
-                  {(filteredOrderData.length > 0 ? filteredOrderData : orderData).map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {orderData.map((_, idx) => (
+                    <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -619,14 +823,13 @@ export function HomeDashboard() {
           </CardContent>
         </Card>
 
-        {/* Bar Chart */}
         <Card className="h-[320px]">
           <CardHeader>
-            <CardTitle>Order Overview {searchQuery && `(${filteredChartData.length})`}</CardTitle>
+            <CardTitle>Order Overview</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={filteredChartData.length > 0 ? filteredChartData : chartData}>
+              <BarChart data={chartData}>
                 <XAxis dataKey="status" />
                 <YAxis />
                 <Tooltip />
@@ -637,47 +840,47 @@ export function HomeDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
-        <Card className="h-[350px]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <IconTrendingUp className="h-5 w-5 text-green-500" />
-              Revenue & Profit Chart
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {revenueData.length === 0 ? (
-              <div className="h-[280px] flex items-center justify-center text-gray-500">Loading revenue data...</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={{ fill: "#3b82f6", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="profit"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={{ fill: "#10b981", r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+    
+
+      {/* Orders table or empty state */}
+    {readyOrdersList.length > 0 ? (
+  <Card>
+    <CardHeader>
+      <CardTitle>Ready Orders</CardTitle>
+    </CardHeader>
+    <CardContent>
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </CardContent>
+  </Card>
+) : (
+  <Card>
+    <CardContent className="text-center text-gray-500 py-10">No ready orders match the selected filter.</CardContent>
+  </Card>
+)}
+
     </div>
   )
 }

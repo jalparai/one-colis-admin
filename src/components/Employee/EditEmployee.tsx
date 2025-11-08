@@ -30,7 +30,6 @@ export function EditEmployee({
     permissions?: {
       addStock?: boolean;
       manageOrders?: boolean;
-      assignOrders?: boolean;
       assignProducts?: boolean;
       assignPayouts?: boolean;
             assignPickups?: boolean;
@@ -48,7 +47,6 @@ export function EditEmployee({
   const [permissions, setPermissions] = useState({
     addStock: employee.permissions?.addStock || false,
     manageOrders: employee.permissions?.manageOrders || false,
-    assignOrders: employee.permissions?.assignOrders || false,
     assignProducts: employee.permissions?.assignProducts || false,
     assignPayouts: employee.permissions?.assignPayouts || false,
         assignPickups: employee.permissions?.assignPickups || false,
@@ -66,7 +64,6 @@ export function EditEmployee({
       setPermissions({
         addStock: employee.permissions?.addStock || false,
         manageOrders: employee.permissions?.manageOrders || false,
-        assignOrders: employee.permissions?.assignOrders || false,
         assignProducts: employee.permissions?.assignProducts || false,
         assignPayouts: employee.permissions?.assignPayouts || false,
                 assignPickups: employee.permissions?.assignPickups || false,

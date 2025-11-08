@@ -74,7 +74,7 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
       {
         title: "Invoice",
         titleKey: "sellerSidebar.invoices",
-        url: `/${locale}/seller/invoices`,
+        url: `/${locale}/seller/Invoices`,
         icon: FileIcon,
       },
        {

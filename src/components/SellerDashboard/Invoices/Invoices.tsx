@@ -196,10 +196,7 @@ export default function InvoicesTableAdmin() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs">
-                      <div>{inv.periodType || "—"}</div>
-                      <div className="text-muted-foreground">
-                        {inv.periodStart ? new Date(inv.periodStart).toLocaleDateString() : "—"} → {inv.periodEnd ? new Date(inv.periodEnd).toLocaleDateString() : "—"}
-                      </div>
+                    3 days
                     </div>
                   </TableCell>
                   <TableCell>
