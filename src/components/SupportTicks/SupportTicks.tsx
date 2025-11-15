@@ -31,7 +31,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Trash } from "lucide-react"
+import { ChevronDown, Trash, Eye, MoreHorizontal } from "lucide-react"
 import { Checkbox } from "../ui/checkbox"
 import {
   AlertDialog,
@@ -43,6 +43,15 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
+
+// dialog for viewing details
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 type Ticket = {
   _id: string
@@ -74,6 +83,10 @@ export function SupportTicketsTable() {
   // delete dialog state
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deleteTicket, setDeleteTicket] = React.useState<Ticket | null>(null)
+
+  // details dialog state
+  const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const [selectedTicket, setSelectedTicket] = React.useState<Ticket | null>(null)
 
   // 🔹 Fetch tickets
   const fetchTickets = React.useCallback(async () => {
@@ -135,6 +148,16 @@ export function SupportTicketsTable() {
     }
   }
 
+  // 🔹 Details handler
+  const openDetailsFor = (ticket: Ticket) => {
+    setSelectedTicket(ticket)
+    setDetailsOpen(true)
+  }
+  const closeDetails = () => {
+    setSelectedTicket(null)
+    setDetailsOpen(false)
+  }
+
   // 🔹 Date filters
   const filteredByDate = React.useMemo(() => {
     if (dateFilter === "all") return tickets
@@ -170,6 +193,7 @@ export function SupportTicketsTable() {
     if (!globalFilter.trim()) return timeFiltered
     const q = globalFilter.toLowerCase()
     return timeFiltered.filter((t) => {
+      // message still searchable; remove `t.message` if you want it excluded
       return (
         t.subject.toLowerCase().includes(q) ||
         t.message.toLowerCase().includes(q) ||
@@ -182,6 +206,7 @@ export function SupportTicketsTable() {
   }, [timeFiltered, globalFilter])
 
   // 🔹 Columns
+  // NOTE: message column removed from the table; actions are now inside a dropdown
   const columns: ColumnDef<Ticket>[] = [
     {
       id: "select",
@@ -214,7 +239,6 @@ export function SupportTicketsTable() {
       cell: ({ row }) => row.original.seller?.email || "—",
     },
     { accessorKey: "subject", header: "Subject" },
-    { accessorKey: "message", header: "Message" },
     { accessorKey: "priority", header: "Priority" },
     { accessorKey: "status", header: "Status" },
 
@@ -232,28 +256,36 @@ export function SupportTicketsTable() {
         const isClosed = ticket.status === "closed"
 
         return (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="cursor-pointer"
-              onClick={() => updateStatus(ticket._id, "closed")}
-              disabled={isClosed}
-            >
-              {isClosed ? "Closed" : "Close"}
-            </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <span className="sr-only">Open actions</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openDetailsFor(ticket)}>
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
 
-            <Button
-              size="sm"
-              variant="ghost"
-              className="cursor-pointer"
-              onClick={() => openDeleteDialogFor(ticket)}
-              aria-label={`Delete ticket ${ticket.subject}`}
-            >
-              <Trash className="mr-2" />
-              Delete
-            </Button>
-          </div>
+              <DropdownMenuItem
+                onClick={() => updateStatus(ticket._id, "closed")}
+                disabled={isClosed}
+              >
+                <ChevronDown className="mr-2 h-4 w-4" />
+                {isClosed ? "Closed" : "Close Ticket"}
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => openDeleteDialogFor(ticket)}
+                className="text-destructive"
+              >
+                <Trash className="mr-2 h-4 w-4 text-red-600" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )
       },
     },
@@ -279,6 +311,44 @@ export function SupportTicketsTable() {
 
   return (
     <div className="w-full">
+      {/* Details dialog */}
+      <Dialog open={detailsOpen} onOpenChange={(open) => { if (!open) closeDetails(); setDetailsOpen(open) }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Ticket Details</DialogTitle>
+            <div className="text-sm text-muted-foreground mt-1">{selectedTicket?.subject}</div>
+          </DialogHeader>
+
+          <div className="py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 className="text-sm font-medium">Seller</h4>
+              <div className="text-sm">{selectedTicket?.seller?.name ?? "—"}</div>
+              <div className="text-sm text-muted-foreground">{selectedTicket?.seller?.storeName ?? ""}</div>
+              <div className="text-sm lowercase">{selectedTicket?.seller?.email ?? ""}</div>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium">Meta</h4>
+              <div className="text-sm">Priority: <strong>{selectedTicket?.priority ?? "—"}</strong></div>
+              <div className="text-sm">Status: <strong>{selectedTicket?.status ?? "—"}</strong></div>
+              <div className="text-sm">Created: {selectedTicket ? new Date(selectedTicket.createdAt).toLocaleString() : "—"}</div>
+              <div className="text-sm">Updated: {selectedTicket && selectedTicket.updatedAt ? new Date(selectedTicket.updatedAt).toLocaleString() : "—"}</div>
+            </div>
+
+            <div className="md:col-span-2">
+              <h4 className="text-sm font-medium">Message</h4>
+              <div className="whitespace-pre-wrap max-h-64 overflow-auto border rounded-md p-3 bg-muted/5">
+                {selectedTicket?.message ?? "—"}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDetails}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete confirmation dialog */}
       <AlertDialog open={deleteOpen} onOpenChange={(open) => {
         // if user closes dialog manually, clear selected ticket
@@ -319,7 +389,7 @@ export function SupportTicketsTable() {
         />
 
         {/* Date Range */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
           <label>To:</label>

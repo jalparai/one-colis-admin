@@ -451,7 +451,7 @@ export function DeliveryPickupsTable() {
                 const title = `Chat on WhatsApp ${row.original.customer?.name ?? phoneRaw}`
                 return (
                     <a href={waLink} target="_blank" rel="noopener noreferrer" title={title}>
-                        <Button size="sm" variant="outline" className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                             <MessageSquare size={14} />
                             WhatsApp
                         </Button>
@@ -565,7 +565,7 @@ export function DeliveryPickupsTable() {
                     className="max-w-sm"
                 />
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                     <label>From:</label>
                     <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
                     <label>To:</label>

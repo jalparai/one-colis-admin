@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardHeader,
@@ -168,6 +169,7 @@ export default function Analysis() {
   const params = useParams();
   const router = useRouter();
   const locale = params.locale as string;
+  const { t } = useTranslation("common");
   // add near other useState(...) lines inside the Analysis component
   const [collectedPending, setCollectedPending] = useState<
     CollectedPendingData | null
@@ -177,24 +179,24 @@ export default function Analysis() {
   // ----------------- Table Definition -----------------
   const orderColumns: ColumnDef<Order>[] = [
     {
-      header: "Seller",
+      header: t('table.seller'),
       accessorKey: "seller",
       cell: ({ row }) => <div className="font-medium">{row.original.seller}</div>,
     },
     {
-      header: "Email",
+      header: t('table.email'),
       accessorKey: "sellerEmail",
       cell: ({ row }) => (
         <div className="text-gray-600">{row.original.sellerEmail}</div>
       ),
     },
     {
-      header: "Total Amount",
+      header: t('table.totalAmount'),
       accessorKey: "totalAmount",
       cell: ({ row }) => <div> DH {row.original.totalAmount.toLocaleString()}</div>,
     },
     {
-      header: "Status",
+      header: t('table.status'),
       accessorKey: "status",
       cell: ({ row }) => {
         const status = row.original.status;
@@ -212,7 +214,7 @@ export default function Analysis() {
       },
     },
     {
-      header: "Created",
+      header: t('table.created'),
       accessorKey: "createdAt",
       cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
     },
@@ -299,16 +301,12 @@ export default function Analysis() {
         });
         const data = await res.json();
 
-        // Normalize: prefer _id, fallback to id (depends on your API)
         const normalized = (data?.data || []).map((s: any) => ({
           id: s._id ?? s.id ?? s._uid ?? "",
           name: s.name ?? s.fullName ?? s.sellerName ?? "Unnamed Seller",
         }));
 
         setSellers(normalized);
-
-        // OPTIONAL: preselect first seller when opening quick action later
-        // setSelectedSeller(normalized[0]?.id ?? null);
       } catch (err) {
         console.error("Error fetching sellers:", err);
       }
@@ -402,29 +400,29 @@ export default function Analysis() {
   }, [filteredOrders]);
 
   // ----------------- Calculations (use filteredOrders where meaningful) -----------------
-  const totalSellerRevenue = metrics?.topSellers.reduce((sum, s) => sum + s.revenue, 0) ?? 0;
-  const totalServiceRevenue = metrics?.cityPerformance.reduce((sum, c) => {
+  const totalSellerRevenueAllTime = metrics?.topSellers.reduce((sum, s) => sum + s.revenue, 0) ?? 0;
+  const totalServiceRevenueAllTime = metrics?.cityPerformance.reduce((sum, c) => {
     const feeObj = metrics?.cityFees.find((f) => f.city === c.city);
     const deliveryFee = feeObj ? feeObj.fee : 0;
     return sum + deliveryFee * c.delivered;
   }, 0) ?? 0;
 
-  const netProfit = totalSellerRevenue - totalServiceRevenue;
+  const netProfitAllTime = totalSellerRevenueAllTime - totalServiceRevenueAllTime;
   const totalOrdersFromMetrics =
     (metrics?.delivered?.deliveredOrders || 0) +
     (metrics?.delivered?.returnedOrders || 0);
 
-  const returnRate =
+  const returnRateAllTime =
     totalOrdersFromMetrics > 0
       ? ((metrics!.delivered.returnedOrders / totalOrdersFromMetrics) * 100).toFixed(1)
       : "0";
 
-  const deliveryRate =
+  const deliveryRateAllTime =
     totalOrdersFromMetrics > 0
       ? ((metrics!.delivered.deliveredOrders / totalOrdersFromMetrics) * 100).toFixed(1)
       : "0";
 
-  const avgDeliveryHours =
+  const avgDeliveryHoursAllTime =
     metrics && metrics.avgDeliveryTime.length > 0
       ? Math.round(
         metrics.avgDeliveryTime.reduce((a, b) => a + b.avgDeliveryHours, 0) /
@@ -437,10 +435,55 @@ export default function Analysis() {
   const pendingCount = filteredPendingOrders.length;
   const pendingRate = allOrdersCount > 0 ? (pendingCount / allOrdersCount) * 100 : 0;
 
-  const [stats, setStats] = useState({
-    totalRevenue: 0,
-    loading: true,
-  });
+  // compute seller revenue from filtered orders
+  const sellerRevenueFiltered = useMemo(() => {
+    return filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  }, [filteredOrders]);
+
+  // estimate service revenue for filtered range by scaling the fetched total service revenue
+  const serviceRevenueFiltered = useMemo(() => {
+    // prefer server-provided stats.totalRevenue (fetched in client) if available; otherwise scale all-time computed revenue
+    const totalOrdersCountAll = orders.length;
+
+    // client-side fetched stats may be set in state 'stats' below (see existing code). We'll reuse that via local storage of fetched value if available.
+    // For simplicity here we'll scale the all-time metric by the fraction of filtered orders to total orders fetched from /api/admin/orders
+    if (totalOrdersCountAll > 0) {
+      const totalService = totalServiceRevenueAllTime ?? 0; // removed statsRef usage to fix ReferenceError
+      return (filteredOrders.length / totalOrdersCountAll) * totalService;
+    }
+
+    // fallback: if we don't know total denominator, just return proportional portion of all-time service revenue using totalOrdersFromMetrics
+    if (totalOrdersFromMetrics > 0) {
+      return (filteredOrders.length / totalOrdersFromMetrics) * totalServiceRevenueAllTime;
+    }
+
+    // last resort: return all-time service revenue
+    return totalServiceRevenueAllTime;
+  }, [filteredOrders, orders.length, totalServiceRevenueAllTime, totalOrdersFromMetrics]);
+
+  const netProfitFiltered = sellerRevenueFiltered - serviceRevenueFiltered;
+
+  // compute return/delivery rates from filteredOrders when possible
+  const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
+    if (filteredOrders.length === 0) {
+      return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
+    }
+
+    const returned = filteredOrders.filter((o) => /return/i.test(o.status)).length;
+    const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status)).length;
+
+    const rr = ((returned / filteredOrders.length) * 100).toFixed(1);
+    const dr = ((delivered / filteredOrders.length) * 100).toFixed(1);
+    return { returnRateFiltered: rr, deliveryRateFiltered: dr };
+  }, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
+
+  // avg delivery hours: we don't have per-order delivery times in Order type, so fallback to all-time metric
+  const avgDeliveryHours = avgDeliveryHoursAllTime;
+
+  // lightweight ref to hold stats.totalRevenue fetched in the other effect (we'll keep same logic for fetching stats below)
+  const [statsState, setStatsState] = useState({ totalRevenue: 0, loading: true });
+  // expose a plain object for use in serviceRevenueFiltered useMemo (avoid creating dependency on object identity)
+  const statsRef = useMemo(() => ({ totalRevenue: statsState.totalRevenue }), [statsState.totalRevenue]);
 
   useEffect(() => {
     let mounted = true;
@@ -449,14 +492,11 @@ export default function Analysis() {
       try {
         const token = localStorage.getItem("token");
 
-        // If you don't have a token, fallback immediately to computed metric
         if (!token) {
-          console.warn("No token in localStorage — using computed metrics fallback for service revenue.");
-          if (mounted) setStats({ totalRevenue: totalServiceRevenue ?? 0, loading: false });
+          if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
           return;
         }
 
-        console.log("Fetching service revenue (client)...");
         const res = await fetch(`/api/admin/service-revenue?group=total`, {
           method: "GET",
           headers: {
@@ -466,93 +506,97 @@ export default function Analysis() {
           cache: "no-store",
         });
 
-        console.log("service-revenue status:", res.status);
         const text = await res.text();
         let data;
         try {
-          data = text ? JSON.parse(text) : null;
+          // Guard: if HTML returned instead of JSON, skip parsing
+          if (res.headers.get("content-type")?.includes("application/json")) {
+            try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error("JSON parse failed despite JSON content-type:", e, text);
+            data = null;
+          }
+          } else {
+            console.error("Expected JSON but received non‑JSON response", text);
+            data = null;
+          }
         } catch (e) {
           console.error("service-revenue JSON parse error:", e, "raw:", text);
         }
-        console.log("service-revenue response body:", data);
 
         if (!res.ok) {
-          // show a helpful log and fallback
-          console.error("service-revenue API returned non-OK:", res.status, data);
-          if (mounted) setStats({ totalRevenue: totalServiceRevenue ?? 0, loading: false });
+          if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
           return;
         }
 
         const apiRevenue = typeof data?.totalRevenue === "number" ? data.totalRevenue : null;
         if (mounted) {
-          setStats({ totalRevenue: apiRevenue ?? totalServiceRevenue ?? 0, loading: false });
+          setStatsState({ totalRevenue: apiRevenue ?? totalServiceRevenueAllTime ?? 0, loading: false });
         }
       } catch (err) {
         console.error("Failed to fetch service revenue (client):", err);
-        if (mounted) setStats({ totalRevenue: totalServiceRevenue ?? 0, loading: false });
+        if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
       }
     }
 
     fetchRevenue();
-
     return () => {
       mounted = false;
     };
-  }, [totalServiceRevenue]); // include totalServiceRevenue to update fallback when metrics load
+  }, [totalServiceRevenueAllTime]);
 
-
-
-  const dashboardMetrics: DashboardMetricCard[] = [
-    {
-      title: "All Orders",
-      value: `${allOrdersCount}`,
-      trend: "up",
-      link: `/${locale}/admin/Order`,
-    },
-    {
-      title: "Pending Orders",
-      value: `${pendingCount} (${pendingRate.toFixed(1)}%)`,
-      trend: pendingRate < 20 ? "up" : "down",
-      link: `/${locale}/admin/Collection-pending`,
-    },
-    {
-      title: "Total Seller Revenue",
-      value: `$${totalSellerRevenue.toLocaleString()}`,
-      trend: "up",
-      link: `/${locale}/admin/Top-Sellers`,
-    },
-    {
-      title: "Net Profit (Seller)",
-      value: `$${netProfit.toLocaleString()}`,
-      trend: netProfit > 0 ? "up" : "down",
-      link: `/${locale}/admin/Seller`,
-    },
-    {
-      title: "Average Delivery Time",
-      value: `${avgDeliveryHours}h`,
-      trend: avgDeliveryHours < 48 ? "up" : "down",
-      link: `/${locale}/admin/Delivery-Returned`,
-    },
-    {
-      title: "Return Rate",
-      value: `${returnRate}%`,
-      trend: parseFloat(returnRate) < 20 ? "up" : "down",
-      link: `/${locale}/admin/Order`,
-    },
-    {
-      title: "Delivery Rate",
-      value: `${deliveryRate}%`,
-      trend: parseFloat(deliveryRate) > 70 ? "up" : "down",
-      link: `/${locale}/admin/Order`,
-    },
-    {
-      title: "Total Service Revenue",
-      value: `DH 1880`,
-      trend: "up",
-      link: `/${locale}/admin/Order`,
-    }
-
-  ];
+  // ----------------- Dashboard cards now use filtered calculations -----------------
+const dashboardMetrics: DashboardMetricCard[] = [
+{
+title: t('metrics.allOrders'),
+value: `${allOrdersCount}`,
+trend: "up",
+link: `/${locale}/admin/Order`,
+},
+{
+title: t('metrics.pendingOrders'),
+value: `${pendingCount} (${pendingRate.toFixed(1)}%)`,
+trend: pendingRate < 20 ? "up" : "down",
+link: `/${locale}/admin/Collection-pending`,
+},
+{
+title: t('metrics.totalSellerRevenue'),
+value: `${sellerRevenueFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
+trend: "up",
+link: `/${locale}/admin/Top-Sellers`,
+},
+{
+title: t('metrics.netProfitSeller'),
+value: `${netProfitFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
+trend: netProfitFiltered > 0 ? "up" : "down",
+link: `/${locale}/admin/Seller`,
+},
+{
+title: t('metrics.averageDeliveryTime'),
+value: `${avgDeliveryHours}h`,
+trend: avgDeliveryHours < 48 ? "up" : "down",
+link: `/${locale}/admin/Delivery-Returned`,
+},
+{
+title: t('metrics.returnRate'),
+value: `${returnRateFiltered}%`,
+trend: parseFloat(returnRateFiltered) < 20 ? "up" : "down",
+link: `/${locale}/admin/Order`,
+},
+{
+title: t('metrics.deliveryRate'),
+value: `${deliveryRateFiltered}%`,
+trend: parseFloat(deliveryRateFiltered) > 70 ? "up" : "down",
+link: `/${locale}/admin/Order`,
+},
+{
+title: t('metrics.totalServiceRevenue'),
+value: `${serviceRevenueFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
+trend: "up",
+link: `/${locale}/admin/Order`,
+},
+];
 
   const isPositive = (t: "up" | "down") => t === "up";
 
@@ -583,14 +627,14 @@ export default function Analysis() {
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-600">
-        Loading dashboard...
+        {t('ui.loadingDashboard')}
       </div>
     );
 
   if (error || !metrics)
     return (
       <div className="min-h-screen flex items-center justify-center text-center">
-        <p>{error || "Failed to load metrics."}</p>
+        <p>{error || t('ui.failedToLoadMetrics')}</p>
       </div>
     );
 
@@ -598,41 +642,41 @@ export default function Analysis() {
     <div className="min-h-screen bg-white lg:px-5 p-0">
       <div className="">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">
-          Quick Actions
+          {t('quickActions.title')}
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[
             {
-              title: "Add New Seller",
+              title: t('quickActions.actions.addSeller'),
               icon: IconTrendingUp,
               color: "text-blue-600",
               bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
               actionType: "dialog",
             },
             {
-              title: "Add Stock",
+              title: t('quickActions.actions.addStock'),
               icon: IconTrendingUp,
               color: "text-green-600",
               bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
               actionType: "dialog",
             },
             {
-              title: "Manage Orders",
+              title: t('quickActions.actions.manageOrders'),
               icon: IconTrendingDown,
               color: "text-amber-600",
               bg: "from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/10",
               link: `/${locale}/admin/Order`,
             },
             {
-              title: "Reports & Analytics",
+              title: t('quickActions.actions.reportsAnalytics'),
               icon: IconTrendingDown,
               color: "text-purple-600",
               bg: "from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/10",
               link: `/${locale}/admin/Collection-pending`,
             },
             {
-              title: "Returned & Delivered Orders",
+              title: t('quickActions.actions.returnedDelivered'),
               icon: IconTrendingUp,
               color: "text-red-600",
               bg: "from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/10",
@@ -654,7 +698,7 @@ export default function Analysis() {
                     {action.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {action.actionType === "dialog" ? "Open seller form →" : "Click to manage →"}
+                    {action.actionType === "dialog" ? t('quickActions.openDialog') : t('quickActions.clickToManage')}
                   </p>
                 </div>
                 <action.icon
@@ -678,7 +722,7 @@ export default function Analysis() {
               <AddSeller
                 onSellerAdded={() => {
                   setOpenAddSeller(false);
-                  toast.success("Seller added successfully!");
+                  toast.success(t('quickActions.sellerAdded'));
                 }}
                 onCancel={() => setOpenAddSeller(false)}
               />
@@ -700,7 +744,7 @@ export default function Analysis() {
                 sellers={sellers}
                 selectedSellerId={selectedSeller}
                 onSellerChange={setSelectedSeller}
-                placeholder="Select a seller..."
+                placeholder={t('ui.selectSeller')}
               />
 
               {selectedSeller && (
@@ -726,7 +770,7 @@ export default function Analysis() {
       <div className="mt-5 space-y-8">
         {/* Date filter controls */}
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100">Filter by Date</h3>
+          <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100">{t('filter.title')}</h3>
 
           <Select
             value={dateFilter}
@@ -744,16 +788,16 @@ export default function Analysis() {
             }
           >
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select date range" />
+              <SelectValue placeholder={t('filter.placeholder')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="yesterday">Yesterday</SelectItem>
-              <SelectItem value="thisWeek">This Week</SelectItem>
-              <SelectItem value="lastWeek">Last Week</SelectItem>
-              <SelectItem value="thisMonth">This Month</SelectItem>
-              <SelectItem value="lastMonth">Last Month</SelectItem>
+              <SelectItem value="all">{t('filter.all')}</SelectItem>
+              <SelectItem value="today">{t('filter.today')}</SelectItem>
+              <SelectItem value="yesterday">{t('filter.yesterday')}</SelectItem>
+              <SelectItem value="thisWeek">{t('filter.thisWeek')}</SelectItem>
+              <SelectItem value="lastWeek">{t('filter.lastWeek')}</SelectItem>
+              <SelectItem value="thisMonth">{t('filter.thisMonth')}</SelectItem>
+              <SelectItem value="lastMonth">{t('filter.lastMonth')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -792,7 +836,7 @@ export default function Analysis() {
                     className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
                     onClick={() => router.push(metric.link)}
                   >
-                    View Details →
+                    {t('ui.viewDetails')}
                   </Button>
                 </CardContent>
               </Card>
@@ -805,8 +849,8 @@ export default function Analysis() {
           {topSellersChartData.length > 0 && (
             <Card className="shadow-sm border rounded-2xl">
               <CardHeader>
-                <CardTitle style={{ color: "#2BC3F1" }}>Top Sellers Revenue</CardTitle>
-                <CardDescription style={{ color: "#E0B660" }}>Revenue performance by top sellers</CardDescription>
+                <CardTitle style={{ color: "#2BC3F1" }}>{t('charts.topSellersTitle')}</CardTitle>
+                <CardDescription style={{ color: "#E0B660" }}>{t('charts.topSellersDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
                 <ChartContainer config={{}} className="h-[300px]">
@@ -827,8 +871,8 @@ export default function Analysis() {
           {deliveryReturnChartData.length > 0 && (
             <Card className="shadow-sm border rounded-2xl">
               <CardHeader>
-                <CardTitle style={{ color: "#E0B660" }}>Delivery vs Return Ratio by City</CardTitle>
-                <CardDescription style={{ color: "#2BC3F1" }}>Comparison of delivered and returned orders across cities</CardDescription>
+                <CardTitle style={{ color: "#E0B660" }}>{t('charts.deliveryReturnTitle')}</CardTitle>
+                <CardDescription style={{ color: "#2BC3F1" }}>{t('charts.deliveryReturnDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
                 <ChartContainer config={{}} className="h-[300px]">
@@ -876,7 +920,7 @@ export default function Analysis() {
           </Table>
         ) : (
           <div className="text-center text-gray-500 py-10">
-            No orders match the selected date filter.
+            {t('table.noOrdersMatch')}
           </div>
         )}
       </div>

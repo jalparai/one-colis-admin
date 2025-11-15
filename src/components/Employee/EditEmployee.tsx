@@ -15,6 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useTranslation } from "react-i18next";
 
 export function EditEmployee({
   employee,
@@ -32,15 +33,18 @@ export function EditEmployee({
       manageOrders?: boolean;
       assignProducts?: boolean;
       assignPayouts?: boolean;
-            assignPickups?: boolean;
-            SupportTick?: boolean;
- managePickups?:boolean
+      assignPickups?: boolean;
+      SupportTick?: boolean;
+      managePickups?: boolean;
     };
   };
   onUpdated: () => void;
   open: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
+  const ns = "employeeAdd";
+
   const [name, setName] = useState(employee.name || "");
   const [password, setPassword] = useState("");
   const [customRole, setCustomRole] = useState(employee.customRole || "");
@@ -49,10 +53,9 @@ export function EditEmployee({
     manageOrders: employee.permissions?.manageOrders || false,
     assignProducts: employee.permissions?.assignProducts || false,
     assignPayouts: employee.permissions?.assignPayouts || false,
-        assignPickups: employee.permissions?.assignPickups || false,
-        SupportTick: employee.permissions?.SupportTick || false,
-         managePickups: employee.permissions?.managePickups || false,
-
+    assignPickups: employee.permissions?.assignPickups || false,
+    SupportTick: employee.permissions?.SupportTick || false,
+    managePickups: employee.permissions?.managePickups || false,
   });
   const [loading, setLoading] = useState(false);
 
@@ -66,10 +69,9 @@ export function EditEmployee({
         manageOrders: employee.permissions?.manageOrders || false,
         assignProducts: employee.permissions?.assignProducts || false,
         assignPayouts: employee.permissions?.assignPayouts || false,
-                assignPickups: employee.permissions?.assignPickups || false,
+        assignPickups: employee.permissions?.assignPickups || false,
         SupportTick: employee.permissions?.SupportTick || false,
-         managePickups: employee.permissions?.managePickups || false,
-
+        managePickups: employee.permissions?.managePickups || false,
       });
       setPassword("");
     }
@@ -90,7 +92,8 @@ export function EditEmployee({
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        toast.error("No token found. Please log in.");
+        toast.error(t(`${ns}.errorNoToken`));
+        setLoading(false);
         return;
       }
 
@@ -105,12 +108,14 @@ export function EditEmployee({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success("✅ Employee updated successfully!");
+      toast.success(t(`${ns}.successUpdate`));
       onUpdated();
       onClose();
     } catch (err: any) {
       console.error(err);
-      toast.error(err.response?.data?.message || "❌ Failed to update employee.");
+      toast.error(
+        err.response?.data?.message || t(`${ns}.errorGenericUpdate`)
+      );
     } finally {
       setLoading(false);
     }
@@ -120,16 +125,14 @@ export function EditEmployee({
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>Edit Employee</SheetTitle>
-          <SheetDescription>
-            You can update name, password, custom role, or permissions.
-          </SheetDescription>
+          <SheetTitle>{t(`${ns}.editTitle`)}</SheetTitle>
+          <SheetDescription>{t(`${ns}.editDescription`)}</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleUpdate} className="grid gap-6 px-4">
           {/* Name Field */}
           <div className="grid gap-3">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t(`${ns}.fields.name`)}</Label>
             <Input
               id="name"
               value={name}
@@ -140,47 +143,45 @@ export function EditEmployee({
 
           {/* Password Field */}
           <div className="grid gap-3">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t(`${ns}.fields.password`)}</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Leave blank to keep current"
+              placeholder={t(`${ns}.placeholders.password`)}
             />
           </div>
 
           {/* Custom Role Field */}
           <div className="grid gap-3">
-            <Label htmlFor="customRole">Custom Role</Label>
+            <Label htmlFor="customRole">{t(`${ns}.fields.customRole`)}</Label>
             <Input
               id="customRole"
               name="customRole"
               value={customRole}
               onChange={(e) => setCustomRole(e.target.value)}
-              placeholder="e.g. Dev"
+              placeholder={t(`${ns}.placeholders.customRole`)}
               required
             />
           </div>
 
           {/* Permissions Section */}
           <div className="border-t pt-4">
-            <Label className="font-semibold text-sm text-gray-700 mb-2 block">
-              Permissions
+            <Label className="font-semibold text-sm mb-2 block">
+              {t(`${ns}.permissionsTitle`)}
             </Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               {Object.keys(permissions).map((key) => (
-                <label key={key} className="flex items-center gap-2 capitalize">
+                <label key={key} className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll capitalize">
                   <input
                     type="checkbox"
                     name={key}
-                    checked={
-                      permissions[key as keyof typeof permissions] || false
-                    }
+                    checked={permissions[key as keyof typeof permissions] || false}
                     onChange={handlePermissionChange}
                     className="w-4 h-4"
                   />
-                  {key.replace(/([A-Z])/g, " $1")}
+                  {t(`${ns}.permissions.${key}`)}
                 </label>
               ))}
             </div>
@@ -188,11 +189,11 @@ export function EditEmployee({
 
           <SheetFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Saving..." : "Save Changes"}
+              {loading ? t(`${ns}.submit.saving`) : t(`${ns}.submit.save`)}
             </Button>
             <SheetClose asChild>
               <Button type="button" variant="outline">
-                Close
+                {t(`${ns}.close`)}
               </Button>
             </SheetClose>
           </SheetFooter>

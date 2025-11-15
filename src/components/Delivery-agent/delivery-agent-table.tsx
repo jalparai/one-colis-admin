@@ -331,7 +331,7 @@ const handleExport = async (url: RequestInfo): Promise<void> => {
           }
           className="max-w-sm"
         />
-<div className="flex items-center gap-2">
+<div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
   <label>From:</label>
   <Input
     type="date"

@@ -62,9 +62,9 @@ export function ImportReadyOrdersButton({ endpoint, label = "Import Ready Orders
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
       <Input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} className="hidden" />
-      <Button variant="outline" size="sm" onClick={onPick} disabled={disabled || submitting} className="flex items-center gap-2">
+      <Button variant="outline" size="sm" onClick={onPick} disabled={disabled || submitting} className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
         <Upload className="h-4 w-4" />
         {label}
       </Button>

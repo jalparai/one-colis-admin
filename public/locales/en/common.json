@@ -680,6 +680,207 @@
     "home": "Home",
     "myPayout": "My Payouts"
   }
+,
+  "quickActions": {
+    "title": "Quick Actions",
+    "actions": {
+      "addSeller": "Add New Seller",
+      "addStock": "Add Stock",
+      "manageOrders": "Manage Orders",
+      "reportsAnalytics": "Reports & Analytics",
+      "returnedDelivered": "Returned & Delivered Orders"
+    },
+    "openDialog": "Open seller form →",
+    "clickToManage": "Click to manage →",
+    "sellerAdded": "Seller added successfully!"
+  },
+  "filter": {
+    "title": "Filter by Date",
+    "placeholder": "Select date range",
+    "all": "All",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "lastWeek": "Last Week",
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month"
+  },
+  "table": {
+    "seller": "Seller",
+    "email": "Email",
+    "totalAmount": "Total Amount",
+    "status": "Status",
+    "created": "Created",
+    "noOrdersMatch": "No orders match the selected date filter."
+  },
+  "ui": {
+    "loadingDashboard": "Loading dashboard...",
+    "failedToLoadMetrics": "Failed to load metrics.",
+    "viewDetails": "View Details →",
+    "selectSeller": "Select a seller..."
+  },
+  "charts": {
+    "topSellersTitle": "Top Sellers Revenue",
+    "topSellersDesc": "Revenue performance by top sellers",
+    "deliveryReturnTitle": "Delivery vs Return Ratio by City",
+    "deliveryReturnDesc": "Comparison of delivered and returned orders across cities"
+  }
+,
+ "metrics": {
+    "allOrders": "All Orders",
+    "pendingOrders": "Pending Orders",
+    "totalSellerRevenue": "Total Seller Revenue",
+    "netProfitSeller": "Net Profit (Seller)",
+    "averageDeliveryTime": "Average Delivery Time",
+    "returnRate": "Return Rate",
+    "deliveryRate": "Delivery Rate",
+    "totalServiceRevenue": "Total Service Revenue"
+  }
+
+,
+
+  "employee": {
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "registeredDate": "Registered Date",
+      "noData": "No employees found."
+    },
+    "aria": {
+      "selectAll": "Select all",
+      "selectRow": "Select row"
+    },
+    "actions": {
+      "openMenu": "Open menu",
+      "label": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "deleting": "Deleting...",
+      "deleteSelected": "Delete Selected ({{count}})"
+    },
+    "dialog": {
+      "deleteTitle": "Delete {{name}}?",
+      "deleteDescription": "This action cannot be undone. The employee will be permanently removed from the system."
+    },
+    "filter": {
+      "emailPlaceholder": "Filter emails...",
+      "from": "From:",
+      "to": "To:",
+      "filterButton": "Filter",
+      "options": {
+        "all": "All",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This Week",
+        "lastWeek": "Last Week",
+        "thisMonth": "This Month",
+        "lastMonth": "Last Month"
+      }
+    },
+    "export": {
+      "exportEmployees": "Export Employees",
+      "error": "Error exporting file!"
+    },
+    "ui": {
+      "loading": "Loading employees...",
+      "selectedRows": "{{selected}} of {{total}} row(s) selected.",
+      "prev": "Previous",
+      "next": "Next",
+      "viewDetails": "View Details →",
+      "selectSeller": "Select a seller..."
+    }
+  }
+,
+
+
+
+  "admin": {
+    "sidebar": {
+      "ui": {
+        "logoAlt": "One-Colis Logo",
+        "searchPlaceholder": "Search..."
+      },
+      "nav": {
+        "home": "Home",
+        "employee": "Employees",
+        "seller": "Sellers",
+        "stocks": "Stocks",
+        "warehouses": "Warehouses",
+        "deliveryAgents": "Delivery Agents",
+        "payoutManager": "Payout Manager",
+        "managesPickup": "Manage Pickups",
+        "cityFee": "City Fee",
+        "orders": "Orders",
+        "payouts": "Payouts",
+        "invoices": "Invoices",
+        "supportTickets": "Support Tickets",
+        "returnNotes": "Return Notes",
+        "report": {
+          "title": "Reports",
+          "collectedPending": "Collected Pending",
+          "deliveredReturned": "Delivered / Returned",
+          "topSellers": "Top Sellers",
+          "topAgents": "Top Agents",
+          "avgDeliveryTime": "Average Delivery Time",
+          "topProducts": "Top Products",
+          "revenueCity": "Revenue by City",
+          "stockTrend": "Stock Trend",
+          "payoutHistory": "Payout History",
+          "financialSummary": "Financial Summary"
+        }
+      }
+    }
+  
+}
+
+
+,
+
+  "employeeAdd": {
+    "button": "+ Add Employee",
+    "title": "Add New Employee",
+    "description": "Fill in the fields to add a new employee and assign permissions.",
+    "editTitle": "Edit Employee",
+    "editDescription": "You can update name, password, custom role, or permissions.",
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "customRole": "Custom Role"
+    },
+    "placeholders": {
+      "customRole": "e.g. Dev",
+              "password": "Leave blank to keep current"
+
+    },
+    "permissionsTitle": "Permissions",
+    "permissions": {
+      "addStock": "Add Stock",
+      "manageOrders": "Manage Orders",
+      "assignProducts": "Assign Products",
+      "assignPayouts": "Assign Payouts",
+      "assignPickups": "Assign Pickups",
+      "SupportTick": "Support Tickets",
+      "managePickups": "Manage Pickups"
+    },
+    "submit": {
+      "adding": "Adding...",
+      "add": "Add Employee",
+       "save": "Save Changes",
+        "saving": "Saving..."
+    },
+    "close": "Close",
+    "success": "Employee added successfully!",
+    "errorNoToken": "No token found. Please log in.",
+    "errorGeneric": "Failed to add employee"
+
+  }
+
+
+  
+
 
 
 }

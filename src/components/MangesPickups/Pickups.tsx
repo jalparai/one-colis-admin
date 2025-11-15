@@ -40,6 +40,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import toast from "react-hot-toast"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
+import { ImportExportButtons } from "../ui/import-export-buttons"
+import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
 
 // ✅ Order type
 export type Order = {
@@ -270,11 +272,7 @@ const [filteredAgents, setFilteredAgents] = React.useState<Agent[]>([])
           setLoading(false);
         }
       };
-      
-
-
-
-      return (
+          return (
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -519,8 +517,16 @@ const [dateFilter, setDateFilter] = React.useState<
           className="max-w-sm"
         />
 
+          <ImportExportButtons
+            entityType="pickups"
+            config={ENTITY_CONFIGS.delivery}
+            onImportSuccess={fetchOrders}
+            onExportSuccess={() => {}}
+          />
+
+
         {/* Date Range Filter */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
           <label>To:</label>

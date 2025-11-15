@@ -12,7 +12,7 @@ export function WareHouseHeader() {
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <h1 className="text-base font-medium">Ware House</h1>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
   
         </div>
       </div>

@@ -83,7 +83,7 @@ export default function ClientTestimonials() {
         </div>
 
         <div className="mt-12">
-          <button className="bg-[#2BC3F1] m-auto hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition">
+          <button className="bg-[#2BC3F1] m-auto hover:bg-sky-400 text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 lg:overflow-auto overflow-x-scroll transition">
             {t("scaleBusiness")}
           </button>
         </div>

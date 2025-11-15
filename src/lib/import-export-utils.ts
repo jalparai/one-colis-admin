@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 const BASE_URL = 'https://cod-ecommerce-two.vercel.app/api/adminb/bulk';
 
 export interface ImportExportConfig {
-  entityType: 'employees' | 'sellers' | 'warehouse' | 'payout' | 'delivery';
+  entityType: 'employees' | 'sellers' | 'warehouse' | 'payout' | 'delivery' | "pickups";
   displayName: string;
 }
 
@@ -14,6 +14,7 @@ export const ENTITY_CONFIGS: Record<string, ImportExportConfig> = {
   warehouse: { entityType: 'warehouse', displayName: 'Warehouse Managers' },
   payout: { entityType: 'payout', displayName: 'Payout Managers' },
   delivery: { entityType: 'delivery', displayName: 'Delivery Agents' },
+  pickups: { entityType: 'pickups', displayName: 'Pickup' },
 };
 
 export const handleImport = async (

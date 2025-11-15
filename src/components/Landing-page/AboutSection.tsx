@@ -47,7 +47,7 @@ export default function AboutSection() {
           <nav>
             <a
               href="#contact"
-              className="bg-[#2BC3F1] hover:bg-sky-400 text-white px-6 py-3 rounded-full w-fit font-semibold flex items-center gap-2 transition"
+              className="bg-[#2BC3F1] hover:bg-sky-400 text-white px-6 py-3 rounded-full w-fit font-semibold flex items-center gap-2 lg:overflow-auto overflow-x-scroll transition"
             >
               {t("about_button")}
             </a>

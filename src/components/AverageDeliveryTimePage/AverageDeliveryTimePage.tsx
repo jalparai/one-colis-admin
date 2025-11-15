@@ -76,7 +76,7 @@ export default function AverageDeliveryTimePage() {
               <p className="text-sm text-muted-foreground">
                 Orders: {city.orders}
               </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll text-sm text-muted-foreground mt-2">
                 <Clock className="h-4 w-4 text-blue-500" />
                 Avg Delivery Time
               </div>

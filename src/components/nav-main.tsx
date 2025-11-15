@@ -11,7 +11,7 @@ export function NavMain({ items }: { items: any[] }) {
           key={item.title}
           href={item.url}
           className={cn(
-            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
+            "flex items-center gap-2 lg:overflow-auto overflow-x-scroll rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
           )}
         >
           <item.icon className="h-4 w-4" />

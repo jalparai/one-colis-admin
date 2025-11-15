@@ -200,7 +200,7 @@ export const columns: ColumnDef<Payout>[] = [
       const [loading, setLoading] = React.useState(false);
       const [payoutManagers, setPayoutManagers] = React.useState<PayoutManager[]>([]);
       const [selectedManager, setSelectedManager] = React.useState("");
-const [editOpen, setEditOpen] = React.useState(false);
+      const [editOpen, setEditOpen] = React.useState(false);
 
       React.useEffect(() => {
         if (assignOpen) {
@@ -219,30 +219,29 @@ const [editOpen, setEditOpen] = React.useState(false);
         }
       }, [assignOpen]);
 
-const handleAssign = async () => {
-  if (!selectedManager) return toast.error("Please select a payout manager");
+      const handleAssign = async () => {
+        if (!selectedManager) return toast.error("Please select a payout manager");
 
-  try {
-    setLoading(true);
-    const token = localStorage.getItem("token");
+        try {
+          setLoading(true);
+          const token = localStorage.getItem("token");
 
-    await axios.post(
-      `https://cod-ecommerce-two.vercel.app/api/admin/assign/payouts/${selectedManager}`,
-      { payoutIds: [payout._id] },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+          await axios.post(
+            `https://cod-ecommerce-two.vercel.app/api/admin/assign/payouts/${selectedManager}`,
+            { payoutIds: [payout._id] },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
 
-    toast.success("✅ Payout assigned successfully!");
-    table.options.meta?.refresh?.();
-    setAssignOpen(false);
-  } catch (err) {
-    console.error("❌ Failed to assign payout:", err);
-    toast.error("Failed to assign payout. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+          toast.success("✅ Payout assigned successfully!");
+          table.options.meta?.refresh?.();
+          setAssignOpen(false);
+        } catch (err) {
+          console.error("❌ Failed to assign payout:", err);
+          toast.error("Failed to assign payout. Please try again.");
+        } finally {
+          setLoading(false);
+        }
+      };
 
       const handleDelete = async () => {
         try {
@@ -282,13 +281,15 @@ const handleAssign = async () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
           <EditPayout
-  payout={payout}
-  open={editOpen}
-  onClose={() => setEditOpen(false)}
-          onUpdated={table.options.meta?.refresh || (() => {})}
-/>
-          {/* Assign Dialog */}
+            payout={payout}
+            open={editOpen}
+            onClose={() => setEditOpen(false)}
+            onUpdated={table.options.meta?.refresh || (() => {})}
+          />
+
+          {/* Assign Dialog (single) */}
           <AlertDialog open={assignOpen} onOpenChange={setAssignOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -339,8 +340,7 @@ const handleAssign = async () => {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-
-        </> 
+        </>
       );
     },
   },
@@ -354,6 +354,12 @@ export function PayoutTable() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
   const [dateFilter, setDateFilter] = React.useState<DateFilter>("all");
+
+  // Bulk assign states
+  const [assignBulkOpen, setAssignBulkOpen] = React.useState(false);
+  const [payoutManagersBulk, setPayoutManagersBulk] = React.useState<PayoutManager[]>([]);
+  const [selectedManagerBulk, setSelectedManagerBulk] = React.useState("");
+  const [bulkLoading, setBulkLoading] = React.useState(false);
 
   const fetchPayouts = React.useCallback(async () => {
     try {
@@ -374,6 +380,22 @@ export function PayoutTable() {
   React.useEffect(() => {
     fetchPayouts();
   }, [fetchPayouts]);
+
+  // Fetch managers for bulk assign when modal opens
+  React.useEffect(() => {
+    if (!assignBulkOpen) return;
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/payout-manager", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setPayoutManagersBulk(res.data.data || []);
+      } catch (err) {
+        console.error("❌ Failed to fetch payout managers (bulk):", err);
+      }
+    })();
+  }, [assignBulkOpen]);
 
   const filteredPayouts = React.useMemo(() => {
     if (dateFilter === "all") return payouts;
@@ -460,9 +482,36 @@ export function PayoutTable() {
       );
       table.resetRowSelection();
       fetchPayouts();
+      toast.success(`Deleted ${selectedIds.length} payout(s).`);
     } catch (err) {
       console.error("Bulk delete failed:", err);
-      alert("Bulk delete failed. Check console for details.");
+      toast.error("Bulk delete failed. Check console for details.");
+    }
+  };
+
+  const handleAssignBulk = async () => {
+    const selectedIds = table.getSelectedRowModel().rows.map((r) => r.original._id);
+    if (!selectedIds.length) return toast.error("No payouts selected.");
+    if (!selectedManagerBulk) return toast.error("Please select a payout manager.");
+
+    try {
+      setBulkLoading(true);
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `https://cod-ecommerce-two.vercel.app/api/admin/assign/payouts/${selectedManagerBulk}`,
+        { payoutIds: selectedIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`Assigned ${selectedIds.length} payout(s).`);
+      setAssignBulkOpen(false);
+      setSelectedManagerBulk("");
+      table.resetRowSelection();
+      fetchPayouts();
+    } catch (err) {
+      console.error("Bulk assign failed:", err);
+      toast.error("Bulk assign failed. Check console for details.");
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -517,40 +566,28 @@ export function PayoutTable() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-        {Object.keys(rowSelection).length > 0 && (
-  <Button
-    variant="destructive"
-    className="mb-2"
-    onClick={async () => {
-      const selectedIds = table.getSelectedRowModel().rows.map(
-        (row) => row.original._id
-      )
-      if (!selectedIds.length) return
+          {/* Bulk actions: Delete + Assign show when one or more rows selected */}
+          {selectedCount > 0 && (
+            <>
+              <Button
+                variant="destructive"
+                className="mb-2"
+                onClick={handleBulkDelete}
+              >
+                Delete Selected ({selectedCount})
+              </Button>
 
-      try {
-        const token = localStorage.getItem("token")
-        // 🔥 Delete all selected payouts in parallel
-        await Promise.all(
-          selectedIds.map((id) =>
-            axios.delete(
-              `https://cod-ecommerce-two.vercel.app/api/admin/delete-payout/${id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            )
-          )
-        )
-        // ✅ Reset selection and refresh table
-        table.resetRowSelection()
-        fetchPayouts()
-      } catch (err) {
-        console.error("❌ Failed bulk delete payouts", err)
-      }
-    }}
-  >
-    Delete Selected ({Object.keys(rowSelection).length})
-  </Button>
-)}
+              <Button
+                variant="default"
+                className="mb-2"
+                onClick={() => setAssignBulkOpen(true)}
+              >
+                Assign Selected ({selectedCount})
+              </Button>
+            </>
+          )}
 
-          <AddPayout  onPayoutAdded={fetchPayouts} />
+          <AddPayout onPayoutAdded={fetchPayouts} />
         </div>
       </div>
 
@@ -591,6 +628,38 @@ export function PayoutTable() {
         </Table>
       </div>
 
+      {/* Bulk Assign Dialog */}
+      <AlertDialog open={assignBulkOpen} onOpenChange={setAssignBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assign Selected Payouts</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose a payout manager to assign the selected payouts to.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <select
+            value={selectedManagerBulk}
+            onChange={(e) => setSelectedManagerBulk(e.target.value)}
+            className="w-full border p-2 rounded-md my-4"
+          >
+            <option value="">Select Manager</option>
+            {payoutManagersBulk.map((pm) => (
+              <option key={pm._id} value={pm._id}>
+                {pm.name} ({pm.email})
+              </option>
+            ))}
+          </select>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAssignBulk} disabled={bulkLoading}>
+              {bulkLoading ? "Assigning..." : `Assign (${selectedCount})`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Pagination controls (if needed) */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="text-muted-foreground flex-1 text-sm">
@@ -614,3 +683,5 @@ export function PayoutTable() {
     </div>
   );
 }
+
+export default PayoutTable;

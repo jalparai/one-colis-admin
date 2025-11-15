@@ -1,5 +1,6 @@
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import LanguageSwitcher from "./LanguageSwitcher"
 
 export function SiteHeader() {
 
@@ -11,10 +12,12 @@ export function SiteHeader() {
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
         />
+        <div className="w-full flex justify-between items-center py-1">
         <h1 className="text-base font-medium">Admin Dashboard</h1>
-        <div className="ml-auto flex items-center gap-2">
-  
-        </div>
+                <LanguageSwitcher />
+                </div>
+      
+
       </div>
     </header>
   )

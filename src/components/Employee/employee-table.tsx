@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -51,6 +50,7 @@ import { EditEmployee } from "./EditEmployee"
 import { AddEmployee } from "./Add-employee"
 import { ImportExportButtons } from "@/components/ui/import-export-buttons"
 import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
+import { useTranslation } from "react-i18next"
 
 // ✅ Extend TableMeta so we can use refresh()
 declare module "@tanstack/react-table" {
@@ -67,170 +67,13 @@ export type Employee = {
   createdAt: string
 }
 
-export const columns: ColumnDef<Employee>[] = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-  },
-  {
-    accessorKey: "name",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Name
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => <div>{row.getValue("name")}</div>,
-  },
-  {
-    accessorKey: "email",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      >
-        Email
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-    cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
-  },
-  {
-    accessorKey: "role",
-    header: "Role",
-    cell: ({ row }) => <div>{row.getValue("role")}</div>,
-  },
-  {
-    accessorKey: "createdAt",
-    header: "Registered Date",
-    cell: ({ row }) => {
-      const dateStr = row.getValue("createdAt") as string
-      return <div>{new Date(dateStr).toLocaleDateString()}</div>
-    },
-    // ✅ custom date filter function
-    filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
-      const date = new Date(row.getValue(columnId) as string)
-      const from = filterValue?.from ? new Date(filterValue.from) : null
-      const to = filterValue?.to ? new Date(filterValue.to) : null
-
-      if (from && date < from) return false
-      if (to && date > to) return false
-      return true
-    },
-  },
-  {
-    id: "actions",
-    enableHiding: false,
-    cell: ({ row, table }) => {
-      const employee = row.original
-      const [editOpen, setEditOpen] = React.useState(false)
-      const [deleteOpen, setDeleteOpen] = React.useState(false)
-      const [loading, setLoading] = React.useState(false)
-
-      const handleDelete = async () => {
-        try {
-          setLoading(true)
-          const token = localStorage.getItem("token")
-          await axios.delete(
-            `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-          setDeleteOpen(false)
-          table.options.meta?.refresh?.()
-        } catch (err) {
-          console.error("❌ Failed to delete employee", err)
-        } finally {
-          setLoading(false)
-        }
-      }
-
-      return (
-        <>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* ✏️ Edit modal */}
-          <EditEmployee
-            employee={employee}
-            open={editOpen}
-            onClose={() => setEditOpen(false)}
-            onUpdated={() => {
-              // Safely trigger table refresh if available
-              if (table?.options?.meta?.refresh) {
-                table.options.meta.refresh();
-              }
-            }}
-          />
-
-
-          {/* 🗑 Delete confirmation popup */}
-          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Delete {employee.name}?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. The employee will be permanently
-                  removed from the system.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={loading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {loading ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </>
-      )
-    },
-  },
-]
-
 export function EmployeesTable() {
+  const { t } = useTranslation("common")
+  // parent namespace to avoid conflicts with other pages
+  // changed to `employee` as requested so i18n calls become t('employee.xxx')
+  const nsPrefix = "employee"
+  const e = (k: string) => `${nsPrefix}.${k}`
+
   const [employees, setEmployees] = React.useState<Employee[]>([])
   const [loading, setLoading] = React.useState(true)
   const [sorting, setSorting] = React.useState<SortingState>([])
@@ -239,7 +82,7 @@ export function EmployeesTable() {
   const [rowSelection, setRowSelection] = React.useState({})
   const [dateFilter, setDateFilter] = React.useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth" | "weekly" | "monthly"
-  >("all");
+  >("all")
 
   const fetchEmployees = React.useCallback(async () => {
     try {
@@ -258,56 +101,215 @@ export function EmployeesTable() {
   React.useEffect(() => {
     fetchEmployees()
   }, [fetchEmployees])
-  const filteredEmployees = React.useMemo(() => {
-    if (dateFilter === "all") return employees;
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
+  // columns are defined inside component so we can use t(...) safely
+  const columns: ColumnDef<Employee>[] = React.useMemo(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label={t(e("aria.selectAll"))}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={t(e("aria.selectRow"))}
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      },
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            {t(e("table.name"))}
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => <div>{row.getValue("name")}</div>,
+      },
+      {
+        accessorKey: "email",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            {t(e("table.email"))}
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
+      },
+      {
+        accessorKey: "role",
+        header: t(e("table.role")),
+        cell: ({ row }) => <div>{row.getValue("role")}</div>,
+      },
+      {
+        accessorKey: "createdAt",
+        header: t(e("table.registeredDate")),
+        cell: ({ row }) => {
+          const dateStr = row.getValue("createdAt") as string
+          return <div>{new Date(dateStr).toLocaleDateString()}</div>
+        },
+        filterFn: (row, columnId, filterValue: { from?: string; to?: string }) => {
+          const date = new Date(row.getValue(columnId) as string)
+          const from = filterValue?.from ? new Date(filterValue.from) : null
+          const to = filterValue?.to ? new Date(filterValue.to) : null
+
+          if (from && date < from) return false
+          if (to && date > to) return false
+          return true
+        },
+      },
+      {
+        id: "actions",
+        enableHiding: false,
+        cell: ({ row, table }) => {
+          const employee = row.original
+          const [editOpen, setEditOpen] = React.useState(false)
+          const [deleteOpen, setDeleteOpen] = React.useState(false)
+          const [loadingLocal, setLoadingLocal] = React.useState(false)
+
+          const handleDelete = async () => {
+            try {
+              setLoadingLocal(true)
+              const token = localStorage.getItem("token")
+              await axios.delete(
+                `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              )
+              setDeleteOpen(false)
+              table.options.meta?.refresh?.()
+            } catch (err) {
+              console.error("❌ Failed to delete employee", err)
+            } finally {
+              setLoadingLocal(false)
+            }
+          }
+
+          return (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">{t(e("actions.openMenu"))}</span>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>{t(e("actions.label"))}</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                    {t(e("actions.edit"))}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
+                    {t(e("actions.delete"))}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <EditEmployee
+                employee={employee}
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                onUpdated={() => {
+                  if (table?.options?.meta?.refresh) {
+                    table.options.meta.refresh()
+                  }
+                }}
+              />
+
+              <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t(e("dialog.deleteTitle"), { name: employee.name })}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t(e("dialog.deleteDescription"))}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={loadingLocal}>{t(e("actions.cancel"))}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={loadingLocal}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {loadingLocal ? t(e("actions.deleting")) : t(e("actions.delete"))}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )
+        },
+      },
+    ],
+    [t]
+  )
+
+  const filteredEmployees = React.useMemo(() => {
+    if (dateFilter === "all") return employees
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfWeek = new Date(today)
+    startOfWeek.setDate(today.getDate() - today.getDay()) // Sunday
+    const endOfWeek = new Date(startOfWeek)
+    endOfWeek.setDate(startOfWeek.getDate() + 6)
 
     return employees.filter((employee) => {
-      const createdAt = new Date(employee.createdAt);
+      const createdAt = new Date(employee.createdAt)
 
       switch (dateFilter) {
         case "today":
-          return createdAt >= today && createdAt <= now;
+          return createdAt >= today && createdAt <= now
         case "yesterday": {
-          const yesterday = new Date(today);
-          yesterday.setDate(today.getDate() - 1);
-          return (
-            createdAt >= yesterday &&
-            createdAt < today
-          );
+          const yesterday = new Date(today)
+          yesterday.setDate(today.getDate() - 1)
+          return createdAt >= yesterday && createdAt < today
         }
         case "thisWeek":
-          return createdAt >= startOfWeek && createdAt <= endOfWeek;
+          return createdAt >= startOfWeek && createdAt <= endOfWeek
         case "lastWeek": {
-          const lastWeekStart = new Date(startOfWeek);
-          lastWeekStart.setDate(startOfWeek.getDate() - 7);
-          const lastWeekEnd = new Date(startOfWeek);
-          lastWeekEnd.setDate(startOfWeek.getDate() - 1);
-          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
+          const lastWeekStart = new Date(startOfWeek)
+          lastWeekStart.setDate(startOfWeek.getDate() - 7)
+          const lastWeekEnd = new Date(startOfWeek)
+          lastWeekEnd.setDate(startOfWeek.getDate() - 1)
+          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd
         }
         case "thisMonth": {
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          return createdAt >= startOfMonth && createdAt <= now;
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+          return createdAt >= startOfMonth && createdAt <= now
         }
         case "lastMonth": {
-          const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-          return createdAt >= startOfLastMonth && createdAt <= endOfLastMonth;
+          const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+          const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+          return createdAt >= startOfLastMonth && createdAt <= endOfLastMonth
         }
         default:
-          return true;
+          return true
       }
-    });
-  }, [employees, dateFilter]);
+    })
+  }, [employees, dateFilter])
 
   const table = useReactTable({
-    data: filteredEmployees, // ✅ works here
+    data: filteredEmployees,
     columns,
     state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
@@ -320,39 +322,35 @@ export function EmployeesTable() {
     getPaginationRowModel: getPaginationRowModel(),
     meta: { refresh: fetchEmployees },
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
-  });
+  })
 
-  if (loading) return <p className="p-4">Loading employees...</p>
-  
+  if (loading) return <p className="p-4">{t(e("ui.loading"))}</p>
+
   const exportEndpoints = [
-    { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
-  //   { label: "Export Sellers", url: "/api/adminb/bulk/seller/export/excal" },
-  //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
-  //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
-  //   { label: "Export Delivery Agents", url: "/api/adminb/bulk/delivery-agents/export/excel" },
-  ];
-  
-const handleExport = async (url: string): Promise<void> => {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to export data");
+    { label: "exportEmployees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
+  ]
 
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
+  const handleExport = async (url: string): Promise<void> => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Failed to export data")
 
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = "export.xlsx";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
 
-    window.URL.revokeObjectURL(downloadUrl);
-  } catch (error) {
-    console.error(error);
-    alert("Error exporting file!");
+      const a = document.createElement("a")
+      a.href = downloadUrl
+      a.download = "export.xlsx"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(downloadUrl)
+    } catch (error) {
+      console.error(error)
+      alert(t(e("export.error")))
+    }
   }
-};
 
   return (
     <div className="w-full">
@@ -360,7 +358,7 @@ const handleExport = async (url: string): Promise<void> => {
       <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide">
         <div className="flex gap-4 items-center">
           <Input
-            placeholder="Filter emails..."
+            placeholder={t(e("filter.emailPlaceholder"))}
             value={(table.getColumn("email")?.getFilterValue() as string) ?? ""}
             onChange={(event) =>
               table.getColumn("email")?.setFilterValue(event.target.value)
@@ -369,7 +367,7 @@ const handleExport = async (url: string): Promise<void> => {
           />
           {/* ✅ Date filters */}
           <div className="flex gap-2 items-center">
-            <label>From:</label>
+            <label>{t(e("filter.from"))}</label>
             <Input
               type="date"
               onChange={(e) =>
@@ -379,7 +377,7 @@ const handleExport = async (url: string): Promise<void> => {
                 })
               }
             />
-            <label>To:</label>
+            <label>{t(e("filter.to"))}</label>
             <Input
               type="date"
               onChange={(e) =>
@@ -399,12 +397,12 @@ const handleExport = async (url: string): Promise<void> => {
             onImportSuccess={fetchEmployees}
             onExportSuccess={() => {}}
           />
-          
+
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                Filter: {dateFilter} <ChevronDown />
+                {t(e("filter.filterButton"))}: {t(e("filter.options." + dateFilter))} <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -421,9 +419,7 @@ const handleExport = async (url: string): Promise<void> => {
                   key={option}
                   onClick={() => setDateFilter(option as any)}
                 >
-                  {option
-                    .replace(/([A-Z])/g, " $1")
-                    .replace(/^./, (str) => str.toUpperCase())}
+                  {t(e("filter.options." + option))}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -440,7 +436,7 @@ const handleExport = async (url: string): Promise<void> => {
           className="mb-3"
           onClick={() => handleExport(item.url)}
         >
-          {item.label} Excal
+          {t(e("export." + item.label))}
         </Button>
       ))}
 
@@ -471,7 +467,7 @@ const handleExport = async (url: string): Promise<void> => {
             }
           }}
         >
-          Delete Selected ({Object.keys(rowSelection).length})
+          {t(e("actions.deleteSelected"), { count: Object.keys(rowSelection).length })}
         </Button>
       )}
 
@@ -508,7 +504,7 @@ const handleExport = async (url: string): Promise<void> => {
             ) : (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No employees found.
+                  {t(e("table.noData"))}
                 </TableCell>
               </TableRow>
             )}
@@ -519,8 +515,7 @@ const handleExport = async (url: string): Promise<void> => {
       {/* Pagination */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="text-muted-foreground flex-1 text-sm">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {t(e("ui.selectedRows"), { selected: table.getFilteredSelectedRowModel().rows.length, total: table.getFilteredRowModel().rows.length })}
         </div>
         <div className="space-x-2">
           <Button
@@ -529,7 +524,7 @@ const handleExport = async (url: string): Promise<void> => {
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
-            Previous
+            {t(e("ui.prev"))}
           </Button>
           <Button
             variant="outline"
@@ -537,7 +532,7 @@ const handleExport = async (url: string): Promise<void> => {
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
-            Next
+            {t(e("ui.next"))}
           </Button>
         </div>
       </div>

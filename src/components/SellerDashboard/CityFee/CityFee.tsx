@@ -134,7 +134,7 @@ export function DeliveryFeeChecker() {
 
             <Button type="submit" disabled={loadingCheck}>
               {loadingCheck ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.2" />
                     <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />

@@ -207,7 +207,7 @@ export function WarehouseProductsTable() {
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="max-w-sm"
         />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
           <label>To:</label>

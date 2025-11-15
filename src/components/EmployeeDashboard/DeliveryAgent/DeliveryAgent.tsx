@@ -213,7 +213,7 @@ export function DeliveryAgentTable() {
         />
 
         {/* Date range filter */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((p) => ({ ...p, from: e.target.value }))} />
           <label>To:</label>

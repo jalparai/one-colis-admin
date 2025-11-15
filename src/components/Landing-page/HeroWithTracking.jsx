@@ -125,7 +125,7 @@ export default function HeroWithTracking() {
             aria-label={t("trackNow")}
             disabled={isLoading || !orderNumber.trim()}
             aria-busy={isLoading}
-            className="bg-[#2BC3F1] lg:mt-0 text-center justify-center mt-2 lg:w-auto w-full hover:bg-sky-400 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 transition"
+            className="bg-[#2BC3F1] lg:mt-0 text-center justify-center mt-2 lg:w-auto w-full hover:bg-sky-400 disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-3 rounded-full font-semibold flex items-center gap-2 lg:overflow-auto overflow-x-scroll transition"
           >
             {isLoading ? (
               <>
@@ -187,11 +187,11 @@ function TrackingResult({ trackingData, orderId }) {
       dir={isArabic ? "rtl" : "ltr"}
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <span className="text-gray-600 text-sm">{t("orderId") || "Order ID"}:</span>
           <span className="font-semibold">{orderId}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <span className="text-gray-600 text-sm">{t("status") || "Status"}:</span>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 border border-sky-200">
             {status}

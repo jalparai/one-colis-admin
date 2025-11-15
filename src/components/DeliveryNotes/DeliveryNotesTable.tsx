@@ -22,10 +22,82 @@ type Note = {
   order?: { _id?: string; orderId?: string; totalAmount?: number; status?: string } | null;
 };
 
+function getDateRangeForFilter(key: string): [Date | null, Date | null] {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  switch (key) {
+    case "today":
+      return [startOfToday, endOfToday];
+
+    case "yesterday": {
+      const s = new Date(startOfToday);
+      s.setDate(s.getDate() - 1);
+      const e = new Date(s);
+      e.setHours(23, 59, 59, 999);
+      return [s, e];
+    }
+
+    case "this_week": {
+      // week starts Monday
+      const d = new Date(startOfToday);
+      const day = d.getDay(); // 0 (Sun) - 6 (Sat)
+      const diffToMonday = (day + 6) % 7; // 0 -> Mon, 6 -> Sun
+      const s = new Date(d);
+      s.setDate(d.getDate() - diffToMonday);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(s);
+      e.setDate(s.getDate() + 6);
+      e.setHours(23, 59, 59, 999);
+      return [s, e];
+    }
+
+    case "last_week": {
+      // previous Monday-Sunday
+      const d = new Date(startOfToday);
+      const day = d.getDay();
+      const diffToMonday = (day + 6) % 7;
+      const startThisWeek = new Date(d);
+      startThisWeek.setDate(d.getDate() - diffToMonday);
+      startThisWeek.setHours(0, 0, 0, 0);
+      const s = new Date(startThisWeek);
+      s.setDate(startThisWeek.getDate() - 7);
+      const e = new Date(startThisWeek);
+      e.setDate(startThisWeek.getDate() - 1);
+      e.setHours(23, 59, 59, 999);
+      return [s, e];
+    }
+
+    case "this_month": {
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      e.setHours(23, 59, 59, 999);
+      return [s, e];
+    }
+
+    case "last_month": {
+      const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(now.getFullYear(), now.getMonth(), 0);
+      e.setHours(23, 59, 59, 999);
+      return [s, e];
+    }
+
+    case "all":
+    default:
+      return [null, null];
+  }
+}
+
 export default function DeliveryNotesTable() {
   const [notes, setNotes] = React.useState<Note[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [filter, setFilter] = React.useState("");
+  const [dateFilter, setDateFilter] = React.useState<string>("all");
   const [downloadingNoteId, setDownloadingNoteId] = React.useState<string | null>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -69,15 +141,30 @@ export default function DeliveryNotesTable() {
 
   const filtered = React.useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return notes;
+    const [start, end] = getDateRangeForFilter(dateFilter);
+
     return notes.filter((n) => {
-      return (
-        n.status?.toLowerCase().includes(q) ||
-        n.note?.toLowerCase().includes(q) ||
-        (n.order?.orderId || n.order?._id || "").toLowerCase().includes(q)
+      // text match
+      const textMatch = !q || (
+        (n.status || "").toLowerCase().includes(q) ||
+        (n.note || "").toLowerCase().includes(q) ||
+        ((n.order?.orderId || n.order?._id || "") as string).toLowerCase().includes(q)
       );
+
+      if (!textMatch) return false;
+
+      // date match
+      if (!start && !end) return true; // 'all' selected
+
+      if (!n.createdAt) return false;
+      const created = new Date(n.createdAt);
+      if (isNaN(created.getTime())) return false;
+
+      if (start && created < start) return false;
+      if (end && created > end) return false;
+      return true;
     });
-  }, [notes, filter]);
+  }, [notes, filter, dateFilter]);
 
   const handleExportPdf = async () => {
     try {
@@ -98,70 +185,86 @@ export default function DeliveryNotesTable() {
     }
   };
 
-  // Try to download PDF; first attempt https, then http fallback.
-  const handleDownloadNote = React.useCallback(
-    async (noteId: string) => {
-      if (!noteId) return;
-      setDownloadingNoteId(noteId);
+  // unified download method: chooses delivery vs return based on status
+  const handleDownload = React.useCallback(
+    async (note: Note) => {
+      if (!note || !note._id) return;
+      setDownloadingNoteId(note._id);
 
-      const basePaths = [
-        `https://cod-ecommerce-two.vercel.app/api/admin/delivery-notes/${noteId}/pdf`,
-        `http://cod-ecommerce-two.vercel.app/api/admin/delivery-notes/${noteId}/pdf`,
-      ];
+      // choose endpoint set based on status
+      const baseCandidates: string[] =
+        note.status === "returned"
+          ? [
+              `https://cod-ecommerce-two.vercel.app/api/admin/return-notes/${note._id}/pdf`,
+              `http://cod-ecommerce-two.vercel.app/api/admin/return-notes/${note._id}/pdf`,
+            ]
+          : [
+              `https://cod-ecommerce-two.vercel.app/api/admin/delivery-notes/${note._id}/pdf`,
+              `http://cod-ecommerce-two.vercel.app/api/admin/delivery-notes/${note._id}/pdf`,
+            ];
+
+      // if status is neither delivered nor returned, warn and return
+      if (!["delivered", "returned"].includes(note.status)) {
+        setDownloadingNoteId(null);
+        alert("PDF not available for this status.");
+        return;
+      }
 
       let lastError: any = null;
 
-      for (const url of basePaths) {
+      for (const url of baseCandidates) {
         try {
           const res = await axios.get(url, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
             responseType: "blob",
-            validateStatus: (s) => s >= 200 && s < 500, // let us inspect non-2xx bodies too
+            validateStatus: (s) => s >= 200 && s < 500,
           });
 
-          // If server returned a non-200 status, try to inform user.
           if (res.status !== 200) {
-            // try to read text from blob (likely HTML error page or JSON)
-            const text = await (res.data as Blob).text();
-            console.error(`Download failed (${url}) status=${res.status}`, text);
-            lastError = `Server returned ${res.status}: ${text.slice(0, 300)}`;
-            // try next fallback (http)
+            // try to show helpful debug snippet when server returned an error blob/text
+            try {
+              const text = await (res.data as Blob).text();
+              console.error(`Download failed (${url}) status=${res.status}`, text);
+              lastError = `Server returned ${res.status}: ${text.slice(0, 300)}`;
+            } catch (e) {
+              console.error(`Download failed (${url}) status=${res.status} (no preview)`);
+              lastError = `Server returned ${res.status}`;
+            }
             continue;
           }
 
           const blob = res.data as Blob;
-
-          // detect non-pdf responses (some servers return HTML or JSON error with 200)
-          const isPdf = blob.type === "application/pdf" || blob.type === "application/octet-stream" || blob.size > 0 && blob.type.includes("pdf");
+          const isPdf =
+            blob.type === "application/pdf" ||
+            blob.type === "application/octet-stream" ||
+            (blob.size > 0 && blob.type.includes("pdf"));
           if (!isPdf && blob.size > 0) {
-            // read text for a helpful error
             const text = await blob.text();
             console.error("Server returned non-PDF payload:", text);
             lastError = `Unexpected response: ${text.slice(0, 500)}`;
             continue;
           }
 
-          // success: trigger download
           const link = window.URL.createObjectURL(blob);
           const a = document.createElement("a");
+          // choose filename based on returned/delivered
+          const kind = note.status === "returned" ? "return-note" : "delivery-note";
           a.href = link;
-          a.download = `delivery-note-${noteId}.pdf`;
+          a.download = `${kind}-${note._id}.pdf`;
           a.click();
           window.URL.revokeObjectURL(link);
           setDownloadingNoteId(null);
           return;
         } catch (err: any) {
-          console.error(`Error fetching note PDF from ${url}:`, err);
+          console.error(`Error fetching PDF from ${url}:`, err);
           lastError = err?.message || String(err);
-          // try next fallback
         }
       }
 
-      // if we reached here, all attempts failed
       setDownloadingNoteId(null);
       console.error("All download attempts failed:", lastError);
       alert(
-        `Failed to download note PDF.\n\nReason: ${typeof lastError === "string" ? lastError : "see console for details"}\n\nTry opening the API URL in your browser or check server logs/CORS settings.`
+        `Failed to download PDF.\n\nReason: ${typeof lastError === "string" ? lastError : "see console for details"}\n\nTry opening the API URL in your browser or check server logs/CORS settings.`
       );
     },
     [token]
@@ -169,13 +272,35 @@ export default function DeliveryNotesTable() {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between py-4 gap-3">
-        <Input
-          placeholder="Search notes..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex items-center justify-between py-4 gap-3 flex-wrap">
+        <div className="flex gap-2 items-center w-full max-w-2xl flex-wrap">
+          <Input
+            placeholder="Search notes..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="flex-1"
+          />
+
+          <label htmlFor="date-filter" className="sr-only">
+            Date filter
+          </label>
+          <select
+            id="date-filter"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="ml-2 border rounded px-2 py-2 text-sm"
+            title="Filter by date range"
+          >
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This week</option>
+            <option value="last_week">Last week</option>
+            <option value="this_month">This month</option>
+            <option value="last_month">Last month</option>
+          </select>
+        </div>
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={fetchNotes}>
             <RefreshCcwIcon className="h-4 w-4 mr-2" /> Refresh
@@ -224,10 +349,7 @@ export default function DeliveryNotesTable() {
                   <TableCell className="max-w-[420px] truncate" title={n.note}>
                     {n.note}
                   </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {/* prefer order.orderId, fallback to order._id */}
-                    {n.order?.orderId}
-                  </TableCell>
+                  <TableCell className="font-mono text-xs">{n.order?.orderId}</TableCell>
                   <TableCell>
                     {typeof n.order?.totalAmount === "number" ? n.order.totalAmount : "—"}
                   </TableCell>
@@ -237,12 +359,24 @@ export default function DeliveryNotesTable() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleDownloadNote(n._id)}
+                        onClick={() => handleDownload(n)}
                         disabled={downloadingNoteId === n._id}
-                        title="Download note PDF"
+                        title={
+                          n.status === "delivered"
+                            ? "Download delivery note"
+                            : n.status === "returned"
+                            ? "Download return note"
+                            : "PDF not available for this status"
+                        }
                       >
                         <DownloadIcon className="h-4 w-4 mr-2" />
-                        {downloadingNoteId === n._id ? "Downloading..." : "Download"}
+                        {downloadingNoteId === n._id
+                          ? "Downloading..."
+                          : n.status === "delivered"
+                          ? "Download"
+                          : n.status === "returned"
+                          ? "Download Return"
+                          : "No PDF"}
                       </Button>
                     </div>
                   </TableCell>

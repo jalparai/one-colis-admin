@@ -181,7 +181,7 @@ export function SignupForm({
                   {t("signup.sellingOnline")}
                 </p>
                 <div className="flex gap-6">
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                     <input
                       type="radio"
                       name="isCurrentlySellingOnline"
@@ -191,7 +191,7 @@ export function SignupForm({
                     />
                     {t("common.yes")}
                   </label>
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                     <input
                       type="radio"
                       name="isCurrentlySellingOnline"

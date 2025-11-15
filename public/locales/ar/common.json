@@ -674,6 +674,200 @@
  "home": "الصفحة الرئيسية",
   "myPayout": "مدفوعاتي"
   }
+,
+
+  "quickActions": {
+    "title": "إجراءات سريعة",
+    "actions": {
+      "addSeller": "إضافة بائع جديد",
+      "addStock": "إضافة مخزون",
+      "manageOrders": "إدارة الطلبات",
+      "reportsAnalytics": "التقارير والتحليلات",
+      "returnedDelivered": "الطلبات المسترجعة والمسلّمة"
+    },
+    "openDialog": "افتح نموذج البائع →",
+    "clickToManage": "انقر للإدارة →",
+    "sellerAdded": "تم إضافة البائع بنجاح!"
+  },
+  "filter": {
+    "title": "التصفية حسب التاريخ",
+    "placeholder": "اختر نطاق التاريخ",
+    "all": "الكل",
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "thisWeek": "هذا الأسبوع",
+    "lastWeek": "الأسبوع الماضي",
+    "thisMonth": "هذا الشهر",
+    "lastMonth": "الشهر الماضي"
+  },
+  "table": {
+    "seller": "البائع",
+    "email": "البريد الإلكتروني",
+    "totalAmount": "المبلغ الإجمالي",
+    "status": "الحالة",
+    "created": "تاريخ الإنشاء",
+    "noOrdersMatch": "لا توجد طلبات تتطابق مع عامل التصفية المحدد."
+  },
+  "ui": {
+    "loadingDashboard": "جارٍ تحميل لوحة التحكم...",
+    "failedToLoadMetrics": "فشل في تحميل المقاييس.",
+    "viewDetails": "عرض التفاصيل →",
+    "selectSeller": "اختر بائعاً..."
+  },
+  "charts": {
+    "topSellersTitle": "إيرادات أفضل البائعين",
+    "topSellersDesc": "أداء الإيرادات لأفضل البائعين",
+    "deliveryReturnTitle": "نسبة التسليم مقابل الاسترجاع حسب المدينة",
+    "deliveryReturnDesc": "مقارنة الطلبات المسلّمة والمسترجعة عبر المدن"
+  }
+
+
+,
+  "metrics": {
+    "allOrders": "جميع الطلبات",
+    "pendingOrders": "الطلبات المعلقة",
+    "totalSellerRevenue": "إجمالي إيرادات البائعين",
+    "netProfitSeller": "صافي الربح (للبائع)",
+    "averageDeliveryTime": "متوسط وقت التسليم",
+    "returnRate": "نسبة الإرجاع",
+    "deliveryRate": "نسبة التسليم",
+    "totalServiceRevenue": "إجمالي إيرادات الخدمة"
+  },
+  
+  "employee": {
+    "table": {
+      "name": "الاسم",
+      "email": "البريد الإلكتروني",
+      "role": "الدور",
+      "registeredDate": "تاريخ التسجيل",
+      "noData": "لا يوجد موظفون."
+    },
+    "aria": {
+      "selectAll": "اختيار الكل",
+      "selectRow": "اختيار الصف"
+    },
+    "actions": {
+      "openMenu": "فتح القائمة",
+      "label": "الإجراءات",
+      "edit": "تعديل",
+      "delete": "حذف",
+      "cancel": "إلغاء",
+      "deleting": "جاري الحذف...",
+      "deleteSelected": "حذف المحدد ({{count}})"
+    },
+    "dialog": {
+      "deleteTitle": "حذف {{name}}؟",
+      "deleteDescription": "لا يمكن التراجع عن هذا الإجراء. سيتم حذف الموظف نهائياً من النظام."
+    },
+    "filter": {
+      "emailPlaceholder": "تصفية البريد الإلكتروني...",
+      "from": "من:",
+      "to": "إلى:",
+      "filterButton": "تصفية",
+      "options": {
+        "all": "الكل",
+        "today": "اليوم",
+        "yesterday": "أمس",
+        "thisWeek": "هذا الأسبوع",
+        "lastWeek": "الأسبوع الماضي",
+        "thisMonth": "هذا الشهر",
+        "lastMonth": "الشهر الماضي"
+      }
+    },
+    "export": {
+      "exportEmployees": "تصدير الموظفين",
+      "error": "خطأ في تصدير الملف!"
+    },
+    "ui": {
+      "loading": "جارٍ تحميل الموظفين...",
+      "selectedRows": "{{selected}} من {{total}} صف(وف) محدد(ة).",
+      "prev": "السابق",
+      "next": "التالي",
+      "viewDetails": "عرض التفاصيل →",
+      "selectSeller": "اختر بائعاً..."
+    }
+  }
+,
+
+  "admin": {
+    "sidebar": {
+      "ui": {
+        "logoAlt": "شعار ون كوليس",
+        "searchPlaceholder": "ابحث..."
+      },
+      "nav": {
+        "home": "الرئيسية",
+        "employee": "الموظفون",
+        "seller": "البائعون",
+        "stocks": "المخزون",
+        "warehouses": "المستودعات",
+        "deliveryAgents": "وكلاء التوصيل",
+        "payoutManager": "مدير الدفعات",
+        "managesPickup": "إدارة الاستلام",
+        "cityFee": "رسوم المدينة",
+        "orders": "الطلبات",
+        "payouts": "المدفوعات",
+        "invoices": "الفواتير",
+        "supportTickets": "تذاكر الدعم",
+        "returnNotes": "ملاحظات الإرجاع",
+        "report": {
+          "title": "التقارير",
+          "collectedPending": "قيد التحصيل",
+          "deliveredReturned": "تم التوصيل / تم الإرجاع",
+          "topSellers": "أفضل البائعين",
+          "topAgents": "أفضل الوكلاء",
+          "avgDeliveryTime": "متوسط وقت التوصيل",
+          "topProducts": "أفضل المنتجات",
+          "revenueCity": "الإيرادات حسب المدينة",
+          "stockTrend": "اتجاه المخزون",
+          "payoutHistory": "سجل المدفوعات",
+          "financialSummary": "الملخص المالي"
+        }
+      }
+    }
+  
+}
+
+,
+
+  "employeeAdd": {
+    "button": "إضافة موظف +",
+    "title": "إضافة موظف جديد",
+    "description": "املأ الحقول لإضافة موظف جديد وتعيين الصلاحيات.",
+    "editTitle": "تعديل الموظف",
+      "editDescription": "يمكنك تحديث الاسم، كلمة المرور، الدور المخصص، أو الأذونات.",  
+    "fields": {
+      "name": "الاسم",
+      "email": "البريد الإلكتروني",
+      "password": "كلمة المرور",
+      "customRole": "الدور المخصص"
+    },
+    "placeholders": {
+      "customRole": "مثال: مطوّر",
+              "password": "اتركه فارغًا للاحتفاظ بالكلمة الحالية"
+
+    },
+    "permissionsTitle": "الصلاحيات",
+    "permissions": {
+      "addStock": "إضافة المخزون",
+      "manageOrders": "إدارة الطلبات",
+      "assignProducts": "تعيين المنتجات",
+      "assignPayouts": "تعيين الدفعات",
+      "assignPickups": "تعيين الاستلام",
+      "SupportTick": "تذاكر الدعم",
+      "managePickups": "إدارة الاستلام"
+    },
+    "submit": {
+      "adding": "جاري الإضافة...",
+      "add": "إضافة الموظف",
+        "save": "حفظ التغييرات",
+        "saving": "جارٍ الحفظ..."
+    },
+    "close": "إغلاق",
+    "success": "تمت إضافة الموظف بنجاح!",
+    "errorNoToken": "لم يتم العثور على رمز الدخول. يرجى تسجيل الدخول.",
+    "errorGeneric": "فشل في إضافة الموظف"
+  }
 
 
 }

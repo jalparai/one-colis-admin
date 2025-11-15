@@ -348,7 +348,7 @@ export function AddOrder({ open, onOpenChange, onOrderAdded }: AddOrderProps) {
             </div>
 
             {/* <div className="flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm">
+            <label className="inline-flex items-center gap-2 lg:overflow-auto overflow-x-scroll text-sm">
               <input type="checkbox" checked={ignoreStock} onChange={(e) => setIgnoreStock(e.target.checked)} />
               <span>Force create order even if quantity exceeds stock</span>
             </label>

@@ -502,7 +502,7 @@ export function EmployeeOrdersTable() {
     <div className="w-full space-y-4">
       {/* Filters Row */}
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <input
             type="text"
             placeholder="Search by email..."

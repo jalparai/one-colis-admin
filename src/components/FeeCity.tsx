@@ -208,7 +208,7 @@ export default function CityFeePage() {
             <Button
               onClick={handleFileUpload}
               disabled={uploading}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll"
             >
               <UploadCloud className="w-4 h-4" />
               {uploading ? "Uploading..." : "Upload CSV"}

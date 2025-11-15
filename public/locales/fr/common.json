@@ -277,5 +277,198 @@
     "payoutSidebar": {
     "home": "Accueil",
     "myPayout": "Mes paiements"
+  },
+  
+  "quickActions": {
+    "title": "Actions rapides",
+    "actions": {
+      "addSeller": "Ajouter un nouveau vendeur",
+      "addStock": "Ajouter du stock",
+      "manageOrders": "Gérer les commandes",
+      "reportsAnalytics": "Rapports & Analyses",
+      "returnedDelivered": "Commandes retournées et livrées"
+    },
+    "openDialog": "Ouvrir le formulaire du vendeur →",
+    "clickToManage": "Cliquez pour gérer →",
+    "sellerAdded": "Vendeur ajouté avec succès !"
+  },
+  "filter": {
+    "title": "Filtrer par date",
+    "placeholder": "Sélectionner la plage de dates",
+    "all": "Toutes",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "thisWeek": "Cette semaine",
+    "lastWeek": "La semaine dernière",
+    "thisMonth": "Ce mois-ci",
+    "lastMonth": "Le mois dernier"
+  },
+  "table": {
+    "seller": "Vendeur",
+    "email": "E-mail",
+    "totalAmount": "Montant total",
+    "status": "Statut",
+    "created": "Créé le",
+    "noOrdersMatch": "Aucune commande ne correspond au filtre de date sélectionné."
+  },
+  "ui": {
+    "loadingDashboard": "Chargement du tableau de bord...",
+    "failedToLoadMetrics": "Échec du chargement des métriques.",
+    "viewDetails": "Voir les détails →",
+    "selectSeller": "Sélectionnez un vendeur..."
+  },
+  "charts": {
+    "topSellersTitle": "Revenus des meilleurs vendeurs",
+    "topSellersDesc": "Performance des revenus par meilleurs vendeurs",
+    "deliveryReturnTitle": "Taux Livraison vs Retour par ville",
+    "deliveryReturnDesc": "Comparaison des commandes livrées et retournées par ville"
   }
+,
+ "metrics": {
+    "allOrders": "Toutes les commandes",
+    "pendingOrders": "Commandes en attente",
+    "totalSellerRevenue": "Revenu total des vendeurs",
+    "netProfitSeller": "Bénéfice net (vendeur)",
+    "averageDeliveryTime": "Temps moyen de livraison",
+    "returnRate": "Taux de retour",
+    "deliveryRate": "Taux de livraison",
+    "totalServiceRevenue": "Revenu total des services"
+  },
+  
+  "employee": {
+    "table": {
+      "name": "Nom",
+      "email": "E-mail",
+      "role": "Rôle",
+      "registeredDate": "Date d'enregistrement",
+      "noData": "Aucun employé trouvé."
+    },
+    "aria": {
+      "selectAll": "Tout sélectionner",
+      "selectRow": "Sélectionner la ligne"
+    },
+    "actions": {
+      "openMenu": "Ouvrir le menu",
+      "label": "Actions",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "cancel": "Annuler",
+      "deleting": "Suppression...",
+      "deleteSelected": "Supprimer la sélection ({{count}})"
+    },
+    "dialog": {
+      "deleteTitle": "Supprimer {{name}} ?",
+      "deleteDescription": "Cette action est irréversible. L'employé sera supprimé définitivement du système."
+    },
+    "filter": {
+      "emailPlaceholder": "Filtrer les e-mails...",
+      "from": "De :",
+      "to": "À :",
+      "filterButton": "Filtrer",
+      "options": {
+        "all": "Toutes",
+        "today": "Aujourd'hui",
+        "yesterday": "Hier",
+        "thisWeek": "Cette semaine",
+        "lastWeek": "La semaine dernière",
+        "thisMonth": "Ce mois-ci",
+        "lastMonth": "Le mois dernier"
+      }
+    },
+    "export": {
+      "exportEmployees": "Exporter les employés",
+      "error": "Erreur lors de l'export du fichier !"
+    },
+    "ui": {
+      "loading": "Chargement des employés...",
+      "selectedRows": "{{selected}} sur {{total}} ligne(s) sélectionnée(s).",
+      "prev": "Précédent",
+      "next": "Suivant",
+      "viewDetails": "Voir les détails →",
+      "selectSeller": "Sélectionnez un vendeur..."
+    }
+  }
+,
+
+  "admin": {
+    "sidebar": {
+      "ui": {
+        "logoAlt": "Logo One-Colis",
+        "searchPlaceholder": "Rechercher..."
+      },
+      "nav": {
+        "home": "Accueil",
+        "employee": "Employés",
+        "seller": "Vendeurs",
+        "stocks": "Stocks",
+        "warehouses": "Entrepôts",
+        "deliveryAgents": "Agents de livraison",
+        "payoutManager": "Gestionnaire de paiements",
+        "managesPickup": "Gérer les ramassages",
+        "cityFee": "Frais de ville",
+        "orders": "Commandes",
+        "payouts": "Paiements",
+        "invoices": "Factures",
+        "supportTickets": "Tickets de support",
+        "returnNotes": "Notes de retour",
+        "report": {
+          "title": "Rapports",
+          "collectedPending": "Collecté en attente",
+          "deliveredReturned": "Livrés / Retournés",
+          "topSellers": "Meilleurs vendeurs",
+          "topAgents": "Meilleurs agents",
+          "avgDeliveryTime": "Temps moyen de livraison",
+          "topProducts": "Meilleurs produits",
+          "revenueCity": "Revenus par ville",
+          "stockTrend": "Tendance des stocks",
+          "payoutHistory": "Historique des paiements",
+          "financialSummary": "Résumé financier"
+        }
+      }
+    }
+  },
+  
+  "employeeAdd": {
+    "button": "+ Ajouter un employé",
+    "title": "Ajouter un nouvel employé",
+    "description": "Remplissez les champs pour ajouter un nouvel employé et attribuer des permissions.",
+    "editTitle": "Modifier l'employé",
+      "editDescription": "Vous pouvez mettre à jour le nom, le mot de passe, le rôle personnalisé ou les permissions.",
+    "fields": {
+      "name": "Nom",
+      "email": "Email",
+      "password": "Mot de passe",
+      "customRole": "Rôle personnalisé"
+    },
+    "placeholders": {
+      "customRole": "ex : Développeur",
+      "password": "Laissez vide pour conserver le mot de passe actuel"
+    },
+    "permissionsTitle": "Permissions",
+    "permissions": {
+      "addStock": "Ajouter du stock",
+      "manageOrders": "Gérer les commandes",
+      "assignProducts": "Attribuer des produits",
+      "assignPayouts": "Attribuer les paiements",
+      "assignPickups": "Attribuer les collectes",
+      "SupportTick": "Tickets de support",
+      "managePickups": "Gérer les collectes"
+    },
+    "submit": {
+      "adding": "Ajout...",
+      "add": "Ajouter l'employé",
+       "save": "Enregistrer les modifications",
+        "saving": "Enregistrement..."
+      
+    },
+    "close": "Fermer",
+    "success": "Employé ajouté avec succès !",
+    "errorNoToken": "Aucun jeton trouvé. Veuillez vous connecter.",
+    "errorGeneric": "Échec de l'ajout de l'employé"
+  }
+
+
+
+
+
 }

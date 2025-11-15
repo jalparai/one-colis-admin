@@ -73,7 +73,7 @@ export function ImportExportButtons({
         size="sm"
         onClick={handleImportClick}
         disabled={disabled}
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll"
       >
         <Upload className="h-4 w-4" />
         Import {config.displayName}
@@ -84,7 +84,7 @@ export function ImportExportButtons({
         size="sm"
         onClick={handleExportClick}
         disabled={disabled}
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll"
       >
         <Download className="h-4 w-4" />
         Export {config.displayName}

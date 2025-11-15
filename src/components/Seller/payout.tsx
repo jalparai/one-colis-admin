@@ -210,7 +210,7 @@ export default function MyPayoutsTable() {
       cell: ({ row }) => {
         const id = row.original._id || "-";
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
             <span className="font-mono text-sm">{id.slice(0, 8)}</span>
             <Button
               size="sm"
@@ -309,7 +309,7 @@ Notes: ${row.original.notes}`
           className="max-w-sm"
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label className="text-sm">From:</label>
           <Input
             type="date"

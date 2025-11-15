@@ -5,7 +5,7 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DownloadIcon, RefreshCcwIcon, PlusIcon } from "lucide-react";
+import { DownloadIcon, RefreshCcwIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 type SellerLite = { _id: string; name?: string; storeName?: string; email?: string } | null;
@@ -25,16 +25,19 @@ export type Invoice = {
   updatedAt: string;
 };
 
-interface InvoicesTableProps {
-  mode: "admin" | "seller";
-}
-
 export default function InvoicesTableAdmin() {
   const [invoices, setInvoices] = React.useState<Invoice[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [filter, setFilter] = React.useState("");
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
+
+  // Preview state
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [previewInvoiceId, setPreviewInvoiceId] = React.useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = React.useState(false);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [downloadFilename, setDownloadFilename] = React.useState<string | null>(null);
 
   // helper to extract array from different response shapes
   const extractArrayFromPayload = (payload: any): any[] => {
@@ -116,21 +119,170 @@ export default function InvoicesTableAdmin() {
     }
   }, [fetchInvoicesRaw, invoices.length]);
 
-  const handleDownloadPdf = async (invoiceId: string) => {
+  // Extract filename from Content-Disposition header (if present)
+  const getFilenameFromDisposition = (disp?: string | null) => {
+    if (!disp) return null;
+    const match = /filename\*?=(?:UTF-8''?)?["']?([^"';]+)["']?/.exec(disp);
+    if (match && match[1]) return decodeURIComponent(match[1]);
+    return null;
+  };
+
+  // Open preview modal (fetch blob and create object URL)
+  const handlePreviewPdf = async (invoiceId: string) => {
+    setPreviewLoading(true);
+    setPreviewInvoiceId(invoiceId);
     try {
       const pdfEndpoint = `https://cod-ecommerce-two.vercel.app/api/admin/invoices/${invoiceId}/pdf`;
-      const res = await axios.get(pdfEndpoint, { headers: token ? { Authorization: `Bearer ${token}` } : {}, responseType: "blob" });
+      const res = await axios.get(pdfEndpoint, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        responseType: "blob",
+      });
+
+      // try to get filename
+      const contentDisp = (res.headers && (res.headers["content-disposition"] || res.headers["Content-Disposition"])) || null;
+      const filename = getFilenameFromDisposition(contentDisp) || `invoice-${invoiceId}.pdf`;
+      setDownloadFilename(filename);
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      // cleanup previous if exists
+      if (previewUrl) {
+        try { window.URL.revokeObjectURL(previewUrl); } catch { }
+      }
+      setPreviewUrl(url);
+      setDialogOpen(true);
+    } catch (err) {
+      console.error("Error fetching PDF for preview:", err);
+      alert("Failed to load PDF preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const getFilenameFromContentDisposition = (cd?: string) => {
+    if (!cd) return null;
+    const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/.exec(cd);
+    return m ? decodeURIComponent(m[1] || m[2]) : null;
+  };
+
+
+  const handleDownloadPdf = async (invoiceId: string, { preview = true } = {}) => {
+    try {
+      const pdfEndpoint = `https://cod-ecommerce-two.vercel.app/api/admin/invoices/${invoiceId}/pdf`;
+      // Use arraybuffer to preserve binary accurately
+      const res = await axios.get(pdfEndpoint, {
+        headers: token ? { Authorization: `Bearer ${token}`, Accept: "application/pdf" } : { Accept: "application/pdf" },
+        responseType: "arraybuffer",
+      });
+
+      const contentType = (res.headers["content-type"] || "").toLowerCase();
+      const contentDisposition = res.headers["content-disposition"];
+      const filenameFromHeader = getFilenameFromContentDisposition(contentDisposition);
+      const defaultName = `invoice-${invoiceId}.pdf`;
+
+      // If the server sent a PDF
+      if (contentType.includes("application/pdf")) {
+        const blob = new Blob([res.data], { type: contentType || "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+
+        if (preview) {
+          // open in new tab for preview
+          window.open(url, "_blank", "noopener,noreferrer");
+        } else {
+          // force download
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filenameFromHeader || defaultName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+
+        // free URL after a short delay
+        setTimeout(() => window.URL.revokeObjectURL(url), 15_000);
+        return;
+      }
+
+      // If server returned HTML (fallback) — open as HTML so user sees the page rather than broken PDF
+      if (contentType.includes("text/html")) {
+        const blob = new Blob([res.data], { type: "text/html" });
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, "_blank", "noopener,noreferrer");
+        setTimeout(() => window.URL.revokeObjectURL(url), 15_000);
+        return;
+      }
+
+      // Unknown content
+      console.error("Unexpected content-type:", contentType);
+      alert("Unexpected response from server when requesting PDF. Check server logs or network tab.");
+    } catch (err: any) {
+      console.error("Error downloading/previewing PDF:", err);
+      // if server responded with HTML error page, show short guidance
+      if (err?.response?.data) {
+        alert("Server responded but returned an unexpected payload. Check network tab for details.");
+      } else {
+        alert("Failed to fetch PDF — check network, CORS, and authorization.");
+      }
+    }
+  };
+
+
+  // Download currently previewed PDF (if previewUrl exists) or fall back to direct fetch+download
+  const handleDownloadFromPreview = async () => {
+    if (previewUrl && downloadFilename) {
+      const a = document.createElement("a");
+      a.href = previewUrl;
+      a.download = downloadFilename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+
+
+    // fallback: re-fetch and force download
+    if (!previewInvoiceId) return;
+    try {
+      const pdfEndpoint = `https://cod-ecommerce-two.vercel.app/api/admin/invoices/${previewInvoiceId}/pdf`;
+      const res = await axios.get(pdfEndpoint, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        responseType: "blob",
+      });
+      const contentDisp = (res.headers && (res.headers["content-disposition"] || res.headers["Content-Disposition"])) || null;
+      const filename = getFilenameFromDisposition(contentDisp) || `invoice-${previewInvoiceId}.pdf`;
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${invoiceId}.pdf`;
+      a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Error downloading PDF:", err);
       alert("Failed to download PDF");
     }
+  };
+
+  // Cleanup object URL on unmount or when previewUrl changes
+  React.useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        try { window.URL.revokeObjectURL(previewUrl); } catch { }
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const closePreview = () => {
+    setDialogOpen(false);
+    if (previewUrl) {
+      try { window.URL.revokeObjectURL(previewUrl); } catch { }
+    }
+    setPreviewUrl(null);
+    setPreviewInvoiceId(null);
+    setDownloadFilename(null);
   };
 
   const filtered = React.useMemo(() => {
@@ -196,9 +348,8 @@ export default function InvoicesTableAdmin() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs">
-                      <div>{inv.periodType || "—"}</div>
                       <div className="text-muted-foreground">
-                        {inv.periodStart ? new Date(inv.periodStart).toLocaleDateString() : "—"} → {inv.periodEnd ? new Date(inv.periodEnd).toLocaleDateString() : "—"}
+                        3 days
                       </div>
                     </div>
                   </TableCell>
@@ -216,9 +367,10 @@ export default function InvoicesTableAdmin() {
                   <TableCell>{inv.createdAt ? new Date(inv.createdAt).toLocaleString() : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button size="sm" onClick={() => handleDownloadPdf(inv._id)}>
-                        <DownloadIcon className="h-4 w-4 mr-2" /> PDF
+                      <Button size="sm" onClick={() => handleDownloadPdf(inv._id, { preview: true })}>
+                        <DownloadIcon className="h-4 w-4 mr-2" /> Preview PDF
                       </Button>
+
                     </div>
                   </TableCell>
                 </TableRow>
@@ -231,6 +383,36 @@ export default function InvoicesTableAdmin() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closePreview(); }}>
+        <DialogContent className="max-w-4xl w-full">
+          <DialogHeader>
+            <DialogTitle>Invoice Preview {previewInvoiceId ? `— ${previewInvoiceId}` : ""}</DialogTitle>
+          </DialogHeader>
+
+          <div className="h-[70vh]">
+            {previewLoading ? (
+              <div className="h-full flex items-center justify-center">Loading preview...</div>
+            ) : previewUrl ? (
+              <iframe src={previewUrl} title="Invoice preview" className="w-full h-full border" />
+            ) : (
+              <div className="h-full flex items-center justify-center">No preview available.</div>
+            )}
+          </div>
+
+          <DialogFooter className="flex justify-between">
+            <div>
+              <Button variant="ghost" onClick={closePreview}>Close</Button>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleDownloadFromPreview} disabled={previewLoading || !previewUrl}>
+                <DownloadIcon className="h-4 w-4 mr-2" /> Download
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

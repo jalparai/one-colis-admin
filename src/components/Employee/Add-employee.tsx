@@ -16,12 +16,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useTranslation } from "react-i18next";
 
 interface AddEmployeeProps {
   onEmployeeAdded: () => void;
 }
 
 export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
+  const { t } = useTranslation(); // Using default namespace
+  const ns = "employeeAdd"; // parent namespace
+
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -37,16 +41,13 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
       assignProducts: false,
       assignPayouts: false,
       assignPickups: false,
-                SupportTick: false,
-                 managePickups:false
-
-
+      SupportTick: false,
+      managePickups: false,
     },
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, checked } = e.target;
-
     if (name in formData.permissions) {
       setFormData((prev) => ({
         ...prev,
@@ -64,7 +65,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
 
     const token = localStorage.getItem("token");
     if (!token) {
-      toast.error("No token found. Please log in.");
+      toast.error(t(`${ns}.errorNoToken`));
       setLoading(false);
       return;
     }
@@ -76,7 +77,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success("✅ Employee added successfully!");
+      toast.success(t(`${ns}.success`));
       onEmployeeAdded();
 
       setFormData({
@@ -91,16 +92,14 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
           assignPayouts: false,
           assignPickups: false,
           SupportTick: false,
-          managePickups:false
-
+          managePickups: false,
         },
       });
 
       setOpen(false);
     } catch (err: any) {
       console.error("Error adding employee:", err);
-      const errorMsg =
-        err.response?.data?.message || "❌ Failed to add employee";
+      const errorMsg = err.response?.data?.message || t(`${ns}.errorGeneric`);
       setMessage(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -112,22 +111,20 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button className="bg-primary text-white hover:bg-primary/90">
-          + Add Employee
+          {t(`${ns}.button`)}
         </Button>
       </SheetTrigger>
 
       <SheetContent className="overflow-scroll">
         <SheetHeader>
-          <SheetTitle>Add New Employee</SheetTitle>
-          <SheetDescription>
-            Fill in the fields to add a new employee and assign permissions.
-          </SheetDescription>
+          <SheetTitle>{t(`${ns}.title`)}</SheetTitle>
+          <SheetDescription>{t(`${ns}.description`)}</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="grid gap-6 px-4 py-4">
           {/* Name */}
           <div className="grid gap-3">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t(`${ns}.fields.name`)}</Label>
             <Input
               id="name"
               name="name"
@@ -139,7 +136,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
 
           {/* Email */}
           <div className="grid gap-3">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t(`${ns}.fields.email`)}</Label>
             <Input
               id="email"
               name="email"
@@ -152,7 +149,7 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
 
           {/* Password */}
           <div className="grid gap-3">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t(`${ns}.fields.password`)}</Label>
             <Input
               id="password"
               name="password"
@@ -165,35 +162,33 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
 
           {/* Role */}
           <div className="grid gap-3">
-            <Label htmlFor="customRole">Custom Role</Label>
+            <Label htmlFor="customRole">{t(`${ns}.fields.customRole`)}</Label>
             <Input
               id="customRole"
               name="customRole"
               value={formData.customRole}
               onChange={handleChange}
-              placeholder="e.g. Dev"
+              placeholder={t(`${ns}.placeholders.customRole`)}
               required
             />
           </div>
 
           {/* Permissions */}
           <div className="border-t pt-4">
-            <Label className="font-semibold mb-2 text-sm">Permissions</Label>
+            <Label className="font-semibold mb-2 text-sm">
+              {t(`${ns}.permissionsTitle`)}
+            </Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-sm">
               {Object.keys(formData.permissions).map((key) => (
-                <label key={key} className="flex items-center gap-2 capitalize">
+                <label key={key} className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll capitalize">
                   <input
                     type="checkbox"
                     name={key}
-                    checked={
-                      formData.permissions[
-                        key as keyof typeof formData.permissions
-                      ]
-                    }
+                    checked={formData.permissions[key as keyof typeof formData.permissions]}
                     onChange={handleChange}
                     className="w-4 h-4"
                   />
-                  {key.replace(/([A-Z])/g, " $1")}
+                  {t(`${ns}.permissions.${key}`)}
                 </label>
               ))}
             </div>
@@ -205,11 +200,11 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
           {/* Footer */}
           <SheetFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add Employee"}
+              {loading ? t(`${ns}.submit.adding`) : t(`${ns}.submit.add`)}
             </Button>
             <SheetClose asChild>
               <Button type="button" variant="outline">
-                Close
+                {t(`${ns}.close`)}
               </Button>
             </SheetClose>
           </SheetFooter>

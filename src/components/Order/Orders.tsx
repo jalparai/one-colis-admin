@@ -108,6 +108,26 @@ export const getOrderColumns = (
   onDelete: (id: string) => Promise<void>,
   onUpdated?: () => void
 ): ColumnDef<Order>[] => [
+   {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
     {
       accessorKey: "orderId",
       header: "# Order ID",
@@ -325,6 +345,36 @@ const handleAssignToAgent = async () => {
   }
 };
 
+  const handlePrintLabel = async () => {
+          try {
+            setLoading(true);
+            const token = localStorage.getItem("token");
+            if (!token) throw new Error("Missing authentication token");
+
+            const endpoint = `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order.id}/label`;
+
+            const res = await axios.get(endpoint, {
+              headers: { Authorization: `Bearer ${token}` },
+              responseType: "blob",
+            });
+
+            const blob = new Blob([res.data], { type: "text/html" });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, "_blank");
+          } catch (err: any) {
+            console.error("Print Label Error:", err);
+            if (err.response?.data instanceof Blob) {
+              const reader = new FileReader();
+              reader.onload = () => alert(reader.result as string);
+              reader.readAsText(err.response.data);
+            } else {
+              alert(err.message || "Error opening label");
+            }
+          } finally {
+            setLoading(false);
+          }
+        };
+
 
         const handleUpdate = async () => {
           if (!selectedStatus) {
@@ -404,7 +454,9 @@ const handleAssignToAgent = async () => {
     <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
 
     <DropdownMenuSeparator />
-
+   {isReady && (
+                  <DropdownMenuItem onClick={handlePrintLabel}>Print Label</DropdownMenuItem>
+                )}
     {/* Assign to agent: only allow if order is ready */}
     <DropdownMenuItem
       onClick={() => {
@@ -540,6 +592,7 @@ const handleAssignToAgent = async () => {
   ];
 
 // ---------- OrdersTable component ----------
+// ---------- OrdersTable component (REPLACE your existing OrdersTable function with this) ----------
 export function OrdersTable() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -553,6 +606,14 @@ export function OrdersTable() {
   >("all");
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
 
+  // --- Bulk action state ---
+  const [assignBulkOpen, setAssignBulkOpen] = React.useState(false);
+  const [assignBulkLoading, setAssignBulkLoading] = React.useState(false);
+  const [selectedAgentIdBulk, setSelectedAgentIdBulk] = React.useState<string>("");
+  const [agents, setAgents] = React.useState<Agent[]>([]);
+  const [deleteBulkOpen, setDeleteBulkOpen] = React.useState(false);
+  const [deleteBulkLoading, setDeleteBulkLoading] = React.useState(false);
+
   const fetchOrders = React.useCallback(async () => {
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -565,7 +626,6 @@ export function OrdersTable() {
       const normalized = raw.map((o: any) => {
         const itemsRaw = Array.isArray(o.items) ? o.items : [];
         const items = itemsRaw.map((it: any) => {
-          // Attempt to pick productId from several possible shapes returned by backend
           const productId = it.productId ?? it.product?._id ?? it._id ?? null;
           const productName = it.productName ?? it.product?.name ?? it.name ?? "";
           const quantity = Number(it.quantity ?? it.qty ?? 0);
@@ -615,6 +675,37 @@ export function OrdersTable() {
   React.useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Fetch agents when bulk-assign dialog opens
+  React.useEffect(() => {
+    if (!assignBulkOpen) return;
+    let cancelled = false;
+    const fetchAgents = async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents", {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
+        const raw = Array.isArray(res.data?.data) ? res.data.data : [];
+        const normalized: Agent[] = raw
+          .map((a: any) => ({
+            id: a?.id ?? a?._id,
+            name: a?.name ?? (a?.email ?? "Unnamed"),
+            email: a?.email ?? "",
+          }))
+          .filter((a: Agent) => Boolean(a.id));
+        if (!cancelled) setAgents(normalized);
+      } catch (err) {
+        console.error("Failed to fetch agents", err);
+        toast.error("Could not load agents");
+      }
+    };
+    fetchAgents();
+    return () => {
+      cancelled = true;
+    };
+  }, [assignBulkOpen]);
 
   // Update status API -> **admin** endpoint using normalized `id`
   const handleStatusUpdate = async (id: string, status: string) => {
@@ -695,7 +786,7 @@ export function OrdersTable() {
     }
   };
 
-  // Delete API (admin)
+  // Delete API (admin) - single
   const handleDelete = async (id: string) => {
     if (!id) {
       toast.error("Missing order id");
@@ -715,9 +806,7 @@ export function OrdersTable() {
     }
 
     const base = "https://cod-ecommerce-two.vercel.app";
-    const attempts = [
-      { method: "delete" as const, url: `${base}/api/admin/delete-order/${id}` },
-    ];
+    const attempts = [{ method: "delete" as const, url: `${base}/api/admin/delete-order/${id}` }];
 
     let succeeded = false;
     const errors: any[] = [];
@@ -756,6 +845,114 @@ export function OrdersTable() {
       toast.error("Delete failed — check console for network logs.");
       // rollback optimistic removal
       if (prev) setOrders((p) => [prev, ...p]);
+    }
+  };
+
+  // --- Bulk Delete handler ---
+  const handleDeleteSelected = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (!selectedRows.length) {
+      toast.error("No orders selected");
+      return;
+    }
+    const ids = selectedRows.map((r) => r.original.id);
+
+    // optimistic remove
+    const prevOrders = orders.slice();
+    setOrders((p) => p.filter((o) => !ids.includes(o.id)));
+
+    setDeleteBulkLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        toast.error("No auth token found. Please login.");
+        setOrders(prevOrders);
+        return;
+      }
+      const base = "https://cod-ecommerce-two.vercel.app";
+
+      // delete each - can be parallelized
+      const promises = ids.map((id) =>
+        axios.delete(`${base}/api/admin/delete-order/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const failed = results.filter((res) => !(res.status >= 200 && res.status < 300));
+
+      if (failed.length) {
+        console.error("Bulk delete failures:", failed);
+        toast.error("Some deletes failed — check console");
+        // refresh from server to get authoritative state
+        await fetchOrders();
+      } else {
+        toast.success("Selected orders deleted");
+        await fetchOrders();
+      }
+      setDeleteBulkOpen(false);
+      // clear selection
+      table.resetRowSelection();
+    } catch (err) {
+      console.error("Bulk delete error", err);
+      toast.error("Bulk delete failed");
+      await fetchOrders();
+    } finally {
+      setDeleteBulkLoading(false);
+    }
+  };
+
+  // --- Bulk Assign handler ---
+  const handleAssignSelected = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (!selectedRows.length) {
+      toast.error("No orders selected");
+      return;
+    }
+    const ids = selectedRows.map((r) => r.original.id);
+
+    // only allow assign if all selected are ready (your per-row required behavior)
+    const notReady = selectedRows.filter((r) => r.original.status !== "ready");
+    if (notReady.length) {
+      toast.error("Only orders with 'ready' status can be assigned. Deselect others or update their status first.");
+      return;
+    }
+    if (!selectedAgentIdBulk) {
+      toast.error("Select an agent first");
+      return;
+    }
+
+    setAssignBulkLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        toast.error("No auth token found. Please login.");
+        return;
+      }
+      const base = "https://cod-ecommerce-two.vercel.app";
+      const res = await axios.post(
+        `${base}/api/admin/assign/orders/${selectedAgentIdBulk}`,
+        { orderIds: ids },
+        { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
+      );
+
+      if (res.status >= 200 && res.status < 300) {
+        toast.success("Orders assigned to agent");
+        // attempt to update status for each (server might already update them)
+        await fetchOrders();
+        setAssignBulkOpen(false);
+        setSelectedAgentIdBulk("");
+        table.resetRowSelection();
+      } else {
+        const msg = res.data?.message ?? `Assign failed (${res.status})`;
+        toast.error(msg);
+      }
+    } catch (err: any) {
+      console.error("Assign error", err);
+      toast.error(err?.response?.data?.message ?? "Network error while assigning");
+    } finally {
+      setAssignBulkLoading(false);
     }
   };
 
@@ -893,6 +1090,8 @@ export function OrdersTable() {
 
   if (loading) return <p className="p-4">Loading orders...</p>;
 
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+
   return (
     <div className="w-full">
       {/* Top bar */}
@@ -900,7 +1099,7 @@ export function OrdersTable() {
         <Input placeholder="Search orders..." value={globalFilter ?? ""} onChange={(e) => setGlobalFilter(e.target.value)} className="max-w-sm" />
 
         {/* Date Range Filter */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
           <label>To:</label>
@@ -912,22 +1111,28 @@ export function OrdersTable() {
             <Button variant="outline">Filter: {dateFilter} <ChevronDown /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {[
-              { key: "all", label: "All" },
-              { key: "today", label: "Today" },
-              { key: "yesterday", label: "Yesterday" },
-              { key: "thisWeek", label: "This Week" },
-              { key: "lastWeek", label: "Last Week" },
-              { key: "thisMonth", label: "This Month" },
-              { key: "lastMonth", label: "Last Month" },
-            ].map((option) => (
+            {[{ key: "all", label: "All" }, { key: "today", label: "Today" }, { key: "yesterday", label: "Yesterday" }, { key: "thisWeek", label: "This Week" }, { key: "lastWeek", label: "Last Week" }, { key: "thisMonth", label: "This Month" }, { key: "lastMonth", label: "Last Month" }].map((option) => (
               <DropdownMenuItem key={option.key} onClick={() => setDateFilter(option.key as typeof dateFilter)}>
                 {option.label}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="flex gap-2">
+
+        <div className="flex gap-2 items-center">
+          {/* Conditionally show bulk action buttons when selection exists */}
+          {selectedCount > 0 && (
+            <>
+              <Button onClick={() => setAssignBulkOpen(true)}>
+                Assign Selected ({selectedCount})
+              </Button>
+
+              <Button variant="destructive" onClick={() => setDeleteBulkOpen(true)}>
+                Delete Selected ({selectedCount})
+              </Button>
+            </>
+          )}
+
           <ImportReadyOrdersButton
             endpoint="https://cod-ecommerce-two.vercel.app/api/admin/ready-order/bulk-upload"
             label="Import Ready Orders"
@@ -937,6 +1142,7 @@ export function OrdersTable() {
           <AddOrder onOrderAdded={fetchOrders} />
         </div>
       </div>
+
       {exportEndpoints.map((item) => (
         <Button
           key={item.label}
@@ -992,6 +1198,63 @@ export function OrdersTable() {
           </Button>
         </div>
       </div>
+
+      {/* Bulk Assign Dialog */}
+      <Dialog open={assignBulkOpen} onOpenChange={setAssignBulkOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Selected Orders to Agent</DialogTitle>
+            <div className="text-sm text-muted-foreground mt-1">Select a delivery agent to assign the selected ready orders.</div>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Select value={selectedAgentIdBulk} onValueChange={(v) => setSelectedAgentIdBulk(String(v))}>
+              <SelectTrigger>
+                <SelectValue placeholder={agents.length ? "Select agent" : "No agents available"} />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.length ? (
+                  agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} {a.email ? `(${a.email})` : ""}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem key="no-agents" value="__no_agents" disabled>
+                    No agents
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignBulkOpen(false)} disabled={assignBulkLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignSelected} disabled={assignBulkLoading}>
+              {assignBulkLoading ? "Assigning..." : `Assign (${selectedCount})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirm */}
+      <AlertDialog open={deleteBulkOpen} onOpenChange={setDeleteBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedCount} selected order(s)?</AlertDialogTitle>
+            <AlertDialogDescription>This action will delete the selected orders and cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBulkLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected} disabled={deleteBulkLoading} className="bg-red-600 hover:bg-red-700">
+              {deleteBulkLoading ? "Deleting..." : `Delete (${selectedCount})`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+

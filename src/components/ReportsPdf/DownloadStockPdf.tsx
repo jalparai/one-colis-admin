@@ -44,7 +44,7 @@ export default function DownloadStockPdf() {
   return (
   <Button
   onClick={handleDownload}
-  className="flex items-center gap-2  bg-[#2BC3F1] cursor-pointer font-medium text-white shadow-md transition-all duration-200 hover:bg-[#1BB8E8] hover:shadow-lg"
+  className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll  bg-[#2BC3F1] cursor-pointer font-medium text-white shadow-md transition-all duration-200 hover:bg-[#1BB8E8] hover:shadow-lg"
 >
   <Download className="w-4 h-4" />
   Export Data

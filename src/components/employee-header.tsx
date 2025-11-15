@@ -16,7 +16,7 @@ export function EmployeeHeader() {
            <h1 className="text-base font-medium">Employee</h1>
                 <LanguageSwitcher />
                 </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
   
         </div>
       </div>

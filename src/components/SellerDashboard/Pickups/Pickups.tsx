@@ -397,7 +397,7 @@ export function PickupsTable() {
 
           {/* show custom range fields inline when selected */}
           {dateFilter === "custom" && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
               <input
                 type="date"
                 value={startDate ?? ""}

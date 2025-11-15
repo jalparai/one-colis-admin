@@ -76,9 +76,9 @@ export default function TopAgentsPage() {
                 {agent.orders} Orders
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Revenue: PKR {agent.revenue.toLocaleString()}
+                Revenue: DH {agent.revenue.toLocaleString()}
               </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll text-sm text-muted-foreground mt-2">
                 <TrendingUp className="h-4 w-4 text-green-500" />
                 Performing well
               </div>

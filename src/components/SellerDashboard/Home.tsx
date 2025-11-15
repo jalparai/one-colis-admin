@@ -428,7 +428,7 @@ const table = useReactTable({
           <CardTitle className="mb-2">Quick Actions</CardTitle>
 
           {/* search + date filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
          
             <select
               value={dateFilter}
@@ -552,7 +552,7 @@ const table = useReactTable({
             </div>
 
             <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                 <IconArrowUpRight className="h-4 w-4 text-green-500" />
                 <span>+{Math.round((totalStocks ?? 0) * 0.08 || 0)}% month</span>
               </div>
@@ -586,7 +586,7 @@ const table = useReactTable({
             </div>
 
             <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                 <IconArrowUpRight className="h-4 w-4 text-green-500" />
                 <span>+{totalOrders ? Math.round((totalOrders as number) * 0.12) : 0}% this week</span>
               </div>
@@ -624,7 +624,7 @@ const table = useReactTable({
     </div>
 
     <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
         <IconArrowUpRight className="h-4 w-4 text-green-500" />
         <span>{sellerRevenue?.breakdowns?.monthly?.length ? `${sellerRevenue.breakdowns.monthly.reduce((acc:any, m:any) => acc + (m.revenue||0), 0).toFixed(2)} this period` : ""}</span>
       </div>
@@ -654,7 +654,7 @@ const table = useReactTable({
             </div>
 
             <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                 <IconArrowDownRight className="h-4 w-4 text-rose-500" />
                 <span>-{processingOrders ? Math.round(processingOrders * 0.05) : 0} since last week</span>
               </div>
@@ -688,7 +688,7 @@ const table = useReactTable({
             </div>
 
             <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
                 <IconArrowUpRight className="h-4 w-4 text-green-500" />
                 <span>+{readyOrders ? Math.round(readyOrders * 0.03) : 0} new today</span>
               </div>
