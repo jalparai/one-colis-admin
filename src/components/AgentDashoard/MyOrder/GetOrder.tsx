@@ -390,15 +390,7 @@ export function DeliveryOrdersTable() {
   }
 
   const columns: ColumnDef<DeliveryOrder>[] = [
-    {
-      accessorKey: "items",
-      header: "Product(s)",
-      cell: ({ row }) => row.original.items.map((i) => `${i.productName} (x${i.quantity})`).join(", "),
-    },
-    {
-      header: "SKU",
-      accessorFn: (row) => row.items.map((i) => i.sku).join(", "),
-    },
+    
     {
       header: "Total Amount",
       accessorKey: "totalAmount",

@@ -26,9 +26,17 @@ export type Invoice = {
 };
 
 export default function InvoicesTableAdmin() {
+  // core state
   const [invoices, setInvoices] = React.useState<Invoice[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [filter, setFilter] = React.useState("");
+  const [filter, setFilter] = React.useState(""); // text filter
+
+  // date filter state
+  const [dateFilter, setDateFilter] = React.useState<
+    "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth" | "custom"
+  >("all");
+  const [customStart, setCustomStart] = React.useState<string | null>(null); // YYYY-MM-DD
+  const [customEnd, setCustomEnd] = React.useState<string | null>(null);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
@@ -39,87 +47,217 @@ export default function InvoicesTableAdmin() {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [downloadFilename, setDownloadFilename] = React.useState<string | null>(null);
 
-  // helper to extract array from different response shapes
+  // ---------- Helpers ----------
+  const formatDate = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Compute start/end for presets. Monday as week start.
+  const computeRange = (
+    filter:
+      | "all"
+      | "today"
+      | "yesterday"
+      | "thisWeek"
+      | "lastWeek"
+      | "thisMonth"
+      | "lastMonth"
+      | "custom"
+  ) => {
+    const now = new Date();
+    const today = formatDate(now);
+
+    switch (filter) {
+      case "today":
+        return { start: today, end: today };
+      case "yesterday": {
+        const y = new Date(now);
+        y.setDate(now.getDate() - 1);
+        return { start: formatDate(y), end: formatDate(y) };
+      }
+      case "thisWeek": {
+        const dayIndex = (now.getDay() + 6) % 7; // 0 = Monday
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - dayIndex);
+        return { start: formatDate(monday), end: today };
+      }
+      case "lastWeek": {
+        const dayIndex = (now.getDay() + 6) % 7;
+        const lastWeekEnd = new Date(now);
+        lastWeekEnd.setDate(now.getDate() - dayIndex - 1); // previous Sunday
+        const lastWeekStart = new Date(lastWeekEnd);
+        lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+        return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
+      }
+      case "thisMonth": {
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: formatDate(startMonth), end: today };
+      }
+      case "lastMonth": {
+        const startLast = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endLast = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { start: formatDate(startLast), end: formatDate(endLast) };
+      }
+      default:
+        return {};
+    }
+  };
+
+  // Build params helper that supplies several commonly-used keys (server may accept any)
+  const buildParams = (opts?: { range?: string; start?: string | null; end?: string | null }) => {
+    const params: Record<string, string> = {};
+    if (!opts) return params;
+    if (opts.range && opts.range !== "all") params.range = opts.range;
+    if (opts.start) {
+      params.startDate = opts.start;
+      params.start = opts.start;
+      params.from = opts.start;
+    }
+    if (opts.end) {
+      params.endDate = opts.end;
+      params.end = opts.end;
+      params.to = opts.end;
+    }
+    return params;
+  };
+
+  // Extract array from different response shapes
   const extractArrayFromPayload = (payload: any): any[] => {
     if (!payload) return [];
     if (Array.isArray(payload)) return payload;
     if (Array.isArray(payload.data)) return payload.data;
     if (Array.isArray(payload.invoices)) return payload.invoices;
     if (Array.isArray(payload.results)) return payload.results;
-    // fallback: first array property
     for (const k of Object.keys(payload || {})) {
       if (Array.isArray(payload[k])) return payload[k];
     }
     return [];
   };
 
-  // low-level fetch that returns array (does not mutate state)
-  const fetchInvoicesRaw = React.useCallback(async (): Promise<Invoice[]> => {
-    const endpoint = "https://cod-ecommerce-two.vercel.app/api/admin/get-all-invoices";
-    const res = await axios.get(endpoint, {
-      headers: token ? { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" } : { "Cache-Control": "no-cache" },
-      params: { _t: Date.now() }, // cache buster
-    });
-    const arr = extractArrayFromPayload(res.data).slice();
-    // sort newest first
-    arr.sort((a: any, b: any) => (new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
-    return arr;
-  }, [token]);
+  // ---------- Fetch functions (server-side) ----------
+  // fetchInvoicesRaw accepts optional date opts and returns array (does not mutate loading)
+  const fetchInvoicesRaw = React.useCallback(
+    async (opts?: { range?: string; start?: string | null; end?: string | null }) => {
+      const endpoint = "https://cod-ecommerce-two.vercel.app/api/admin/get-all-invoices";
+      const params = { ...buildParams(opts), _t: Date.now() }; // cache buster
+      const res = await axios.get(endpoint, {
+        headers: token ? { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" } : { "Cache-Control": "no-cache" },
+        params,
+      });
+      const arr = extractArrayFromPayload(res.data).slice();
+      arr.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return arr as Invoice[];
+    },
+    [token]
+  );
 
-  // normal fetch that updates state & loading
-  const fetchInvoices = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      const arr = await fetchInvoicesRaw();
-      setInvoices(arr);
-    } catch (err) {
-      console.error("Error fetching invoices:", err);
-      setInvoices([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchInvoicesRaw]);
+  // fetchInvoices updates state & sets loading
+  const fetchInvoices = React.useCallback(
+    async (opts?: { range?: string; start?: string | null; end?: string | null }) => {
+      setLoading(true);
+      try {
+        const arr = await fetchInvoicesRaw(opts);
+        setInvoices(arr);
+      } catch (err) {
+        console.error("Error fetching invoices:", err);
+        setInvoices([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchInvoicesRaw]
+  );
 
+  // initial load
   React.useEffect(() => {
-    fetchInvoices();
+    // On mount, use current dateFilter if not custom; else fetch all and wait for custom Apply
+    if (dateFilter !== "custom") {
+      const range = computeRange(dateFilter);
+      if (!range || Object.keys(range).length === 0) {
+        fetchInvoices({ range: "all" });
+      } else {
+        fetchInvoices({ range: dateFilter, start: (range as any).start, end: (range as any).end });
+      }
+    } else {
+      fetchInvoices();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Refresh + short polling if backend generation is async
-  const refreshAndPoll = React.useCallback(async (opts?: { maxTries?: number; intervalMs?: number }) => {
-    const maxTries = opts?.maxTries ?? 10;
-    const intervalMs = opts?.intervalMs ?? 1000;
+  // Re-fetch when a preset dateFilter changes (but not when user is in custom mode)
+  React.useEffect(() => {
+    if (dateFilter !== "custom") {
+      const range = computeRange(dateFilter);
+      if (!range || Object.keys(range).length === 0) {
+        fetchInvoices({ range: "all" });
+      } else {
+        fetchInvoices({ range: dateFilter, start: (range as any).start, end: (range as any).end });
+      }
+    }
+  }, [dateFilter, fetchInvoices]);
 
-    try {
-      // quick immediate fetch
-      const before = invoices.length;
-      const first = await fetchInvoicesRaw();
-      if (first.length > before) {
-        setInvoices(first);
+  // Apply custom range (user clicks Apply)
+  const applyCustomRange = async () => {
+    // basic validation
+    if (!customStart && !customEnd) {
+      alert("Please choose start and/or end date for custom range.");
+      return;
+    }
+    if (customStart && customEnd) {
+      if (new Date(customStart).getTime() > new Date(customEnd).getTime()) {
+        alert("Start date cannot be after end date.");
         return;
       }
+    }
+    setDateFilter("custom");
+    await fetchInvoices({ range: "custom", start: customStart ?? null, end: customEnd ?? null });
+  };
 
-      // poll until new item appears (or timeout)
-      let tries = 0;
-      while (tries < maxTries) {
-        await new Promise((r) => setTimeout(r, intervalMs));
-        const arr = await fetchInvoicesRaw();
-        if (arr.length > before) {
-          setInvoices(arr);
+  // Clear custom filter and reset to All
+  const clearCustomRange = async () => {
+    setCustomStart(null);
+    setCustomEnd(null);
+    setDateFilter("all");
+    await fetchInvoices({ range: "all" });
+  };
+
+  // Refresh + poll if backend generation is async (accept opts)
+  const refreshAndPoll = React.useCallback(
+    async (opts?: { maxTries?: number; intervalMs?: number; rangeOpts?: { range?: string; start?: string | null; end?: string | null } }) => {
+      const maxTries = opts?.maxTries ?? 10;
+      const intervalMs = opts?.intervalMs ?? 1000;
+      const rangeOpts = opts?.rangeOpts;
+      try {
+        const before = invoices.length;
+        const first = await fetchInvoicesRaw(rangeOpts);
+        if (first.length > before) {
+          setInvoices(first);
           return;
         }
-        tries++;
+        let tries = 0;
+        while (tries < maxTries) {
+          await new Promise((r) => setTimeout(r, intervalMs));
+          const arr = await fetchInvoicesRaw(rangeOpts);
+          if (arr.length > before) {
+            setInvoices(arr);
+            return;
+          }
+          tries++;
+        }
+        // fallback to latest
+        const last = await fetchInvoicesRaw(rangeOpts);
+        setInvoices(last);
+      } catch (err) {
+        console.error("Error during refreshAndPoll:", err);
       }
+    },
+    [fetchInvoicesRaw, invoices.length]
+  );
 
-      // final fallback: just set latest even if count same
-      const last = await fetchInvoicesRaw();
-      setInvoices(last);
-    } catch (err) {
-      console.error("Error during refreshAndPoll:", err);
-    }
-  }, [fetchInvoicesRaw, invoices.length]);
-
-  // Extract filename from Content-Disposition header (if present)
+  // ---------- PDF helpers (unchanged) ----------
   const getFilenameFromDisposition = (disp?: string | null) => {
     if (!disp) return null;
     const match = /filename\*?=(?:UTF-8''?)?["']?([^"';]+)["']?/.exec(disp);
@@ -127,7 +265,12 @@ export default function InvoicesTableAdmin() {
     return null;
   };
 
-  // Open preview modal (fetch blob and create object URL)
+  const getFilenameFromContentDisposition = (cd?: string) => {
+    if (!cd) return null;
+    const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/.exec(cd);
+    return m ? decodeURIComponent(m[1] || m[2]) : null;
+  };
+
   const handlePreviewPdf = async (invoiceId: string) => {
     setPreviewLoading(true);
     setPreviewInvoiceId(invoiceId);
@@ -137,17 +280,16 @@ export default function InvoicesTableAdmin() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         responseType: "blob",
       });
-
-      // try to get filename
       const contentDisp = (res.headers && (res.headers["content-disposition"] || res.headers["Content-Disposition"])) || null;
       const filename = getFilenameFromDisposition(contentDisp) || `invoice-${invoiceId}.pdf`;
       setDownloadFilename(filename);
 
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
-      // cleanup previous if exists
       if (previewUrl) {
-        try { window.URL.revokeObjectURL(previewUrl); } catch { }
+        try {
+          window.URL.revokeObjectURL(previewUrl);
+        } catch {}
       }
       setPreviewUrl(url);
       setDialogOpen(true);
@@ -159,17 +301,9 @@ export default function InvoicesTableAdmin() {
     }
   };
 
-  const getFilenameFromContentDisposition = (cd?: string) => {
-    if (!cd) return null;
-    const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/.exec(cd);
-    return m ? decodeURIComponent(m[1] || m[2]) : null;
-  };
-
-
   const handleDownloadPdf = async (invoiceId: string, { preview = true } = {}) => {
     try {
       const pdfEndpoint = `https://cod-ecommerce-two.vercel.app/api/admin/invoices/${invoiceId}/pdf`;
-      // Use arraybuffer to preserve binary accurately
       const res = await axios.get(pdfEndpoint, {
         headers: token ? { Authorization: `Bearer ${token}`, Accept: "application/pdf" } : { Accept: "application/pdf" },
         responseType: "arraybuffer",
@@ -180,16 +314,13 @@ export default function InvoicesTableAdmin() {
       const filenameFromHeader = getFilenameFromContentDisposition(contentDisposition);
       const defaultName = `invoice-${invoiceId}.pdf`;
 
-      // If the server sent a PDF
       if (contentType.includes("application/pdf")) {
         const blob = new Blob([res.data], { type: contentType || "application/pdf" });
         const url = window.URL.createObjectURL(blob);
 
         if (preview) {
-          // open in new tab for preview
           window.open(url, "_blank", "noopener,noreferrer");
         } else {
-          // force download
           const a = document.createElement("a");
           a.href = url;
           a.download = filenameFromHeader || defaultName;
@@ -198,12 +329,10 @@ export default function InvoicesTableAdmin() {
           a.remove();
         }
 
-        // free URL after a short delay
         setTimeout(() => window.URL.revokeObjectURL(url), 15_000);
         return;
       }
 
-      // If server returned HTML (fallback) — open as HTML so user sees the page rather than broken PDF
       if (contentType.includes("text/html")) {
         const blob = new Blob([res.data], { type: "text/html" });
         const url = window.URL.createObjectURL(blob);
@@ -212,12 +341,10 @@ export default function InvoicesTableAdmin() {
         return;
       }
 
-      // Unknown content
       console.error("Unexpected content-type:", contentType);
       alert("Unexpected response from server when requesting PDF. Check server logs or network tab.");
     } catch (err: any) {
       console.error("Error downloading/previewing PDF:", err);
-      // if server responded with HTML error page, show short guidance
       if (err?.response?.data) {
         alert("Server responded but returned an unexpected payload. Check network tab for details.");
       } else {
@@ -226,8 +353,6 @@ export default function InvoicesTableAdmin() {
     }
   };
 
-
-  // Download currently previewed PDF (if previewUrl exists) or fall back to direct fetch+download
   const handleDownloadFromPreview = async () => {
     if (previewUrl && downloadFilename) {
       const a = document.createElement("a");
@@ -239,8 +364,6 @@ export default function InvoicesTableAdmin() {
       return;
     }
 
-
-    // fallback: re-fetch and force download
     if (!previewInvoiceId) return;
     try {
       const pdfEndpoint = `https://cod-ecommerce-two.vercel.app/api/admin/invoices/${previewInvoiceId}/pdf`;
@@ -265,11 +388,12 @@ export default function InvoicesTableAdmin() {
     }
   };
 
-  // Cleanup object URL on unmount or when previewUrl changes
   React.useEffect(() => {
     return () => {
       if (previewUrl) {
-        try { window.URL.revokeObjectURL(previewUrl); } catch { }
+        try {
+          window.URL.revokeObjectURL(previewUrl);
+        } catch {}
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,37 +402,136 @@ export default function InvoicesTableAdmin() {
   const closePreview = () => {
     setDialogOpen(false);
     if (previewUrl) {
-      try { window.URL.revokeObjectURL(previewUrl); } catch { }
+      try {
+        window.URL.revokeObjectURL(previewUrl);
+      } catch {}
     }
     setPreviewUrl(null);
     setPreviewInvoiceId(null);
     setDownloadFilename(null);
   };
 
+  // ---------- Client-side filtering (text + date fallback) ----------
+  const invoiceInRange = (createdAt?: string) => {
+    if (!createdAt) return true;
+    const d = new Date(createdAt);
+    // If preset (not custom) use computeRange
+    if (dateFilter && dateFilter !== "custom") {
+      const r = computeRange(dateFilter);
+      if (!r || !r.start || !r.end) return true;
+      const start = new Date(r.start + "T00:00:00");
+      const end = new Date(r.end + "T23:59:59");
+      return d >= start && d <= end;
+    }
+    // custom
+    if (dateFilter === "custom") {
+      const from = customStart ? new Date(customStart + "T00:00:00") : null;
+      const to = customEnd ? new Date(customEnd + "T23:59:59") : null;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    return true;
+  };
+
   const filtered = React.useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return invoices;
-    return invoices.filter((inv) => {
-      const sellerName = (inv.seller?.name || inv.seller?.storeName || inv.seller?.email || "").toLowerCase();
-      return (
-        String(inv.invoiceNumber || "").toLowerCase().includes(q) ||
-        sellerName.includes(q) ||
-        String(inv.status || "").toLowerCase().includes(q)
-      );
-    });
-  }, [invoices, filter]);
+    return invoices
+      .filter((inv) => {
+        // date fallback filter
+        return invoiceInRange(inv.createdAt);
+      })
+      .filter((inv) => {
+        if (!q) return true;
+        const sellerName = (inv.seller?.name || inv.seller?.storeName || inv.seller?.email || "").toLowerCase();
+        return (
+          String(inv.invoiceNumber || "").toLowerCase().includes(q) ||
+          sellerName.includes(q) ||
+          String(inv.status || "").toLowerCase().includes(q)
+        );
+      });
+  }, [invoices, filter, dateFilter, customStart, customEnd]);
 
+  // ---------- Render ----------
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between py-4 gap-3">
-        <Input
-          placeholder="Search invoices..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex flex-wrap items-center gap-3 justify-between py-4">
+        <div className="flex gap-2 items-center">
+          <Input
+            placeholder="Search invoices..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="max-w-sm"
+          />
+
+          <label className="text-sm font-medium">Date:</label>
+          <select
+            value={dateFilter}
+            onChange={(e) => {
+              const v = e.target.value as any;
+              setDateFilter(v);
+              if (v !== "custom") {
+                setCustomStart(null);
+                setCustomEnd(null);
+              }
+            }}
+            className="px-3 py-1 rounded-md border bg-white text-sm"
+          >
+            <option value="all">All</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="thisWeek">This Week</option>
+            <option value="lastWeek">Last Week</option>
+            <option value="thisMonth">This Month</option>
+            <option value="lastMonth">Last Month</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          {dateFilter === "custom" && (
+            <div className="flex items-center gap-2 ml-2">
+              <Input
+                type="date"
+                value={customStart ?? ""}
+                onChange={(e) => setCustomStart(e.target.value || null)}
+                className="px-2 py-1"
+              />
+              <span className="text-sm">—</span>
+              <Input
+                type="date"
+                value={customEnd ?? ""}
+                onChange={(e) => setCustomEnd(e.target.value || null)}
+                className="px-2 py-1"
+              />
+              <Button size="sm" variant="outline" onClick={applyCustomRange}>
+                Apply
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearCustomRange}>
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => refreshAndPoll({ maxTries: 12, intervalMs: 1000 })}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              // pass current date opts to refreshAndPoll so it checks same filtered set server-side
+              refreshAndPoll({
+                maxTries: 12,
+                intervalMs: 1000,
+                rangeOpts:
+                  dateFilter === "custom"
+                    ? { range: "custom", start: customStart ?? null, end: customEnd ?? null }
+                    : dateFilter === "all"
+                    ? { range: "all" }
+                    : (() => {
+                        const r = computeRange(dateFilter);
+                        return r && r.start && r.end ? { range: dateFilter, start: r.start, end: r.end } : { range: "all" };
+                      })(),
+              })
+            }
+          >
             <RefreshCcwIcon className="h-4 w-4 mr-2" /> Refresh
           </Button>
         </div>
@@ -330,7 +553,9 @@ export default function InvoicesTableAdmin() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">Loading invoices...</TableCell>
+                <TableCell colSpan={7} className="h-24 text-center">
+                  Loading invoices...
+                </TableCell>
               </TableRow>
             ) : filtered.length ? (
               filtered.map((inv) => (
@@ -349,7 +574,9 @@ export default function InvoicesTableAdmin() {
                   <TableCell>
                     <div className="text-xs">
                       <div className="text-muted-foreground">
-                        3 days
+                        {inv.periodStart && inv.periodEnd
+                          ? `${new Date(inv.periodStart).toLocaleDateString()} → ${new Date(inv.periodEnd).toLocaleDateString()}`
+                          : "—"}
                       </div>
                     </div>
                   </TableCell>
@@ -367,17 +594,21 @@ export default function InvoicesTableAdmin() {
                   <TableCell>{inv.createdAt ? new Date(inv.createdAt).toLocaleString() : "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button size="sm" onClick={() => handleDownloadPdf(inv._id, { preview: true })}>
+                      <Button size="sm" onClick={() => handlePreviewPdf(inv._id)}>
                         <DownloadIcon className="h-4 w-4 mr-2" /> Preview PDF
                       </Button>
-
+                      <Button size="sm" onClick={() => handleDownloadPdf(inv._id, { preview: false })}>
+                        <DownloadIcon className="h-4 w-4 mr-2" /> Download
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">No invoices found.</TableCell>
+                <TableCell colSpan={7} className="h-24 text-center">
+                  No invoices found.
+                </TableCell>
               </TableRow>
             )}
           </TableBody>

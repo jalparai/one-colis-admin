@@ -57,7 +57,7 @@ export type Order = {
   notes: string
   createdAt: string
   updatedAt: string,
-    customer?: {
+  customer?: {
     name?: string;
     phone?: string;
     address?: string;
@@ -76,9 +76,11 @@ export function HomeDashboard() {
   const [openAddOrder, setOpenAddOrder] = useState(false)
   const [openAddReadyOrder, setOpenAddReadyOrder] = useState(false)
   const [openAddTicket, setOpenAddTicket] = useState(false)
-const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
+  const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
 
   const [searchQuery, setSearchQuery] = useState("")
+    const [fromDate, setFromDate] = useState<string | null>(null)
+  const [toDate, setToDate] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<
     "all" | "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month"
   >("all")
@@ -96,59 +98,6 @@ const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
   // color palette for pie
   const COLORS = ["#60a5fa", "#facc15", "#34d399", "#f87171", "#a78bfa", "#fb923c"]
 
-  const filteredOrders = useMemo(() => {
-    if (!allOrders || allOrders.length === 0) return []
-
-    const nowLocal = new Date()
-    return allOrders.filter((order) => {
-      const created = new Date(order.createdAt)
-      const diffDays = Math.floor((nowLocal.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
-
-      switch (dateFilter) {
-        case "today":
-          return created.toDateString() === nowLocal.toDateString()
-        case "yesterday":
-          return diffDays === 1
-        case "this_week": {
-          const startOfWeek = (d: Date) => {
-            const copy = new Date(d)
-            const day = copy.getDay()
-            copy.setDate(copy.getDate() - day)
-            copy.setHours(0, 0, 0, 0)
-            return copy
-          }
-          return startOfWeek(created).toDateString() === startOfWeek(nowLocal).toDateString()
-        }
-        case "last_week": {
-          const startOfWeek = (d: Date) => {
-            const copy = new Date(d)
-            const day = copy.getDay()
-            copy.setDate(copy.getDate() - day)
-            copy.setHours(0, 0, 0, 0)
-            return copy
-          }
-          const lastWeek = new Date(nowLocal)
-          lastWeek.setDate(nowLocal.getDate() - 7)
-          return startOfWeek(created).toDateString() === startOfWeek(lastWeek).toDateString()
-        }
-        case "this_month":
-          return created.getMonth() === nowLocal.getMonth() && created.getFullYear() === nowLocal.getFullYear()
-        case "last_month": {
-          const prevMonth = new Date(nowLocal)
-          prevMonth.setMonth(nowLocal.getMonth() - 1)
-          return created.getMonth() === prevMonth.getMonth() && created.getFullYear() === prevMonth.getFullYear()
-        }
-        default:
-          return true
-      }
-    })
-  }, [allOrders, dateFilter])
-
-  const readyOrdersList = useMemo(
-  () => filteredOrders.filter((o) => (o.status || "").toLowerCase() === "ready"),
-  [filteredOrders]
-)
-
   // ---------- helpers ----------
   const parseDate = (d?: string | number) => {
     if (!d) return null
@@ -157,12 +106,57 @@ const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
     return parsed
   }
 
+  const startOfWeek = (d: Date) => {
+    const copy = new Date(d)
+    const day = copy.getDay()
+    copy.setDate(copy.getDate() - day)
+    copy.setHours(0, 0, 0, 0)
+    return copy
+  }
+
   const inRange = (d?: string | number, rangeKey?: typeof dateFilter) => {
     if (!d) return false
-    if (!rangeKey || rangeKey === "all") return true
     const dt = parseDate(d)
     if (!dt) return false
-    return dt.toDateString() === new Date().toDateString()
+
+    // If a custom from/to date range is set, it takes precedence over the preset dateFilter
+    if (fromDate || toDate) {
+      let from = fromDate ? parseDate(fromDate) : null
+      let to = toDate ? parseDate(toDate) : null
+      if (from) from.setHours(0, 0, 0, 0)
+      if (to) to.setHours(23, 59, 59, 999)
+      if (from && to) return dt >= from && dt <= to
+      if (from) return dt >= from
+      if (to) return dt <= to
+      return true
+    }
+
+    const nowLocal = new Date()
+
+    switch (rangeKey) {
+      case "today":
+        return dt.toDateString() === nowLocal.toDateString()
+      case "yesterday": {
+        const diffDays = Math.floor((nowLocal.getTime() - dt.getTime()) / (1000 * 60 * 60 * 24))
+        return diffDays === 1
+      }
+      case "this_week":
+        return startOfWeek(dt).toDateString() === startOfWeek(nowLocal).toDateString()
+      case "last_week": {
+        const lastWeek = new Date(nowLocal)
+        lastWeek.setDate(nowLocal.getDate() - 7)
+        return startOfWeek(dt).toDateString() === startOfWeek(lastWeek).toDateString()
+      }
+      case "this_month":
+        return dt.getMonth() === nowLocal.getMonth() && dt.getFullYear() === nowLocal.getFullYear()
+      case "last_month": {
+        const prevMonth = new Date(nowLocal)
+        prevMonth.setMonth(nowLocal.getMonth() - 1)
+        return dt.getMonth() === prevMonth.getMonth() && dt.getFullYear() === prevMonth.getFullYear()
+      }
+      default:
+        return true
+    }
   }
 
   const countToday = (items: any[], dateField = "createdAt") => {
@@ -234,56 +228,51 @@ const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
       setLoading(false)
     }
   }, [])
-const fetchSellerRevenue = useCallback(async () => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
-  if (!token) return
-  try {
-    const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/seller-revenue", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    // API returns object with totalRevenue, totalOrders, netProfit, breakdowns, etc.
-    setSellerRevenue(res.data || null)
-  } catch (err) {
-    console.error("Error fetching seller revenue:", err)
-    setSellerRevenue(null)
-  }
-}, [])
-useEffect(() => {
-  fetchData()
-  fetchRevenueData()
-  fetchSellerRevenue()
-}, [fetchData, fetchRevenueData, fetchSellerRevenue])
 
-  // wrappers for child modals
-  const fetchOrders = useCallback(async () => {
-    await fetchData()
-    toast.success("Orders refreshed") // Use toast here
-  }, [fetchData])
-
-  const fetchTickets = useCallback(async () => {
-    await fetchData()
-  }, [fetchData])
+  const fetchSellerRevenue = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+    if (!token) return
+    try {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/seller-revenue", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      // API returns object with totalRevenue, totalOrders, netProfit, breakdowns, etc.
+      setSellerRevenue(res.data || null)
+    } catch (err) {
+      console.error("Error fetching seller revenue:", err)
+      setSellerRevenue(null)
+    }
+  }, [])
 
   useEffect(() => {
     fetchData()
     fetchRevenueData()
-  }, [fetchData, fetchRevenueData])
+    fetchSellerRevenue()
+  }, [fetchData, fetchRevenueData, fetchSellerRevenue])
 
   // ---------- filtering derived state ----------
-  useEffect(() => {
-    // apply search + dateRange to get filtered orders then compute counts
-    const query = searchQuery.trim().toLowerCase()
-    const filtered = allOrders.filter((o) => {
-      // search against status or id or customer fields
-      const status = (o.status || "").toString().toLowerCase()
-      const id = (o.id || "").toString().toLowerCase()
-      const textMatch =
-        !query || status.includes(query) || id.includes(query) || JSON.stringify(o).toLowerCase().includes(query)
-      const dateMatch = dateFilter === "all" ? true : inRange(o.createdAt, dateFilter)
-      return textMatch && dateMatch
-    })
+  const filteredOrders = useMemo(() => {
+    if (!allOrders || allOrders.length === 0) return []
 
+    const nowLocal = new Date()
+
+    return allOrders.filter((order) => {
+      // apply date range filter (use preset dateFilter unless overridden by from/to)
+      if (!inRange(order.createdAt, dateFilter)) return false
+      // apply search filter
+      const query = searchQuery.trim().toLowerCase()
+      if (!query) return true
+      const status = (order.status || "").toString().toLowerCase()
+      const id = (order.id || "").toString().toLowerCase()
+      const textMatch = status.includes(query) || id.includes(query) || JSON.stringify(order).toLowerCase().includes(query)
+      return textMatch
+    })
+  }, [allOrders, dateFilter, searchQuery, fromDate, toDate])
+
+  useEffect(() => {
     // compute counts from filtered set
+    const filtered = filteredOrders
+
     const countBy = (s: string) => filtered.filter((o) => (o.status || "").toLowerCase() === s).length
 
     setProcessingOrders(countBy("processing"))
@@ -294,7 +283,13 @@ useEffect(() => {
     setPickupOrders(countBy("pickup"))
     setTotalOrders(filtered.length)
     setNewOrdersToday(countToday(filtered, "createdAt"))
-  }, [allOrders, searchQuery, dateFilter])
+  }, [filteredOrders])
+
+  // ---------- revenue filtering: compute revenue from filtered orders when dateFilter != 'all' ----------
+  const totalRevenueFromFilteredOrders = useMemo(() => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0
+    return filteredOrders.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0)
+  }, [filteredOrders])
 
   // ---------- small UI helpers ----------
   const percent = (part: number, total: number) => {
@@ -340,13 +335,13 @@ useEffect(() => {
       bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
       action: () => setOpenAddOrder(true),
     },
-  {
-  title: "Create New Ready Order",
-  icon: IconShoppingBag,
-  color: "text-blue-600",
-  bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-  action: () => setOpenAddReadyOrder(true), // ✅ this opens modal
-},
+    {
+      title: "Create New Ready Order",
+      icon: IconShoppingBag,
+      color: "text-blue-600",
+      bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
+      action: () => setOpenAddReadyOrder(true), // ✅ this opens modal
+    },
     {
       title: "Create Support Ticket",
       icon: IconTicket,
@@ -361,7 +356,7 @@ useEffect(() => {
       bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
       link: "/en/seller/Invoices",
     },
-     {
+    {
       title: "My Pickups",
       icon: IconFile,
       color: "text-orange-600",
@@ -371,7 +366,7 @@ useEffect(() => {
   ]
 
   const orderColumns: ColumnDef<Order>[] = [
- {
+    {
       header: "Customer",
       id: "customer_group",
       // a compact customer cell that shows name + phone on two lines
@@ -392,7 +387,7 @@ useEffect(() => {
     {
       header: "Total Amount",
       accessorKey: "totalAmount",
-      cell: ({ row }) => <div>DH {row.original.totalAmount.toLocaleString()}</div>,
+      cell: ({ row }) => <div>DH {Number(row.original.totalAmount || 0).toLocaleString()}</div>,
     },
     {
       header: "Status",
@@ -411,15 +406,27 @@ useEffect(() => {
     {
       header: "Created",
       accessorKey: "createdAt",
-      cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
+      cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleString()}</div>,
     },
   ]
 
-const table = useReactTable({
-  data: readyOrdersList,
-  columns: orderColumns,
-  getCoreRowModel: getCoreRowModel(),
-})
+  // recent orders (sorted desc) - used at bottom table instead of ready-only list
+  const recentOrdersList = useMemo(() => {
+    const sorted = [...filteredOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return sorted.slice(0, 50) // limit rows to 50 for performance
+  }, [filteredOrders])
+
+  const readyOrdersList = useMemo(
+    () => filteredOrders.filter((o) => (o.status || "").toLowerCase() === "ready"),
+    [filteredOrders]
+  )
+
+  const table = useReactTable({
+    data: recentOrdersList,
+    columns: orderColumns,
+    getCoreRowModel: getCoreRowModel(),
+  })
+
   return (
     <div className="p-4 lg:p-6 space-y-6">
       {/* Quick Actions */}
@@ -429,10 +436,22 @@ const table = useReactTable({
 
           {/* search + date filter */}
           <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-         
+            <input
+              className="px-3 py-1 rounded-md border bg-white"
+              placeholder="Search orders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search orders"
+            />
+
             <select
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as any)}
+              onChange={(e) => {
+                setDateFilter(e.target.value as any)
+                // clear manual from/to when using preset filters
+                setFromDate(null)
+                setToDate(null)
+              }}
               className="px-3 py-1 rounded-md border bg-white"
               aria-label="Filter date range"
             >
@@ -444,6 +463,47 @@ const table = useReactTable({
               <option value="this_month">This Month</option>
               <option value="last_month">Last Month</option>
             </select>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm">From:</label>
+              <input
+                type="date"
+                value={fromDate ?? ""}
+                onChange={(e) => {
+                  setFromDate(e.target.value || null)
+                  // when using manual range, clear preset filter
+                  if (e.target.value) setDateFilter('all')
+                }}
+                className="px-3 py-1 rounded-md border bg-white"
+                aria-label="From date"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm">To:</label>
+              <input
+                type="date"
+                value={toDate ?? ""}
+                onChange={(e) => {
+                  setToDate(e.target.value || null)
+                  if (e.target.value) setDateFilter('all')
+                }}
+                className="px-3 py-1 rounded-md border bg-white"
+                aria-label="To date"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFromDate(null)
+                setToDate(null)
+                setDateFilter('all')
+              }}
+              className="px-3 py-1 rounded-md border bg-white text-sm"
+            >
+              Clear
+            </button>
           </div>
         </CardHeader>
 
@@ -504,21 +564,21 @@ const table = useReactTable({
           onOpenChange={setOpenAddOrder}
           onOrderAdded={() => {
             setOpenAddOrder(false)
-            fetchOrders()
+            fetchData()
             toast.success("Order added successfully!")
           }}
         />
-{openAddReadyOrder && (
-  <AddReadyOrder
-    open={openAddReadyOrder}
-    onOpenChange={setOpenAddReadyOrder}
-    onOrderAdded={() => {
-      setOpenAddReadyOrder(false)
-      fetchOrders()
-      toast.success("Ready order added successfully!")
-    }}
-  />
-)}
+        {openAddReadyOrder && (
+          <AddReadyOrder
+            open={openAddReadyOrder}
+            onOpenChange={setOpenAddReadyOrder}
+            onOrderAdded={() => {
+              setOpenAddReadyOrder(false)
+              fetchData()
+              toast.success("Ready order added successfully!")
+            }}
+          />
+        )}
 
 
 
@@ -527,7 +587,7 @@ const table = useReactTable({
           onOpenChange={setOpenAddTicket}
           onTicketAdded={() => {
             setOpenAddTicket(false)
-            fetchTickets()
+            fetchData()
           }}
         />
       </Card>
@@ -600,42 +660,43 @@ const table = useReactTable({
             </div>
           </CardContent>
         </Card>
-<Card className="hover:shadow-lg transition-all duration-200">
-  <CardHeader className="flex items-center justify-between">
-    <div>
-      <CardTitle>Total Revenue</CardTitle>
-    </div>
-    <IconTrendingUp className="text-green-500 h-6 w-6" />
-  </CardHeader>
-  <CardContent>
-    <div className="flex items-baseline justify-between">
-      <div className="text-3xl font-semibold">
-        {sellerRevenue == null
-          ? "..."
-          : (
-              // format number with two decimals
-              Number(sellerRevenue.totalRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        <Card className="hover:shadow-lg transition-all duration-200">
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <CardTitle>Total Revenue</CardTitle>
+            </div>
+            <IconTrendingUp className="text-green-500 h-6 w-6" />
+          </CardHeader>
+          <CardContent>
+            {/* Always compute revenue from the currently filtered orders so presets and manual ranges apply */}
+            <div className="flex items-baseline justify-between">
+              <div className="text-3xl font-semibold">
+                {loading ? "..." : Number(totalRevenueFromFilteredOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div className="text-sm text-muted-foreground text-right">
+                <div>{filteredOrders.length != null ? `${filteredOrders.length} orders` : "—"}</div>
+                <div className="text-xs mt-1">{dateFilter === 'all' ? (sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "") : "Net: calculated from filtered orders"}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                <IconArrowUpRight className="h-4 w-4 text-green-500" />
+                <span>{`${Number(totalRevenueFromFilteredOrders || 0).toFixed(2)} this period`}</span>
+              </div>
+              <div className="text-xs">Revenue</div>
+            </div>
+
+            <div className="mt-3">
+              <ProgressBar value={Math.min(100, (Number(totalRevenueFromFilteredOrders || 0) % 100))} />
+            </div>
+
+            {/* when showing All, still show API totals below as a reference */}
+            {dateFilter === 'all' && sellerRevenue?.totalRevenue != null && (
+              <div className="mt-2 text-xs text-muted-foreground">All-time (API): {Number(sellerRevenue.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             )}
-      </div>
-      <div className="text-sm text-muted-foreground text-right">
-        <div>{sellerRevenue?.totalOrders != null ? `${sellerRevenue.totalOrders} orders` : "—"}</div>
-        <div className="text-xs mt-1">{sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}</div>
-      </div>
-    </div>
-
-    <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-      <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-        <IconArrowUpRight className="h-4 w-4 text-green-500" />
-        <span>{sellerRevenue?.breakdowns?.monthly?.length ? `${sellerRevenue.breakdowns.monthly.reduce((acc:any, m:any) => acc + (m.revenue||0), 0).toFixed(2)} this period` : ""}</span>
-      </div>
-      <div className="text-xs">Revenue</div>
-    </div>
-
-    <div className="mt-3">
-      <ProgressBar value={sellerRevenue?.totalRevenue ? Math.min(100, (sellerRevenue.totalRevenue % 100)) : 0} />
-    </div>
-  </CardContent>
-</Card>
+          </CardContent>
+        </Card>
         {/* Processing */}
         <Card className="hover:shadow-lg transition-all duration-200">
           <CardHeader className="flex items-center justify-between">
@@ -840,46 +901,46 @@ const table = useReactTable({
         </Card>
       </div>
 
-    
+
 
       {/* Orders table or empty state */}
-    {readyOrdersList.length > 0 ? (
-  <Card>
-    <CardHeader>
-      <CardTitle>Ready Orders</CardTitle>
-    </CardHeader>
-    <CardContent>
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </CardContent>
-  </Card>
-) : (
-  <Card>
-    <CardContent className="text-center text-gray-500 py-10">No ready orders match the selected filter.</CardContent>
-  </Card>
-)}
+      {recentOrdersList.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="text-center text-gray-500 py-10">No recent orders match the selected filter.</CardContent>
+        </Card>
+      )}
 
     </div>
   )

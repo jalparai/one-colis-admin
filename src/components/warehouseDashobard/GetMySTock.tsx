@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ChevronDown } from "lucide-react"
+import toast, { Toaster } from "react-hot-toast"
 
 type Product = {
   _id: string
@@ -60,12 +61,21 @@ export function WarehouseProductsTable() {
   >("all")
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({})
 
+  // For inline editing
+  const [editingId, setEditingId] = React.useState<string | null>(null)
+  const [editingValue, setEditingValue] = React.useState<string>("")
+  const [loadingQtyId, setLoadingQtyId] = React.useState<string | null>(null)
+
   // 🔹 Fetch warehouse products
   const fetchProducts = React.useCallback(async () => {
     try {
       setLoading(true)
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
-      if (!token) return
+      if (!token) {
+        toast.error("No token found. Please log in.")
+        setLoading(false)
+        return
+      }
 
       const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/warehouse/e/getMyProducts", {
         headers: { Authorization: `Bearer ${token}` },
@@ -77,12 +87,14 @@ export function WarehouseProductsTable() {
       // 🔹 Include seller info if available (API may not send seller details — mock if needed)
       const formattedProducts = (data?.products || []).map((p: any) => ({
         ...p,
-        seller: p.sellerDetails || { name: "Unknown Seller", email: "N/A" }, // Fallback
+        seller: p.sellerDetails || p.seller || { name: "Unknown Seller", email: "N/A" }, // Fallback
+        quantity: Number(p.quantity ?? p.qty ?? 0),
       }))
 
       setProducts(formattedProducts)
     } catch (err) {
       console.error("❌ Error fetching products:", err)
+      toast.error("Failed to fetch products")
     } finally {
       setLoading(false)
     }
@@ -91,6 +103,58 @@ export function WarehouseProductsTable() {
   React.useEffect(() => {
     fetchProducts()
   }, [fetchProducts])
+
+  // 🔹 Update quantity (PATCH)
+  const updateQuantity = React.useCallback(
+    async (productId: string, newQty: number) => {
+      try {
+        if (newQty < 0) {
+          toast.error("Quantity cannot be negative")
+          return
+        }
+
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+        if (!token) {
+          toast.error("No token found. Please log in.")
+          return
+        }
+
+        setLoadingQtyId(productId)
+
+        // Patch endpoint as requested (body contains quantity)
+        const url = `https://cod-ecommerce-two.vercel.app/api/warehouse/e/product/${productId}/quantity`
+        const payload = { quantity: newQty }
+
+        const res = await axios.patch(url, payload, {
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          timeout: 10000,
+        })
+
+        // If successful, update local state
+        setProducts((prev) => prev.map((p) => (p._id === productId ? { ...p, quantity: newQty } : p)))
+        toast.success("Quantity updated")
+        setEditingId(null)
+        setEditingValue("")
+        return res.data
+      } catch (err: any) {
+        console.error("[updateQuantity] error:", err)
+        const status = err?.response?.status
+        const data = err?.response?.data
+        if (status === 400) {
+          toast.error(data?.message || "Invalid quantity")
+        } else if (status === 401 || status === 403) {
+          toast.error("Authentication failed. Please log in again.")
+        } else if (status === 404) {
+          toast.error("Endpoint not found. Check server URL.")
+        } else {
+          toast.error(data?.message || "Failed to update quantity")
+        }
+      } finally {
+        setLoadingQtyId(null)
+      }
+    },
+    [],
+  )
 
   // 🔹 Date filters
   const filteredByDate = React.useMemo(() => {
@@ -159,25 +223,92 @@ export function WarehouseProductsTable() {
     )
   }, [rangeFiltered, globalFilter])
 
-  // 🔹 Columns (Seller info shown here)
+  // 🔹 Columns (Seller info shown here + Actions column)
   const columns: ColumnDef<Product>[] = [
     { accessorKey: "name", header: "Product Name" },
     { accessorKey: "sku", header: "SKU" },
     { accessorKey: "category", header: "Category" },
-    { accessorKey: "quantity", header: "Quantity" },
-    { accessorKey: "price", header: "Price ($)" },
     {
-      accessorKey: "seller",
-      header: "Seller Details",
+      accessorKey: "quantity",
+      header: "Quantity",
       cell: ({ row }) => {
-        const seller = row.original.seller
-        return seller ? `${seller.name} (${seller.email})` : "-"
+        const id = row.original._id
+        // if editing this row, show the inline input
+        if (editingId === id) {
+          return (
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                value={editingValue}
+                onChange={(e) => setEditingValue(e.target.value)}
+                className="w-28"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  const parsed = Number(editingValue)
+                  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
+                    toast.error("Enter a valid number")
+                    return
+                  }
+                  updateQuantity(id, Math.max(0, Math.floor(parsed)))
+                }}
+                disabled={loadingQtyId === id}
+              >
+                {loadingQtyId === id ? "Saving..." : "Save"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditingId(null)
+                  setEditingValue("")
+                }}
+                disabled={loadingQtyId === id}
+              >
+                Cancel
+              </Button>
+            </div>
+          )
+        }
+
+        // default display
+        return <span>{row.original.quantity}</span>
       },
     },
+    { accessorKey: "price", header: "Price ($)" },
+  
     {
       accessorKey: "createdAt",
       header: "Created At",
-      cell: (row) => new Date(row.getValue() as string).toLocaleString(),
+      cell: (row) => {
+        const raw = row.getValue() as string
+        const d = new Date(raw)
+        return isNaN(d.getTime()) ? "-" : d.toLocaleString()
+      },
+    },
+    // Actions column
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const id = row.original._id
+        return (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingId(id)
+                setEditingValue(String(row.original.quantity ?? 0))
+              }}
+            >
+              Edit Qty
+            </Button>
+          </div>
+        )
+      },
     },
   ]
 
@@ -199,6 +330,7 @@ export function WarehouseProductsTable() {
 
   return (
     <div className="w-full">
+      <Toaster position="top-right" />
       {/* Filters */}
       <div className="flex flex-wrap justify-between items-center py-4 gap-4">
         <Input

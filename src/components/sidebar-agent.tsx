@@ -34,7 +34,7 @@ export function AppSidebarAgent({
         icon: ListIcon,
       },
        {
-        title: t("agentSidebar.returnNote", { defaultValue: "Return-Notes" }),
+        title: t("agentSidebar.returnNote", { defaultValue: "Delivery & Return Notes" }),
         url: `/${locale}/agent/Return-Notes`,
         icon: FileIcon,
       },

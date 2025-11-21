@@ -219,22 +219,22 @@ export default function FinancialSummaryPage() {
   const metrics = [
     {
       title: "Total Revenue",
-      value: `$${data.totalRevenue.toLocaleString()}`,
+      value: `${data.totalRevenue.toLocaleString()} DH`,
       trend: "up" as const,
     },
     {
       title: "Total Payouts",
-      value: `$${data.totalPayouts.toLocaleString()}`,
+      value: `${data.totalPayouts.toLocaleString()} DH`,
       trend: data.totalPayouts > 0 ? "down" : "up",
     },
     {
       title: "Total Commission",
-      value: `$${data.totalCommission.toLocaleString()}`,
+      value: `${data.totalCommission.toLocaleString()} DH`,
       trend: "up" as const,
     },
     {
       title: "Net Profit",
-      value: `$${data.netProfit.toLocaleString()}`,
+      value: `${data.netProfit.toLocaleString()} DH`,
       trend: "up" as const,
     },
   ]

@@ -22,9 +22,16 @@ import { Check, ChevronsUpDown } from "lucide-react";
 type Seller = { id: string; name: string };
 type Product = { id: string; name: string; sku?: string; price?: number; sellerId?: string; qty?: number };
 type OrderItem = {
-  productId?: string | null; sku?: string | null; productName?: string; quantity?: number; unitPrice?: number; total?: number, open?: boolean
-  searchInput?: string
+  productId?: string | null;
+  sku?: string | null;
+  productName?: string;
+  quantity?: number;
+  unitPrice?: number;
+  total?: number;
+  open?: boolean;
+  searchInput?: string;
 };
+type CityFee = { city: string; fee?: number };
 
 export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   const API_BASE = "https://cod-ecommerce-two.vercel.app";
@@ -35,16 +42,22 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   const [notes, setNotes] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showSellerDropdown, setShowSellerDropdown] = useState(false)
-  const [open, setOpen] = useState(false)
-  const [searchInput, setSearchInput] = useState("")
+  const [open, setOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
 
-  const [customerName, setCustomerName] = useState("")
-  const [customerPhone, setCustomerPhone] = useState("")
-  const [customerAddress, setCustomerAddress] = useState("")
-  const [customerCity, setCustomerCity] = useState("")
-  const [customerPostalCode, setCustomerPostalCode] = useState("")
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerCity, setCustomerCity] = useState("");
+  const [customerPostalCode, setCustomerPostalCode] = useState("");
+
+  // city fees state
+  const [cityFees, setCityFees] = useState<CityFee[]>([]);
+  const [cityLoading, setCityLoading] = useState(false);
+
+  // city popover state
+  const [cityOpen, setCityOpen] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
 
   // fetch sellers
   useEffect(() => {
@@ -61,12 +74,12 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
       }
     })();
   }, []);
+
   const filteredSellers = sellers.filter((s) =>
     s.name.toLowerCase().includes(searchInput.toLowerCase())
-  )
+  );
 
-  const selectedSellerName = sellers.find((s) => s.id === sellerId)?.name
-
+  const selectedSellerName = sellers.find((s) => s.id === sellerId)?.name;
 
   // fetch all stock from the provided endpoint
   useEffect(() => {
@@ -89,6 +102,36 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
         setProducts([]);
       }
     })();
+  }, []);
+
+  // fetch city fees and normalize the shape
+  useEffect(() => {
+    async function fetchCityFees() {
+      setCityLoading(true);
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await fetch(`${API_BASE}/api/admin/city-fees`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch city fees");
+        const resData = await res.json();
+        // Normalize different possible shapes from the API
+        const rawList: any[] = Array.isArray(resData) ? resData : (resData?.data ?? resData?.cityFees ?? []);
+        const normalized: CityFee[] = (rawList || []).map((c: any) => ({
+          city: String(c.city ?? c.name ?? c.cityName ?? c.city_name ?? c.name_en ?? "").trim(),
+          fee: c.fee !== undefined ? Number(c.fee) : (c.charge ?? c.amount ?? undefined) !== undefined ? Number(c.charge ?? c.amount) : undefined,
+        })).filter(cf => cf.city);
+        setCityFees(normalized);
+      } catch (err) {
+        console.error("Unable to load city fees", err);
+        toast.error("Unable to load city fees");
+      } finally {
+        setCityLoading(false);
+      }
+    }
+
+    fetchCityFees();
   }, []);
 
   const availableProducts = sellerId ? products.filter(p => String(p.sellerId) === String(sellerId)) : products;
@@ -124,10 +167,10 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
       if (!sellerId) { setMessage("Please select a seller"); setLoading(false); return; }
       if (!items.length) { setMessage("Add at least one product"); setLoading(false); return; }
 
-
       if (!customerName || !customerPhone || !customerAddress || !customerCity) {
-        toast.error("Please fill customer name, phone, address, and city")
-        return
+        toast.error("Please fill customer name, phone, address, and city");
+        setLoading(false);
+        return;
       }
 
       for (const [i, it] of items.entries()) {
@@ -161,8 +204,6 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
 
       if (res.status >= 200 && res.status < 300) {
         const created = res.data?.data ?? res.data?.order ?? res.data;
-
-        // show a success toast that includes the user-facing order id (tracking number)
         const createdOrderId =
           created?.orderId ??
           created?.order_number ??
@@ -173,18 +214,16 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
 
         toast.success(createdOrderId ? `Order created: ${createdOrderId}` : "Order created");
 
-
         setMessage("Order created");
         setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
         setNotes("");
         setSellerId("");
-        setCustomerName("")
-        setCustomerPhone("")
-        setCustomerAddress("")
-        setCustomerCity("")
-        setCustomerPostalCode("")
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setCustomerCity("");
+        setCustomerPostalCode("");
         onOrderAdded?.();
-        toast.success("Order created");
       } else {
         setMessage(res.data?.message ?? `Failed (${res.status})`);
         toast.error(res.data?.message ?? `Failed (${res.status})`);
@@ -198,14 +237,21 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest(".relative")) setShowSellerDropdown(false)
-    }
-    document.addEventListener("click", handleClickOutside)
-    return () => document.removeEventListener("click", handleClickOutside)
-  }, [])
+      const target = e.target as HTMLElement;
+      if (!target.closest(".relative")) {
+        /* nothing specific for seller anymore, kept for legacy UI behavior */
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  const selectedCityFee = cityFees.find(c => c.city === customerCity)?.fee;
+
+  const filteredCities = cityFees.filter(c => c.city.toLowerCase().includes(citySearch.toLowerCase()));
 
   return (
     <Sheet>
@@ -219,7 +265,7 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
           <SheetDescription>Choose seller and products to create a new order.</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleAddOrder} className="grid gap-4 px-4">
+        <form onSubmit={handleAddOrder} className="grid gap-4 px-4 overflow-scroll">
           <div>
             <Label className="mb-2">Seller</Label>
             <Popover open={open} onOpenChange={setOpen}>
@@ -252,10 +298,10 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                         <button
                           key={s.id}
                           onClick={() => {
-                            setSellerId(s.id)
-                            setSearchInput("")
-                            setOpen(false)
-                            setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }])
+                            setSellerId(s.id);
+                            setSearchInput("");
+                            setOpen(false);
+                            setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
                           }}
                           className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${sellerId === s.id ? "bg-accent text-accent-foreground" : ""
                             }`}
@@ -281,10 +327,70 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
               <Input placeholder="Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
               <Input placeholder="Phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} required />
               <Input placeholder="Address" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} required />
-              <Input placeholder="City" value={customerCity} onChange={(e) => setCustomerCity(e.target.value)} required />
+
+              {/* city popover */}
+              <div>
+                <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={cityOpen}
+                      className="w-full justify-between bg-transparent"
+                      onClick={() => setCityOpen(!cityOpen)}
+                    >
+                      <span className="truncate">{customerCity || (cityLoading ? "Loading cities..." : "Select city...")}</span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent className="w-full p-0" align="start">
+                    <div className="p-2 space-y-2">
+                      <Input
+                        placeholder="Search city..."
+                        value={citySearch}
+                        onChange={(e) => setCitySearch(e.target.value)}
+                        className="h-8"
+                        autoFocus
+                      />
+
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {cityLoading ? (
+                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">Loading cities...</div>
+                        ) : filteredCities.length > 0 ? (
+                          filteredCities.map((c) => (
+                            <button
+                              key={c.city}
+                              onClick={() => {
+                                setCustomerCity(c.city);
+                                setCitySearch("");
+                                setCityOpen(false);
+                              }}
+                              className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${customerCity === c.city ? "bg-accent text-accent-foreground" : ""}`}
+                            >
+                              <span>{c.city}{c.fee !== undefined ? ` — ${c.fee}` : ""}</span>
+                              {customerCity === c.city && <Check className="h-4 w-4" />}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                            No cities found
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {selectedCityFee !== undefined && (
+                  <div className="text-sm mt-1">Delivery fee: {selectedCityFee}</div>
+                )}
+              </div>
+
               <Input placeholder="Postal Code" value={customerPostalCode} onChange={(e) => setCustomerPostalCode(e.target.value)} />
             </div>
           </div>
+
           <div>
             <Label className="mb-2">Products</Label>
             <div className="space-y-2">
@@ -334,7 +440,7 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                                         unitPrice: p.price,
                                         searchInput: "",
                                         open: false,
-                                      })
+                                      });
                                     }}
                                     className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${it.productId === p.id ? "bg-accent text-accent-foreground" : ""
                                       }`}
@@ -355,8 +461,6 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                   </div>
 
                   <div className="grid grid-cols-2 mt-4 gap-2">
-
-
                     <div className="col-span-1">
                       <Label className="mb-2">Qty</Label>
                       <Input type="number" min={1} value={it.quantity ?? 1} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value || 0) })} />
@@ -364,12 +468,9 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
 
                     <div className="col-span-1">
                       <Label className="mb-2">Amount</Label>
-
                       <Input value={it.unitPrice ?? ""} readOnly placeholder="unit price" />
                     </div>
-
                   </div>
-                  {/* <div className="col-span-1 text-sm pt-2">{((it.total ?? 0)).toFixed ? (it.total ?? 0).toFixed(2) : it.total ?? 0}</div> */}
 
                   <div className="col-span-12 sm:col-span-12">
                     <div className="flex gap-2 mt-2">

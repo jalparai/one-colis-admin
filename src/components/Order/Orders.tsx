@@ -15,7 +15,7 @@ import {
   type RowData,
   flexRender,
 } from "@tanstack/react-table";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown, DownloadIcon, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -106,7 +106,8 @@ const statuses = [
 export const getOrderColumns = (
   onStatusUpdate: (id: string, status: string) => Promise<void>,
   onDelete: (id: string) => Promise<void>,
-  onUpdated?: () => void
+  onUpdated?: () => void,
+    onPrintLabel?: (id: string) => Promise<void> // <-- new optional callback
 ): ColumnDef<Order>[] => [
    {
       id: "select",
@@ -202,6 +203,8 @@ export const getOrderColumns = (
         </ul>
       ),
     },
+        // --- Print Label column (separate from actions) ---
+ 
     {
       accessorKey: "totalAmount",
       header: "Total Amount",
@@ -239,6 +242,40 @@ export const getOrderColumns = (
       accessorKey: "createdAt",
       header: "Date",
       cell: ({ row }) => <div>{new Date(row.getValue("createdAt") as string).toLocaleDateString()}</div>,
+    },
+   {
+      id: "print_label",
+      header: "Label",
+      cell: ({ row }) => {
+        const order = row.original;
+        const [downloading, setDownloading] = React.useState(false);
+        const isReady = order.status === "ready";
+
+        const onClick = async () => {
+          if (!onPrintLabel) {
+            console.warn("onPrintLabel handler not provided");
+            return;
+          }
+          setDownloading(true);
+          try {
+            await onPrintLabel(order.id);
+          } catch (err) {
+            console.error("Print label error:", err);
+          } finally {
+            setDownloading(false);
+          }
+        };
+
+        return isReady ? (
+          <Button size="sm" onClick={onClick} disabled={downloading}>
+            {/* {downloading ? "Downloading..." : "Label Export"} */}
+            <DownloadIcon />
+          </Button>
+        ) : (
+          <div className="text-sm text-muted-foreground">—</div>
+        );
+      },
+      enableSorting: false,
     },
 
     // Actions column — uses callbacks passed in
@@ -345,35 +382,7 @@ const handleAssignToAgent = async () => {
   }
 };
 
-  const handlePrintLabel = async () => {
-          try {
-            setLoading(true);
-            const token = localStorage.getItem("token");
-            if (!token) throw new Error("Missing authentication token");
 
-            const endpoint = `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order.id}/label`;
-
-            const res = await axios.get(endpoint, {
-              headers: { Authorization: `Bearer ${token}` },
-              responseType: "blob",
-            });
-
-            const blob = new Blob([res.data], { type: "text/html" });
-            const url = window.URL.createObjectURL(blob);
-            window.open(url, "_blank");
-          } catch (err: any) {
-            console.error("Print Label Error:", err);
-            if (err.response?.data instanceof Blob) {
-              const reader = new FileReader();
-              reader.onload = () => alert(reader.result as string);
-              reader.readAsText(err.response.data);
-            } else {
-              alert(err.message || "Error opening label");
-            }
-          } finally {
-            setLoading(false);
-          }
-        };
 
 
         const handleUpdate = async () => {
@@ -454,9 +463,7 @@ const handleAssignToAgent = async () => {
     <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
 
     <DropdownMenuSeparator />
-   {isReady && (
-                  <DropdownMenuItem onClick={handlePrintLabel}>Print Label</DropdownMenuItem>
-                )}
+ 
     {/* Assign to agent: only allow if order is ready */}
     <DropdownMenuItem
       onClick={() => {
@@ -605,6 +612,8 @@ export function OrdersTable() {
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
+  // new: dedicated city filter (input will update this)
+  const [cityFilter, setCityFilter] = React.useState("");
 
   // --- Bulk action state ---
   const [assignBulkOpen, setAssignBulkOpen] = React.useState(false);
@@ -1012,6 +1021,76 @@ export function OrdersTable() {
       }
     });
   }, [orders, dateFilter]);
+  // ----- Add this download helper to OrdersTable (above useReactTable) -----
+  const handleDownloadLabel = async (orderId: string) => {
+    if (!orderId) {
+      toast.error("Missing order id");
+      return;
+    }
+    let loadingToastId: string | undefined;
+    try {
+      loadingToastId = toast.loading("Downloading label...");
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) throw new Error("Missing authentication token");
+
+      const endpoint = `https://cod-ecommerce-two.vercel.app/api/seller/orders/${orderId}/shipping-label`;
+
+      const res = await axios.get(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+
+      const contentType = res.headers?.["content-type"] || "application/octet-stream";
+      let filename = "label";
+      const disposition = res.headers?.["content-disposition"];
+      if (disposition) {
+        const fnStarMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+        const fnMatch = disposition.match(/filename="?([^";]+)"?/);
+        if (fnStarMatch && fnStarMatch[1]) {
+          try {
+            filename = decodeURIComponent(fnStarMatch[1]);
+          } catch {
+            filename = fnStarMatch[1];
+          }
+        } else if (fnMatch && fnMatch[1]) {
+          filename = fnMatch[1];
+        }
+      } else {
+        if (contentType.includes("pdf")) filename += ".pdf";
+        else if (contentType.includes("html")) filename += ".html";
+        else if (contentType.includes("zip")) filename += ".zip";
+        else if (contentType.includes("text")) filename += ".txt";
+        else filename += ".bin";
+      }
+
+      const blob = new Blob([res.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Label downloaded");
+    } catch (err: any) {
+      console.error("Download label error", err);
+      const errData = err?.response?.data;
+      if (errData instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => alert(reader.result as string);
+        reader.readAsText(errData);
+      } else {
+        toast.error(err?.response?.data?.message || err?.message || "Error downloading label");
+      }
+    } finally {
+      if (loadingToastId) toast.dismiss(loadingToastId);
+      // optionally refresh or re-fetch orders if required:
+      // await fetchOrders();
+    }
+  };
 
   // Apply range + search
   const timeFilteredOrders = React.useMemo(() => {
@@ -1025,7 +1104,14 @@ export function OrdersTable() {
     });
   }, [filteredOrders, rangeFilter]);
 
-  const finalOrders = React.useMemo(() => {
+   const finalOrders = React.useMemo(() => {
+    // If cityFilter is provided, use it to filter by customer.city only
+    if (cityFilter && cityFilter.trim()) {
+      const q = cityFilter.toLowerCase();
+      return timeFilteredOrders.filter((o) => (o.customer?.city ?? "").toLowerCase().includes(q));
+    }
+
+    // Otherwise fall back to globalFilter (existing behavior)
     if (!globalFilter.trim()) return timeFilteredOrders;
     const q = globalFilter.toLowerCase();
     return timeFilteredOrders.filter((o) => {
@@ -1044,11 +1130,11 @@ export function OrdersTable() {
         )
       );
     });
-  }, [timeFilteredOrders, globalFilter]);
+  }, [timeFilteredOrders, globalFilter, cityFilter]);
 
   const table = useReactTable({
     data: finalOrders,
-    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders),
+    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders,handleDownloadLabel),
     state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -1096,10 +1182,15 @@ export function OrdersTable() {
     <div className="w-full">
       {/* Top bar */}
       <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
-        <Input placeholder="Search orders..." value={globalFilter ?? ""} onChange={(e) => setGlobalFilter(e.target.value)} className="max-w-sm" />
+  <Input
+    placeholder="Filter by city..."
+    value={cityFilter}
+    onChange={(e) => setCityFilter(e.target.value)}
+    className="max-w-sm"
+  />
 
         {/* Date Range Filter */}
-        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+        <div className="flex items-center gap-2">
           <label>From:</label>
           <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
           <label>To:</label>

@@ -127,6 +127,8 @@ export default function Analysis() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // date filter presets + custom range
   const [dateFilter, setDateFilter] = useState<
     | "all"
     | "today"
@@ -135,7 +137,11 @@ export default function Analysis() {
     | "lastWeek"
     | "thisMonth"
     | "lastMonth"
+    | "custom"
   >("all");
+  const [customStart, setCustomStart] = useState<string | null>(null); // YYYY-MM-DD
+  const [customEnd, setCustomEnd] = useState<string | null>(null); // YYYY-MM-DD
+
   const [openAddSeller, setOpenAddSeller] = useState(false);
   const [openAddStock, setOpenAddStock] = useState(false);
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
@@ -168,35 +174,135 @@ export default function Analysis() {
 
   const params = useParams();
   const router = useRouter();
-  const locale = params.locale as string;
+  const locale = (params as any)?.locale ?? "en";
   const { t } = useTranslation("common");
   // add near other useState(...) lines inside the Analysis component
-  const [collectedPending, setCollectedPending] = useState<
-    CollectedPendingData | null
-  >(null);
+  const [collectedPending, setCollectedPending] = useState<CollectedPendingData | null>(null);
   const [ordersView, setOrdersView] = useState<"all" | "pending">("all");
+
+  // ---------- Date helpers ----------
+  const formatDate = (d: Date) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // computeRange returns { start, end } strings for presets (YYYY-MM-DD)
+  const computeRange = (
+    filter:
+      | "all"
+      | "today"
+      | "yesterday"
+      | "thisWeek"
+      | "lastWeek"
+      | "thisMonth"
+      | "lastMonth"
+  ) => {
+    const now = new Date();
+    const today = formatDate(now);
+
+    switch (filter) {
+      case "today":
+        return { start: today, end: today };
+      case "yesterday": {
+        const y = new Date(now);
+        y.setDate(now.getDate() - 1);
+        return { start: formatDate(y), end: formatDate(y) };
+      }
+      case "thisWeek": {
+        // Monday as week start
+        const dayIndex = (now.getDay() + 6) % 7;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - dayIndex);
+        return { start: formatDate(monday), end: today };
+      }
+      case "lastWeek": {
+        const dayIndex = (now.getDay() + 6) % 7;
+        const lastWeekEnd = new Date(now);
+        lastWeekEnd.setDate(now.getDate() - dayIndex - 1); // previous Sunday
+        const lastWeekStart = new Date(lastWeekEnd);
+        lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+        return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
+      }
+      case "thisMonth": {
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: formatDate(startMonth), end: today };
+      }
+      case "lastMonth": {
+        const startLast = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endLast = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { start: formatDate(startLast), end: formatDate(endLast) };
+      }
+      default:
+        return {};
+    }
+  };
+
+  // Build params helper - accepts dateFilter and optional customStart/customEnd
+  const buildParams = (filterArg?: typeof dateFilter, customS?: string | null, customE?: string | null) => {
+    const params: Record<string, string> = {};
+    if (!filterArg || filterArg === "all") {
+      params.range = "all";
+      return params;
+    }
+
+    if (filterArg === "custom") {
+      // use provided custom dates if any
+      if (customS) {
+        params.startDate = customS;
+        params.start = customS;
+        params.from = customS;
+      }
+      if (customE) {
+        params.endDate = customE;
+        params.end = customE;
+        params.to = customE;
+      }
+      params.range = "custom";
+      return params;
+    }
+
+    const range = computeRange(filterArg);
+    if (range.start) {
+      params.startDate = range.start;
+      params.start = range.start;
+      params.from = range.start;
+    }
+    if (range.end) {
+      params.endDate = range.end;
+      params.end = range.end;
+      params.to = range.end;
+    }
+    params.range = filterArg;
+    return params;
+  };
+
+  const appendParamsToUrl = (url: string, paramsObj: Record<string, string>) => {
+    const p = new URLSearchParams(paramsObj);
+    const qs = p.toString();
+    return qs ? `${url}${url.includes("?") ? "&" : "?"}${qs}` : url;
+  };
 
   // ----------------- Table Definition -----------------
   const orderColumns: ColumnDef<Order>[] = [
     {
-      header: t('table.seller'),
+      header: t("table.seller"),
       accessorKey: "seller",
       cell: ({ row }) => <div className="font-medium">{row.original.seller}</div>,
     },
     {
-      header: t('table.email'),
+      header: t("table.email"),
       accessorKey: "sellerEmail",
-      cell: ({ row }) => (
-        <div className="text-gray-600">{row.original.sellerEmail}</div>
-      ),
+      cell: ({ row }) => <div className="text-gray-600">{row.original.sellerEmail}</div>,
     },
     {
-      header: t('table.totalAmount'),
+      header: t("table.totalAmount"),
       accessorKey: "totalAmount",
-      cell: ({ row }) => <div> DH {row.original.totalAmount.toLocaleString()}</div>,
+      cell: ({ row }) => <div> DH {row.original.totalAmount?.toLocaleString?.()}</div>,
     },
     {
-      header: t('table.status'),
+      header: t("table.status"),
       accessorKey: "status",
       cell: ({ row }) => {
         const status = row.original.status;
@@ -214,15 +320,21 @@ export default function Analysis() {
       },
     },
     {
-      header: t('table.created'),
+      header: t("table.created"),
       accessorKey: "createdAt",
       cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
     },
   ];
 
-  // ----------------- Fetch Data -----------------
+  // ----------------- Fetch Data (respects dateFilter and customStart/customEnd) -----------------
+  // now refetches when date filter / custom range / selected seller changes so charts update
   useEffect(() => {
+    let mounted = true;
+
     async function fetchData() {
+      setLoading(true);
+      setError(null);
+
       try {
         const token = localStorage.getItem("token");
         if (!token) {
@@ -236,6 +348,22 @@ export default function Analysis() {
           "Content-Type": "application/json",
         };
 
+        // Build shared params for date range & seller
+        const params = buildParams(dateFilter, customStart, customEnd);
+        if (selectedSeller) params.sellerId = selectedSeller;
+
+        // endpoints
+        const base = "https://cod-ecommerce-two.vercel.app/api/admin";
+        const deliveredUrl = appendParamsToUrl(`${base}/getDeliveredVsReturnedRatio`, params);
+        const avgDeliveryUrl = appendParamsToUrl(`${base}/getAverageDeliveryTime`, params);
+        const topSellersUrl = appendParamsToUrl(`${base}/getTopSellers`, params);
+        const cityPerfUrl = appendParamsToUrl(`${base}/city-performance`, params);
+        const cityFeesUrl = appendParamsToUrl(`${base}/city-fees`, params);
+        // orders: limit recent orders to 50, sort desc
+        const ordersParams = { ...params, limit: "50", sort: "desc" as string };
+        const ordersUrl = appendParamsToUrl(`${base}/orders`, ordersParams);
+
+        // request all in parallel
         const [
           deliveredRes,
           avgDeliveryRes,
@@ -244,42 +372,53 @@ export default function Analysis() {
           cityFeesRes,
           ordersRes,
         ] = await Promise.all([
-          fetch(
-            "https://cod-ecommerce-two.vercel.app/api/admin/getDeliveredVsReturnedRatio",
-            { headers }
-          ),
-          fetch("https://cod-ecommerce-two.vercel.app/api/admin/getAverageDeliveryTime", { headers }),
-          fetch("https://cod-ecommerce-two.vercel.app/api/admin/getTopSellers", { headers }),
-          fetch("https://cod-ecommerce-two.vercel.app/api/admin/city-performance", { headers }),
-          fetch("https://cod-ecommerce-two.vercel.app/api/admin/city-fees", { headers }),
-          fetch("https://cod-ecommerce-two.vercel.app/api/admin/orders", { headers }),
+          fetch(deliveredUrl, { headers }),
+          fetch(avgDeliveryUrl, { headers }),
+          fetch(topSellersUrl, { headers }),
+          fetch(cityPerfUrl, { headers }),
+          fetch(cityFeesUrl, { headers }),
+          fetch(ordersUrl, { headers }),
         ]);
 
+        // parse safely and gracefully
         const [
-          deliveredData,
-          avgDeliveryData,
-          topSellersData,
-          cityPerformanceData,
-          cityFeesData,
-          ordersData,
+          deliveredJson,
+          avgDeliveryJson,
+          topSellersJson,
+          cityPerfJson,
+          cityFeesJson,
+          ordersJson,
         ] = await Promise.all([
-          deliveredRes.json(),
-          avgDeliveryRes.json(),
-          topSellersRes.json(),
-          cityPerformanceRes.json(),
-          cityFeesRes.json(),
-          ordersRes.json(),
+          deliveredRes.ok ? deliveredRes.json().catch(() => ({})) : Promise.resolve({}),
+          avgDeliveryRes.ok ? avgDeliveryRes.json().catch(() => ({})) : Promise.resolve({}),
+          topSellersRes.ok ? topSellersRes.json().catch(() => ({})) : Promise.resolve({}),
+          cityPerformanceRes.ok ? cityPerformanceRes.json().catch(() => ({})) : Promise.resolve({}),
+          cityFeesRes.ok ? cityFeesRes.json().catch(() => ({})) : Promise.resolve({}),
+          ordersRes.ok ? ordersRes.json().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
         ]);
+
+        if (!mounted) return;
+
+        // Normalize shapes (try common locations)
+        const deliveredData = deliveredJson?.data ?? deliveredJson ?? { deliveredOrders: 0, returnedOrders: 0 };
+        const avgDeliveryData = Array.isArray(avgDeliveryJson?.data) ? avgDeliveryJson.data : Array.isArray(avgDeliveryJson) ? avgDeliveryJson : avgDeliveryJson?.result ?? [];
+        const topSellersData = Array.isArray(topSellersJson?.data) ? topSellersJson.data : Array.isArray(topSellersJson) ? topSellersJson : topSellersJson?.result ?? [];
+        const cityPerfData = Array.isArray(cityPerfJson?.analytics) ? cityPerfJson.analytics : Array.isArray(cityPerfJson?.data) ? cityPerfJson.data : Array.isArray(cityPerfJson) ? cityPerfJson : [];
+        const cityFeesData = Array.isArray(cityFeesJson?.data) ? cityFeesJson.data : Array.isArray(cityFeesJson) ? cityFeesJson : [];
+
+        const ordersData = ordersJson?.data ?? ordersJson ?? [];
 
         setMetrics({
-          delivered: deliveredData?.data ?? { deliveredOrders: 0, returnedOrders: 0 },
-          avgDeliveryTime: avgDeliveryData?.data ?? [],
-          topSellers: topSellersData?.data ?? [],
-          cityPerformance: cityPerformanceData?.analytics ?? [],
-          cityFees: cityFeesData?.data ?? [],
+          delivered: deliveredData,
+          avgDeliveryTime: avgDeliveryData,
+          topSellers: topSellersData,
+          cityPerformance: cityPerfData,
+          cityFees: cityFeesData,
         });
 
-        setOrders(ordersData?.data ?? []);
+        // orders - server-limited to recent (limit param). We'll still allow client-side filter as fallback.
+        setOrders(Array.isArray(ordersData) ? ordersData : []);
+
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
         setError("Failed to load dashboard data.");
@@ -289,8 +428,13 @@ export default function Analysis() {
     }
 
     fetchData();
-  }, []);
 
+    return () => {
+      mounted = false;
+    };
+  }, [dateFilter, customStart, customEnd, selectedSeller]); // re-run when filter or seller changes
+
+  // fetch sellers once (no date param)
   useEffect(() => {
     async function fetchSellers() {
       try {
@@ -314,15 +458,18 @@ export default function Analysis() {
     fetchSellers();
   }, []);
 
+  // collected/pending should also respect date filter (refetch when dateFilter changes)
   useEffect(() => {
     const fetchCollectedPending = async () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) return;
-        const res = await fetch(
+        const params = buildParams(dateFilter, customStart, customEnd);
+        const url = appendParamsToUrl(
           "https://cod-ecommerce-two.vercel.app/api/admin/getCollectedvsPending",
-          { headers: { Authorization: `Bearer ${token}` } }
+          params
         );
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         const json = await res.json();
         setCollectedPending(json?.data ?? null);
       } catch (err) {
@@ -331,10 +478,10 @@ export default function Analysis() {
     };
 
     fetchCollectedPending();
-  }, []);
+  }, [dateFilter, customStart, customEnd]);
 
-  // ----------------- Date Filter Logic -----------------
-  const now = useMemo(() => new Date(), [dateFilter]); // updates when filter changes to re-evaluate relative ranges
+  // ----------------- Date Filter Logic (client-side helpers retained) -----------------
+  const now = useMemo(() => new Date(), [dateFilter, customStart, customEnd]); // updates when filter/custom range changes
 
   const sameWeek = (d1: Date, d2: Date) => {
     const startOfWeek = (d: Date) => {
@@ -349,16 +496,24 @@ export default function Analysis() {
     return w1 === w2 && d1.getFullYear() === d2.getFullYear();
   };
 
-  // filteredOrders computed from orders + dateFilter
+  // filteredOrders computed from orders + dateFilter (client-side fallback)
   const filteredOrders = useMemo(() => {
     if (!orders || orders.length === 0) return [];
 
     const nowLocal = new Date();
     return orders.filter((order) => {
       const created = new Date(order.createdAt);
-      const diffDays = Math.floor(
-        (nowLocal.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
-      );
+
+      // If using custom range, apply it client-side as well
+      if (dateFilter === "custom") {
+        const from = customStart ? new Date(customStart + "T00:00:00") : null;
+        const to = customEnd ? new Date(customEnd + "T23:59:59") : null;
+        if (from && created < from) return false;
+        if (to && created > to) return false;
+        return true;
+      }
+
+      const diffDays = Math.floor((nowLocal.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 
       switch (dateFilter) {
         case "today":
@@ -389,9 +544,9 @@ export default function Analysis() {
           return true;
       }
     });
-  }, [orders, dateFilter]);
+  }, [orders, dateFilter, customStart, customEnd]);
 
-  // pendingOrders derived from filteredOrders
+  // filteredPendingOrders derived from filteredOrders
   const filteredPendingOrders = useMemo(() => {
     return filteredOrders.filter((o) => {
       const status = (o.status ?? "").toString().toLowerCase();
@@ -408,9 +563,7 @@ export default function Analysis() {
   }, 0) ?? 0;
 
   const netProfitAllTime = totalSellerRevenueAllTime - totalServiceRevenueAllTime;
-  const totalOrdersFromMetrics =
-    (metrics?.delivered?.deliveredOrders || 0) +
-    (metrics?.delivered?.returnedOrders || 0);
+  const totalOrdersFromMetrics = (metrics?.delivered?.deliveredOrders || 0) + (metrics?.delivered?.returnedOrders || 0);
 
   const returnRateAllTime =
     totalOrdersFromMetrics > 0
@@ -424,10 +577,7 @@ export default function Analysis() {
 
   const avgDeliveryHoursAllTime =
     metrics && metrics.avgDeliveryTime.length > 0
-      ? Math.round(
-        metrics.avgDeliveryTime.reduce((a, b) => a + b.avgDeliveryHours, 0) /
-        metrics.avgDeliveryTime.length
-      )
+      ? Math.round(metrics.avgDeliveryTime.reduce((a, b) => a + b.avgDeliveryHours, 0) / metrics.avgDeliveryTime.length)
       : 0;
 
   // use filteredOrders counts for Order cards
@@ -442,22 +592,14 @@ export default function Analysis() {
 
   // estimate service revenue for filtered range by scaling the fetched total service revenue
   const serviceRevenueFiltered = useMemo(() => {
-    // prefer server-provided stats.totalRevenue (fetched in client) if available; otherwise scale all-time computed revenue
     const totalOrdersCountAll = orders.length;
-
-    // client-side fetched stats may be set in state 'stats' below (see existing code). We'll reuse that via local storage of fetched value if available.
-    // For simplicity here we'll scale the all-time metric by the fraction of filtered orders to total orders fetched from /api/admin/orders
     if (totalOrdersCountAll > 0) {
-      const totalService = totalServiceRevenueAllTime ?? 0; // removed statsRef usage to fix ReferenceError
+      const totalService = totalServiceRevenueAllTime ?? 0;
       return (filteredOrders.length / totalOrdersCountAll) * totalService;
     }
-
-    // fallback: if we don't know total denominator, just return proportional portion of all-time service revenue using totalOrdersFromMetrics
     if (totalOrdersFromMetrics > 0) {
       return (filteredOrders.length / totalOrdersFromMetrics) * totalServiceRevenueAllTime;
     }
-
-    // last resort: return all-time service revenue
     return totalServiceRevenueAllTime;
   }, [filteredOrders, orders.length, totalServiceRevenueAllTime, totalOrdersFromMetrics]);
 
@@ -477,13 +619,10 @@ export default function Analysis() {
     return { returnRateFiltered: rr, deliveryRateFiltered: dr };
   }, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
 
-  // avg delivery hours: we don't have per-order delivery times in Order type, so fallback to all-time metric
   const avgDeliveryHours = avgDeliveryHoursAllTime;
 
   // lightweight ref to hold stats.totalRevenue fetched in the other effect (we'll keep same logic for fetching stats below)
   const [statsState, setStatsState] = useState({ totalRevenue: 0, loading: true });
-  // expose a plain object for use in serviceRevenueFiltered useMemo (avoid creating dependency on object identity)
-  const statsRef = useMemo(() => ({ totalRevenue: statsState.totalRevenue }), [statsState.totalRevenue]);
 
   useEffect(() => {
     let mounted = true;
@@ -497,7 +636,11 @@ export default function Analysis() {
           return;
         }
 
-        const res = await fetch(`/api/admin/service-revenue?group=total`, {
+        // Append date params so service revenue query can be scoped if server supports it
+        const params = buildParams(dateFilter, customStart, customEnd);
+        const url = appendParamsToUrl(`/api/admin/service-revenue?group=total`, params);
+
+        const res = await fetch(url, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -507,22 +650,16 @@ export default function Analysis() {
         });
 
         const text = await res.text();
-        let data;
+        let data = null;
         try {
-          // Guard: if HTML returned instead of JSON, skip parsing
           if (res.headers.get("content-type")?.includes("application/json")) {
-            try {
             data = JSON.parse(text);
-          } catch (e) {
-            console.error("JSON parse failed despite JSON content-type:", e, text);
-            data = null;
-          }
           } else {
-            console.error("Expected JSON but received non‑JSON response", text);
-            data = null;
+            // keep a concise console warning but don't break parsing
+            console.warn("service-revenue returned non-JSON (status:", res.status, ")");
           }
         } catch (e) {
-          console.error("service-revenue JSON parse error:", e, "raw:", text);
+          console.error("JSON parse failed for service-revenue:", e, text);
         }
 
         if (!res.ok) {
@@ -544,61 +681,64 @@ export default function Analysis() {
     return () => {
       mounted = false;
     };
-  }, [totalServiceRevenueAllTime]);
+  }, [dateFilter, customStart, customEnd, totalServiceRevenueAllTime]);
 
   // ----------------- Dashboard cards now use filtered calculations -----------------
-const dashboardMetrics: DashboardMetricCard[] = [
-{
-title: t('metrics.allOrders'),
-value: `${allOrdersCount}`,
-trend: "up",
-link: `/${locale}/admin/Order`,
-},
-{
-title: t('metrics.pendingOrders'),
-value: `${pendingCount} (${pendingRate.toFixed(1)}%)`,
-trend: pendingRate < 20 ? "up" : "down",
-link: `/${locale}/admin/Collection-pending`,
-},
-{
-title: t('metrics.totalSellerRevenue'),
-value: `${sellerRevenueFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
-trend: "up",
-link: `/${locale}/admin/Top-Sellers`,
-},
-{
-title: t('metrics.netProfitSeller'),
-value: `${netProfitFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
-trend: netProfitFiltered > 0 ? "up" : "down",
-link: `/${locale}/admin/Seller`,
-},
-{
-title: t('metrics.averageDeliveryTime'),
-value: `${avgDeliveryHours}h`,
-trend: avgDeliveryHours < 48 ? "up" : "down",
-link: `/${locale}/admin/Delivery-Returned`,
-},
-{
-title: t('metrics.returnRate'),
-value: `${returnRateFiltered}%`,
-trend: parseFloat(returnRateFiltered) < 20 ? "up" : "down",
-link: `/${locale}/admin/Order`,
-},
-{
-title: t('metrics.deliveryRate'),
-value: `${deliveryRateFiltered}%`,
-trend: parseFloat(deliveryRateFiltered) > 70 ? "up" : "down",
-link: `/${locale}/admin/Order`,
-},
-{
-title: t('metrics.totalServiceRevenue'),
-value: `${serviceRevenueFiltered.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
-trend: "up",
-link: `/${locale}/admin/Order`,
-},
-];
+  const formatDH = (amount: number) =>
+    `${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} DH`;
 
-  const isPositive = (t: "up" | "down") => t === "up";
+  const dashboardMetrics: DashboardMetricCard[] = [
+    {
+      title: t("metrics.allOrders"),
+      value: `${allOrdersCount}`,
+      trend: "up",
+      link: `/${locale}/admin/Order`,
+    },
+    {
+      title: t("metrics.pendingOrders"),
+      value: `${pendingCount} (${pendingRate.toFixed(1)}%)`,
+      trend: pendingRate < 20 ? "up" : "down",
+      link: `/${locale}/admin/Collection-pending`,
+    },
+    {
+      title: t("metrics.totalSellerRevenue"),
+      value: formatDH(sellerRevenueFiltered),
+      trend: "up",
+      link: `/${locale}/admin/Top-Sellers`,
+    },
+    {
+      title: t("metrics.netProfitSeller"),
+      value: formatDH(netProfitFiltered),
+      trend: netProfitFiltered > 0 ? "up" : "down",
+      link: `/${locale}/admin/Seller`,
+    },
+    {
+      title: t("metrics.averageDeliveryTime"),
+      value: `${avgDeliveryHours}h`,
+      trend: avgDeliveryHours < 48 ? "up" : "down",
+      link: `/${locale}/admin/Delivery-Returned`,
+    },
+    {
+      title: t("metrics.returnRate"),
+      value: `${returnRateFiltered}%`,
+      trend: parseFloat(returnRateFiltered) < 20 ? "up" : "down",
+      link: `/${locale}/admin/Order`,
+    },
+    {
+      title: t("metrics.deliveryRate"),
+      value: `${deliveryRateFiltered}%`,
+      trend: parseFloat(deliveryRateFiltered) > 70 ? "up" : "down",
+      link: `/${locale}/admin/Order`,
+    },
+    {
+      title: t("metrics.totalServiceRevenue"),
+      value: formatDH(serviceRevenueFiltered),
+      trend: "up",
+      link: `/${locale}/admin/Order`,
+    },
+  ];
+
+  const isPositive = (tmetric: "up" | "down") => tmetric === "up";
 
   const topSellersChartData = metrics?.topSellers
     .slice(0, 5)
@@ -623,18 +763,35 @@ link: `/${locale}/admin/Order`,
     getCoreRowModel: getCoreRowModel(),
   });
 
+  // ----------------- RECENT ORDERS HOOKS (MUST BE DECLARED BEFORE ANY EARLY RETURN) -----------------
+  const RECENT_COUNT = 10; // change to 3, 5, etc.
+  const recentOrders = useMemo(() => {
+    if (!orders || orders.length === 0) return [];
+    // ensure newest first — if your server already returns newest-first you can remove the sort
+    const sorted = [...orders].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    return sorted.slice(0, RECENT_COUNT);
+  }, [orders]);
+
+  const recentTable = useReactTable({
+    data: recentOrders,
+    columns: orderColumns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
   // ----------------- UI -----------------
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-600">
-        {t('ui.loadingDashboard')}
+        {t("ui.loadingDashboard")}
       </div>
     );
 
   if (error || !metrics)
     return (
       <div className="min-h-screen flex items-center justify-center text-center">
-        <p>{error || t('ui.failedToLoadMetrics')}</p>
+        <p>{error || t("ui.failedToLoadMetrics")}</p>
       </div>
     );
 
@@ -642,41 +799,41 @@ link: `/${locale}/admin/Order`,
     <div className="min-h-screen bg-white lg:px-5 p-0">
       <div className="">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-4">
-          {t('quickActions.title')}
+          {t("quickActions.title")}
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[
             {
-              title: t('quickActions.actions.addSeller'),
+              title: t("quickActions.actions.addSeller"),
               icon: IconTrendingUp,
               color: "text-blue-600",
               bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
               actionType: "dialog",
             },
             {
-              title: t('quickActions.actions.addStock'),
+              title: t("quickActions.actions.addStock"),
               icon: IconTrendingUp,
               color: "text-green-600",
               bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
               actionType: "dialog",
             },
             {
-              title: t('quickActions.actions.manageOrders'),
+              title: t("quickActions.actions.manageOrders"),
               icon: IconTrendingDown,
               color: "text-amber-600",
               bg: "from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/10",
               link: `/${locale}/admin/Order`,
             },
             {
-              title: t('quickActions.actions.reportsAnalytics'),
+              title: t("quickActions.actions.reportsAnalytics"),
               icon: IconTrendingDown,
               color: "text-purple-600",
               bg: "from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/10",
               link: `/${locale}/admin/Collection-pending`,
             },
             {
-              title: t('quickActions.actions.returnedDelivered'),
+              title: t("quickActions.actions.returnedDelivered"),
               icon: IconTrendingUp,
               color: "text-red-600",
               bg: "from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/10",
@@ -698,7 +855,7 @@ link: `/${locale}/admin/Order`,
                     {action.title}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {action.actionType === "dialog" ? t('quickActions.openDialog') : t('quickActions.clickToManage')}
+                    {action.actionType === "dialog" ? t("quickActions.openDialog") : t("quickActions.clickToManage")}
                   </p>
                 </div>
                 <action.icon
@@ -722,7 +879,7 @@ link: `/${locale}/admin/Order`,
               <AddSeller
                 onSellerAdded={() => {
                   setOpenAddSeller(false);
-                  toast.success(t('quickActions.sellerAdded'));
+                  toast.success(t("quickActions.sellerAdded"));
                 }}
                 onCancel={() => setOpenAddSeller(false)}
               />
@@ -744,7 +901,7 @@ link: `/${locale}/admin/Order`,
                 sellers={sellers}
                 selectedSellerId={selectedSeller}
                 onSellerChange={setSelectedSeller}
-                placeholder={t('ui.selectSeller')}
+                placeholder={t("ui.selectSeller")}
               />
 
               {selectedSeller && (
@@ -770,37 +927,93 @@ link: `/${locale}/admin/Order`,
       <div className="mt-5 space-y-8">
         {/* Date filter controls */}
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100">{t('filter.title')}</h3>
+          <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100">{t("filter.title")}</h3>
 
-          <Select
-            value={dateFilter}
-            onValueChange={(v) =>
-              setDateFilter(
-                v as
-                | "all"
-                | "today"
-                | "yesterday"
-                | "thisWeek"
-                | "lastWeek"
-                | "thisMonth"
-                | "lastMonth"
-              )
-            }
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder={t('filter.placeholder')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('filter.all')}</SelectItem>
-              <SelectItem value="today">{t('filter.today')}</SelectItem>
-              <SelectItem value="yesterday">{t('filter.yesterday')}</SelectItem>
-              <SelectItem value="thisWeek">{t('filter.thisWeek')}</SelectItem>
-              <SelectItem value="lastWeek">{t('filter.lastWeek')}</SelectItem>
-              <SelectItem value="thisMonth">{t('filter.thisMonth')}</SelectItem>
-              <SelectItem value="lastMonth">{t('filter.lastMonth')}</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select
+              value={dateFilter}
+              onValueChange={(v) =>
+                setDateFilter(
+                  v as
+                    | "all"
+                    | "today"
+                    | "yesterday"
+                    | "thisWeek"
+                    | "lastWeek"
+                    | "thisMonth"
+                    | "lastMonth"
+                    | "custom"
+                )
+              }
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder={t("filter.placeholder")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("filter.all")}</SelectItem>
+                <SelectItem value="today">{t("filter.today")}</SelectItem>
+                <SelectItem value="yesterday">{t("filter.yesterday")}</SelectItem>
+                <SelectItem value="thisWeek">{t("filter.thisWeek")}</SelectItem>
+                <SelectItem value="lastWeek">{t("filter.lastWeek")}</SelectItem>
+                <SelectItem value="thisMonth">{t("filter.thisMonth")}</SelectItem>
+                <SelectItem value="lastMonth">{t("filter.lastMonth")}</SelectItem>
+                <SelectItem value="custom">{t("filter.custom") ?? "Custom Range"}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Custom range inputs (shown when dateFilter === 'custom') */}
+            {dateFilter === "custom" && (
+              <div className="flex items-center gap-2 ml-2">
+                <input
+                  type="date"
+                  value={customStart ?? ""}
+                  onChange={(e) => setCustomStart(e.target.value || null)}
+                  className="px-2 py-1 rounded-md border bg-white"
+                />
+                <span className="text-sm">—</span>
+                <input
+                  type="date"
+                  value={customEnd ?? ""}
+                  onChange={(e) => setCustomEnd(e.target.value || null)}
+                  className="px-2 py-1 rounded-md border bg-white"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    // apply custom range by triggering useEffect (customStart/customEnd are deps)
+                    // ensure basic validation
+                    if (!customStart && !customEnd) {
+                      toast.error("Select start and/or end date.");
+                      return;
+                    }
+                    if (customStart && customEnd && new Date(customStart) > new Date(customEnd)) {
+                      toast.error("Start date cannot be after end date.");
+                      return;
+                    }
+                    // set dateFilter to 'custom' (already is) and effect will fetch
+                    setDateFilter("custom");
+                    toast.success("Applied custom date range");
+                  }}
+                >
+                  Apply
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setCustomStart(null);
+                    setCustomEnd(null);
+                    setDateFilter("all");
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
+
         {/* Metric Cards */}
         <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
           {dashboardMetrics.map((metric, i) => {
@@ -836,7 +1049,7 @@ link: `/${locale}/admin/Order`,
                     className="text-primary hover:text-primary/80 text-sm font-medium cursor-pointer"
                     onClick={() => router.push(metric.link)}
                   >
-                    {t('ui.viewDetails')}
+                    {t("ui.viewDetails")}
                   </Button>
                 </CardContent>
               </Card>
@@ -849,8 +1062,8 @@ link: `/${locale}/admin/Order`,
           {topSellersChartData.length > 0 && (
             <Card className="shadow-sm border rounded-2xl">
               <CardHeader>
-                <CardTitle style={{ color: "#2BC3F1" }}>{t('charts.topSellersTitle')}</CardTitle>
-                <CardDescription style={{ color: "#E0B660" }}>{t('charts.topSellersDesc')}</CardDescription>
+                <CardTitle style={{ color: "#2BC3F1" }}>{t("charts.topSellersTitle")}</CardTitle>
+                <CardDescription style={{ color: "#E0B660" }}>{t("charts.topSellersDesc")}</CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
                 <ChartContainer config={{}} className="h-[300px]">
@@ -871,8 +1084,8 @@ link: `/${locale}/admin/Order`,
           {deliveryReturnChartData.length > 0 && (
             <Card className="shadow-sm border rounded-2xl">
               <CardHeader>
-                <CardTitle style={{ color: "#E0B660" }}>{t('charts.deliveryReturnTitle')}</CardTitle>
-                <CardDescription style={{ color: "#2BC3F1" }}>{t('charts.deliveryReturnDesc')}</CardDescription>
+                <CardTitle style={{ color: "#E0B660" }}>{t("charts.deliveryReturnTitle")}</CardTitle>
+                <CardDescription style={{ color: "#2BC3F1" }}>{t("charts.deliveryReturnDesc")}</CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
                 <ChartContainer config={{}} className="h-[300px]">
@@ -892,40 +1105,45 @@ link: `/${locale}/admin/Order`,
           )}
         </div>
 
-        {/* Orders table or empty state */}
-        {filteredOrders.length > 0 ? (
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="text-center text-gray-500 py-10">
-            {t('table.noOrdersMatch')}
-          </div>
-        )}
+        {/* Recent Orders */}
+        <div className="mt-6">
+          <h3 className="text-lg font-medium text-gray-800 dark:text-gray-100 mb-3">
+            Recent Orders
+          </h3>
+
+          {recentOrders.length > 0 ? (
+            <Table>
+              <TableHeader>
+                {recentTable.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+
+              <TableBody>
+                {recentTable.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="text-center text-gray-500 py-10">
+              No recent orders for the selected range.
+            </div>
+          )}
+        </div>
       </div>
-
-
     </div>
   );
 }

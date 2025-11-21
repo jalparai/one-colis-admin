@@ -186,14 +186,18 @@ export const getColumns = (
       cell: ({ row }) => {
         const items = row.original.items;
         return (
-          <ul className="list-none pl-4">
-            {items.map((item, idx) => (
-              <li key={(item.productId ?? item.productName ?? idx) + "-p"}>${item.unitPrice}</li>
-            ))}
-          </ul>
+     <ul className="list-none pl-4">
+  {items.map((item, idx) => (
+    <li key={`${item.productId ?? item.productName ?? idx}-p`}>
+      ${item.unitPrice}
+    </li>
+  ))}
+</ul>
+
         );
+      }
       },
-    },
+    
     {
       accessorKey: "totalAmount",
       header: ({ column }) => (
@@ -315,6 +319,8 @@ export const getColumns = (
         const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
         const isReady = order.status === "ready";
+        // NEW: disable edit also when status is 'collected' or 'shipped'
+        const editDisabled = isReady || order.status === "collected" || order.status === "shipped";
 
         const handleUpdate = async () => {
           setLoading(true);
@@ -392,19 +398,17 @@ export const getColumns = (
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
 
-                {
-                  !isReady && (
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setEditOpen(true);
-                      }}
-                    >
-                      Edit Order
-                    </DropdownMenuItem>
-                  )
-                }
-
+                {/* Edit Order - now disabled for ready, collected or shipped statuses */}
+                <DropdownMenuItem
+                  disabled={editDisabled}
+                  onClick={() => {
+                    if (editDisabled) return;
+                    setSelectedOrder(order);
+                    setEditOpen(true);
+                  }}
+                >
+                  Edit Order
+                </DropdownMenuItem>
 
                 {isReady && (
                   <DropdownMenuItem onClick={handlePrintLabel}>Print Label</DropdownMenuItem>
@@ -438,7 +442,10 @@ export const getColumns = (
               <EditOrder
                 order={selectedOrder}
                 open={editOpen}
-                onClose={() => setEditOpen(false)}
+                onClose={() => {
+                  setEditOpen(false);
+                  setSelectedOrder(null);
+                }}
                 onUpdated={onUpdated}
               />
             )}
@@ -868,7 +875,7 @@ export function OrderTable() {
           <Button
             key={item.label}
             variant="outline"
-            className="mb-3"
+            className=""
             onClick={() => handleExport(item.url)}
           >
             {item.label} Excel

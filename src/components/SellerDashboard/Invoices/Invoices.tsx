@@ -7,6 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DownloadIcon, RefreshCcwIcon, PlusIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type SellerLite = { _id: string; name?: string; storeName?: string; email?: string } | null;
 
@@ -33,6 +39,13 @@ export default function InvoicesTableAdmin() {
   const [invoices, setInvoices] = React.useState<Invoice[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [filter, setFilter] = React.useState("");
+
+  // date filter states
+  const [dateFilter, setDateFilter] = React.useState<
+    "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
+  >("all");
+  const [fromDate, setFromDate] = React.useState<string>(""); // yyyy-mm-dd
+  const [toDate, setToDate] = React.useState<string>(""); // yyyy-mm-dd
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
@@ -133,28 +146,248 @@ export default function InvoicesTableAdmin() {
     }
   };
 
+  // --- date helpers ---
+  const startOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(23, 59, 59, 999);
+    return c;
+  };
+  const startOfWeek = (d: Date) => {
+    const c = new Date(d);
+    c.setDate(c.getDate() - c.getDay());
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfWeek = (d: Date) => {
+    const s = startOfWeek(d);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    return endOfDay(e);
+  };
+  const startOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth(), 1);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return endOfDay(c);
+  };
+  const formatISODate = (d: Date) => d.toISOString().slice(0, 10);
+
+  // Apply preset: sets dateFilter AND updates fromDate/toDate so both controls stay in sync.
+  const applyPreset = (preset: typeof dateFilter) => {
+    const today = new Date();
+    let from: Date | null = null;
+    let to: Date | null = null;
+
+    switch (preset) {
+      case "all":
+        from = null;
+        to = null;
+        break;
+      case "today":
+        from = startOfDay(today);
+        to = endOfDay(today);
+        break;
+      case "yesterday": {
+        const y = new Date();
+        y.setDate(today.getDate() - 1);
+        from = startOfDay(y);
+        to = endOfDay(y);
+        break;
+      }
+      case "thisWeek":
+        from = startOfWeek(today);
+        to = endOfWeek(today);
+        break;
+      case "lastWeek": {
+        // compute last week relative to today
+        const lwRef = new Date(today);
+        lwRef.setDate(today.getDate() - 7);
+        const lwStart = startOfWeek(lwRef);
+        from = lwStart;
+        to = endOfWeek(lwStart);
+        break;
+      }
+      case "thisMonth":
+        from = startOfMonth(today);
+        to = endOfMonth(today);
+        break;
+      case "lastMonth": {
+        const lm = new Date();
+        lm.setMonth(lm.getMonth() - 1);
+        from = startOfMonth(lm);
+        to = endOfMonth(lm);
+        break;
+      }
+    }
+
+    setDateFilter(preset);
+    setFromDate(from ? formatISODate(from) : "");
+    setToDate(to ? formatISODate(to) : "");
+  };
+
+  // filtered invoices by search + date (range priority: from/to > preset)
   const filtered = React.useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return invoices;
+
+    // create date bounds if provided
+    const hasFrom = !!fromDate;
+    const hasTo = !!toDate;
+    let fromBound: Date | null = null;
+    let toBound: Date | null = null;
+    if (hasFrom) {
+      const parsed = new Date(fromDate);
+      if (!isNaN(parsed.getTime())) fromBound = startOfDay(parsed);
+    }
+    if (hasTo) {
+      const parsed = new Date(toDate);
+      if (!isNaN(parsed.getTime())) toBound = endOfDay(parsed);
+    }
+
+    // if no custom range, but preset selected (and not 'all'), compute bounds for preset
+    if (!hasFrom && !hasTo && dateFilter !== "all") {
+      const today = new Date();
+      switch (dateFilter) {
+        case "today":
+          fromBound = startOfDay(today);
+          toBound = endOfDay(today);
+          break;
+        case "yesterday": {
+          const y = new Date();
+          y.setDate(today.getDate() - 1);
+          fromBound = startOfDay(y);
+          toBound = endOfDay(y);
+          break;
+        }
+        case "thisWeek":
+          fromBound = startOfWeek(today);
+          toBound = endOfWeek(today);
+          break;
+        case "lastWeek": {
+          const lwRef = new Date(today);
+          lwRef.setDate(today.getDate() - 7);
+          const lwStart = startOfWeek(lwRef);
+          fromBound = lwStart;
+          toBound = endOfWeek(lwStart);
+          break;
+        }
+        case "thisMonth":
+          fromBound = startOfMonth(today);
+          toBound = endOfMonth(today);
+          break;
+        case "lastMonth": {
+          const lm = new Date();
+          lm.setMonth(lm.getMonth() - 1);
+          fromBound = startOfMonth(lm);
+          toBound = endOfMonth(lm);
+          break;
+        }
+      }
+    }
+
     return invoices.filter((inv) => {
-      const sellerName = (inv.seller?.name || inv.seller?.storeName || inv.seller?.email || "").toLowerCase();
-      return (
-        String(inv.invoiceNumber || "").toLowerCase().includes(q) ||
-        sellerName.includes(q) ||
-        String(inv.status || "").toLowerCase().includes(q)
-      );
+      // search filter
+      if (q) {
+        const sellerName = (inv.seller?.name || inv.seller?.storeName || inv.seller?.email || "").toLowerCase();
+        const matches =
+          String(inv.invoiceNumber || "").toLowerCase().includes(q) ||
+          sellerName.includes(q) ||
+          String(inv.status || "").toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      // date filter if bounds exist
+      if (fromBound || toBound) {
+        if (!inv.createdAt) return false;
+        const d = new Date(inv.createdAt);
+        if (isNaN(d.getTime())) return false;
+        if (fromBound && toBound) {
+          return d >= fromBound && d <= toBound;
+        } else if (fromBound) {
+          return d >= fromBound;
+        } else if (toBound) {
+          return d <= toBound;
+        }
+      }
+
+      return true;
     });
-  }, [invoices, filter]);
+  }, [invoices, filter, fromDate, toDate, dateFilter]);
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between py-4 gap-3">
+      <div className="flex items-center justify-between py-4 gap-3 flex-wrap">
         <Input
           placeholder="Search invoices..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="max-w-sm"
         />
+
+        {/* date controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                {dateFilter === "all" ? "All" :
+                  dateFilter === "today" ? "Today" :
+                  dateFilter === "yesterday" ? "Yesterday" :
+                  dateFilter === "thisWeek" ? "This Week" :
+                  dateFilter === "lastWeek" ? "Last Week" :
+                  dateFilter === "thisMonth" ? "This Month" :
+                  "Last Month"
+                }
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => applyPreset("all")}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("today")}>Today</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("yesterday")}>Yesterday</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("thisWeek")}>This Week</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("lastWeek")}>Last Week</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("thisMonth")}>This Month</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("lastMonth")}>Last Month</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+            <label className="text-sm hidden md:inline">From:</label>
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              aria-label="From date"
+              className="max-w-[160px]"
+            />
+            <label className="text-sm hidden md:inline ml-2">To:</label>
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              aria-label="To date"
+              className="max-w-[160px]"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setDateFilter("all");
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => refreshAndPoll({ maxTries: 12, intervalMs: 1000 })}>
             <RefreshCcwIcon className="h-4 w-4 mr-2" /> Refresh
@@ -196,7 +429,8 @@ export default function InvoicesTableAdmin() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs">
-                    3 days
+                      {/* keep the same placeholder value you had */}
+                      3 days
                     </div>
                   </TableCell>
                   <TableCell>

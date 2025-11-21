@@ -115,130 +115,118 @@ export function DeliveryPickupsTable() {
             .toLowerCase()
             .replace(/\s+/g, "_")
             .replace(/[^\w_]/g, "")
+// --- Replace your fetchOrders useCallback with this ---
+const fetchOrders = React.useCallback(async () => {
+  try {
+    setLoading(true)
 
-    const fetchOrders = React.useCallback(async () => {
-        try {
-            setLoading(true)
-            const token = localStorage.getItem("token")
-            if (!token) {
-                toast.error("No token found. Please log in again.")
-                setLoading(false)
-                return
+    const token = localStorage.getItem("token")
+    if (!token) {
+      toast.error("No token found. Please log in again.")
+      setLoading(false)
+      return
+    }
+
+    const headers = { Authorization: `Bearer ${token}` }
+    const timeout = 10000
+
+    // try several endpoints (https -> http -> relative)
+    const endpoints = [
+      "https://cod-ecommerce-two.vercel.app/api/delivery-agent/pickups/my-assignments",
+      "http://cod-ecommerce-two.vercel.app/api/delivery-agent/pickups/my-assignments",
+      "/api/delivery-agent/pickups/my-assignments",
+    ]
+
+    let res: any = null
+    let lastErr: any = null
+
+    for (const url of endpoints) {
+      try {
+        res = await axios.get(url, { headers, timeout })
+        break
+      } catch (e: any) {
+        lastErr = e
+        // try next URL
+      }
+    }
+
+    if (!res) {
+      throw lastErr ?? new Error("No response from pickup endpoint")
+    }
+
+    // normalize response shapes
+    const payload = res.data
+    const raw: any[] = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.pickups)
+      ? payload.pickups
+      : []
+
+    const normalized: DeliveryOrder[] = (raw || []).map((o: any) => {
+      // Main fields from your example
+      const orderId = o.orderId ?? o.orderID ?? o.code ?? o.id ?? ""
+      const createdAt = o.createdAt ?? o.created_at ?? o.orderDate ?? new Date().toISOString()
+
+      // Customer mapping (match example exactly)
+      const c = o.customer ?? {}
+      const customer: Customer | undefined =
+        c && (c.name || c.phone || c.address || c.city || c.postalCode)
+          ? {
+              name: c.name ?? undefined,
+              phone: c.phone ?? undefined,
+              address: c.address ?? undefined,
+              city: c.city ?? undefined,
+              postalCode: c.postalCode ?? undefined,
             }
+          : undefined
 
-            const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/delivery-agent/pickups/my-assignments", {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000,
-            })
+      // Build id for table actions (use whatever unique id exists; fallback to orderId)
+      const id = o._id ?? o.id ?? orderId ?? `${orderId}-${Math.random().toString(36).slice(2, 9)}`
 
-            const raw = res.data?.data || []
+      return {
+        id,
+        orderId,
+        items: Array.isArray(o.items)
+          ? o.items.map((it: any) => ({
+              sku: it.sku ?? it.product?.sku ?? String(it.sku ?? ""),
+              productName: it.productName ?? it.product?.name ?? it.name ?? it.title ?? "",
+              unitPrice: Number(it.unitPrice ?? it.price ?? 0),
+              quantity: Number(it.quantity ?? it.qty ?? 0),
+            }))
+          : [],
+        totalAmount: Number(o.totalAmount ?? o.total ?? 0),
+        notes: o.notes ?? "",
+        status: o.status ?? "",
+        createdAt,
+        assignedAt: o.assignedAt ?? o.assigned_at ?? undefined,
+        assignedBy: o.assignedBy ?? o.assigned_by ?? undefined,
+        assignedTo: o.assignedTo ?? o.assigned_to ?? undefined,
+        seller: undefined, // not provided in example; keep undefined unless backend returns it
+        customer,
+        customerLocation: o.customerLocation ?? undefined,
+        customerPhone: o.customerPhone ?? (customer?.phone ?? undefined),
+      } as DeliveryOrder
+    })
 
-            const normalized = (raw || []).map((o: any) => {
-                const dbId = o._id ?? o.id ?? o._doc?._id ?? o.code ?? null
+    setOrders(normalized)
 
-                const orderId =
-                    o.orderId ??
-                    o.orderID ??
-                    o.order_number ??
-                    o.orderNo ??
-                    o.orderCode ??
-                    o.trackingNumber ??
-                    o.tracking_no ??
-                    o.tracking_id ??
-                    o.externalId ??
-                    o.code ??
-                    dbId ??
-                    ""
-
-                // seller detection (existing logic)
-                const sellerRaw = o.seller ?? null
-                const seller: Seller | undefined = sellerRaw
-                    ? {
-                        id: sellerRaw._id ?? sellerRaw.id ?? sellerRaw.id ?? "",
-                        name: sellerRaw.name ?? sellerRaw.shopName ?? sellerRaw.storeName ?? sellerRaw.email ?? "",
-                        storeName: sellerRaw.storeName ?? sellerRaw.shopName ?? "",
-                        email: sellerRaw.email ?? "",
-                        phone:
-                            sellerRaw.phone ?? sellerRaw.phoneNumber ?? sellerRaw.contact?.phone ?? sellerRaw.mobile ?? null,
-                    }
-                    : undefined
-
-                // try to locate customer info from nested fields first
-                const customerRaw = o.customer ?? o.customerInfo ?? o.shippingAddress ?? o.shipping ?? null
-
-                let customer: Customer | undefined = undefined
-
-                if (customerRaw) {
-                    customer = {
-                        name: customerRaw.name ?? customerRaw.fullName ?? customerRaw.contactName ?? undefined,
-                        phone: (customerRaw.phone ?? customerRaw.mobile ?? customerRaw.contact?.phone) ?? undefined,
-                        address: customerRaw.address ?? customerRaw.street ?? undefined,
-                        city: customerRaw.city ?? undefined,
-                        postalCode: customerRaw.postalCode ?? customerRaw.zip ?? undefined,
-                    }
-                } else {
-                    // fallback to top-level fields (your API returns `customerLocation` and `customerPhone`)
-                    const topPhone = o.customerPhone ?? o.customer_phone ?? o.customer_mobile ?? null
-                    const topAddr = o.customerLocation ?? o.customer_location ?? o.customer_address ?? null
-                    const topName = o.customerName ?? o.customer_name ?? null
-
-                    const phoneValue = typeof topPhone === "string" ? topPhone.trim() : topPhone
-                    const addrValue = typeof topAddr === "string" ? topAddr.trim() : topAddr
-
-                    const invalidPhoneStrings = new Set(["", "n/a", "na", "null", "undefined", "N/A"])
-
-                    customer = (phoneValue || addrValue || topName)
-                        ? {
-                            name: topName ?? undefined,
-                            phone: invalidPhoneStrings.has(String(phoneValue)) ? undefined : phoneValue ?? undefined,
-                            address: addrValue ?? undefined,
-                            city: undefined,
-                            postalCode: undefined,
-                        }
-                        : undefined
-                }
-
-                return {
-                    id: dbId ?? orderId,
-                    orderId,
-                    items: Array.isArray(o.items)
-                        ? o.items.map((it: any) => ({
-                            sku: it.sku ?? it.product?.sku ?? String(it.sku ?? ""),
-                            productName: it.productName ?? it.product?.name ?? it.name ?? it.title ?? "",
-                            unitPrice: Number(it.unitPrice ?? it.price ?? it.totalPrice ?? 0),
-                            quantity: Number(it.quantity ?? it.qty ?? 0),
-                        }))
-                        : [],
-                    totalAmount: Number(o.totalAmount ?? o.total ?? o.grandTotal ?? 0),
-                    notes: o.notes ?? "",
-                    status: o.status ?? "",
-                    createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
-                    assignedAt: o.assignedAt,
-                    assignedBy: o.assignedBy,
-                    assignedTo: o.assignedTo,
-                    seller,
-                    customer,
-                    // keep top-level copies if you need them later
-                    customerLocation: o.customerLocation ?? undefined,
-                    customerPhone: o.customerPhone ?? undefined,
-                } as DeliveryOrder
-            })
-
-            setOrders(normalized)
-
-            const map: Record<string, string> = {}
-            for (const o of normalized) {
-                map[o.id] = o.status ?? ""
-            }
-            setSelectedStatusById(map)
-        } catch (err: any) {
-            console.error("[v0] Error fetching orders:", err)
-            const msg = err?.response?.data?.message || err?.message || "Failed to fetch orders"
-            toast.error(`Failed to fetch orders: ${msg}`)
-        } finally {
-            setLoading(false)
-        }
-    }, [])
+    // prepare status map for dropdowns (use id as key)
+    const map: Record<string, string> = {}
+    for (const o of normalized) {
+      map[o.id] = o.status ?? ""
+    }
+    setSelectedStatusById(map)
+  } catch (err: any) {
+    console.error("[fetchOrders] Error fetching pickups:", err)
+    const msg = err?.response?.data?.message || err?.message || "Failed to fetch pickups"
+    toast.error(msg)
+  } finally {
+    setLoading(false)
+  }
+}, [])
+// --- end fetchOrders replacement ---
 
     const handleUpdateStatus = async (orderId: string) => {
         const selectedRaw = selectedStatusById[orderId]
@@ -422,24 +410,13 @@ export function DeliveryPickupsTable() {
     }
 
     const columns: ColumnDef<DeliveryOrder>[] = [
-        {
-            accessorKey: "items",
-            header: "Product(s)",
-            cell: ({ row }) => row.original.items.map((i) => `${i.productName} (x${i.quantity})`).join(", "),
-        },
-        {
-            header: "SKU",
-            accessorFn: (row) => row.items.map((i) => i.sku).join(", "),
-        },
+      
         {
             header: "Total Amount",
             accessorKey: "totalAmount",
             cell: ({ row }) => `dh - ${row.original.totalAmount}`,
         },
-        {
-            header: "Seller",
-            accessorFn: (row) => row.seller?.name ?? "-",
-        },
+       
         // WhatsApp column uses customer.phone (mapped from top-level customerPhone when necessary)
         {
             header: "WhatsApp",
@@ -483,22 +460,14 @@ export function DeliveryPickupsTable() {
                 return parts.join(", ") || row.customerLocation || "-"
             },
         },
-        {
-            header: "Status",
-            accessorKey: "status",
-            cell: ({ row }) => (
-                <span
-                    className={`px-2 py-1 rounded text-xs font-medium ${row.original.status === "shipped" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                        }`}
-                >
-                    {row.original.status}
-                </span>
-            ),
-        },
+        
         {
             header: "Created At",
             accessorKey: "createdAt",
-            cell: ({ row }) => new Date(row.original.createdAt).toLocaleString(),
+cell: ({ row }) => {
+  const d = new Date(row.original.createdAt)
+  return isNaN(d.getTime()) ? "-" : d.toLocaleString()
+},
         },
         {
             header: "Status Update",

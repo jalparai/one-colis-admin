@@ -6,6 +6,7 @@ import {
   BoxIcon,
   CalculatorIcon,
   FileIcon,
+  FileTextIcon,
   HomeIcon,
   ListIcon,
   PackageIcon,
@@ -94,6 +95,11 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
         titleKey: "sellerSidebar.cityFee",
         url: `/${locale}/seller/City-Fee`,
         icon: CalculatorIcon,
+      },
+        {
+        title: "Return & Delivery Notes",
+        url: `/${locale}/seller/Return-Notes`,
+        icon: FileTextIcon,
       },
       {
         title: "Seller Reports",

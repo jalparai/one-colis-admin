@@ -55,6 +55,8 @@ export default function MyPayoutsTable() {
   const [dateFilter, setDateFilter] = React.useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
+
+  // rangeFilter now stored as { from?: "yyyy-mm-dd", to?: "yyyy-mm-dd" }
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
 
   // tokenKey - adjust if your app stores token under a different key
@@ -65,13 +67,14 @@ export default function MyPayoutsTable() {
     setError(null);
 
     try {
-      const base = "https://cod-ecommerce-two.vercel.app"
+      const base = "https://cod-ecommerce-two.vercel.app";
       const url = `${base}/api/seller/my-payouts`;
 
       const token = typeof window !== "undefined" ? localStorage.getItem(tokenKey) : null;
       if (!token) {
         setError("Not authenticated. No token found in localStorage.");
         setPayouts([]);
+        setLoading(false);
         return;
       }
 
@@ -91,7 +94,6 @@ export default function MyPayoutsTable() {
       else if (res.data?.payouts && Array.isArray(res.data.payouts)) data = res.data.payouts;
       else if (typeof res.data === "object" && Object.keys(res.data).length && Array.isArray(res.data.items)) data = res.data.items;
       else {
-        // final fallback: try to dig common locations
         data = res.data?.data || res.data || [];
         if (!Array.isArray(data)) data = [];
       }
@@ -132,66 +134,185 @@ export default function MyPayoutsTable() {
     fetchPayouts();
   }, [fetchPayouts]);
 
-  // Date filters
-  const filteredByDate = React.useMemo(() => {
-    const now = new Date();
-    return payouts.filter((p) => {
-      const createdAt = new Date(p.createdAt);
-      switch (dateFilter) {
-        case "today":
-          return createdAt.toDateString() === now.toDateString();
-        case "yesterday": {
-          const y = new Date(now);
-          y.setDate(now.getDate() - 1);
-          return createdAt.toDateString() === y.toDateString();
-        }
-        case "thisWeek": {
-          const weekStart = new Date(now);
-          weekStart.setDate(now.getDate() - now.getDay());
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekStart.getDate() + 6);
-          return createdAt >= weekStart && createdAt <= weekEnd;
-        }
-        case "lastWeek": {
-          const lastWeekStart = new Date(now);
-          lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
-          const lastWeekEnd = new Date(lastWeekStart);
-          lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
-        }
-        case "thisMonth": {
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-          return createdAt >= monthStart && createdAt <= monthEnd;
-        }
-        case "lastMonth": {
-          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-          return createdAt >= lastMonthStart && createdAt <= lastMonthEnd;
-        }
-        default:
-          return true;
-      }
-    });
-  }, [payouts, dateFilter]);
+  // --- date helpers ---
+  const startOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(23, 59, 59, 999);
+    return c;
+  };
+  const startOfWeek = (d: Date) => {
+    const c = new Date(d);
+    c.setDate(c.getDate() - c.getDay());
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfWeek = (d: Date) => {
+    const s = startOfWeek(d);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    return endOfDay(e);
+  };
+  const startOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth(), 1);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return endOfDay(c);
+  };
+  const formatISODate = (d: Date) => d.toISOString().slice(0, 10);
 
-  // Range filter
-  const rangeFiltered = React.useMemo(() => {
-    return filteredByDate.filter((p) => {
-      const createdAt = new Date(p.createdAt);
-      const from = rangeFilter.from ? new Date(rangeFilter.from) : null;
-      const to = rangeFilter.to ? new Date(rangeFilter.to) : null;
-      if (from && createdAt < from) return false;
-      if (to && createdAt > to) return false;
+  // Apply preset: sets dateFilter AND populates rangeFilter so both controls are in sync.
+  const applyPreset = (preset: typeof dateFilter) => {
+    const today = new Date();
+    let from: Date | null = null;
+    let to: Date | null = null;
+
+    switch (preset) {
+      case "all":
+        from = null;
+        to = null;
+        break;
+      case "today":
+        from = startOfDay(today);
+        to = endOfDay(today);
+        break;
+      case "yesterday": {
+        const y = new Date();
+        y.setDate(today.getDate() - 1);
+        from = startOfDay(y);
+        to = endOfDay(y);
+        break;
+      }
+      case "thisWeek":
+        from = startOfWeek(today);
+        to = endOfWeek(today);
+        break;
+      case "lastWeek": {
+        const lwRef = new Date(today);
+        lwRef.setDate(today.getDate() - 7);
+        const lwStart = startOfWeek(lwRef);
+        from = lwStart;
+        to = endOfWeek(lwStart);
+        break;
+      }
+      case "thisMonth":
+        from = startOfMonth(today);
+        to = endOfMonth(today);
+        break;
+      case "lastMonth": {
+        const lm = new Date();
+        lm.setMonth(lm.getMonth() - 1);
+        from = startOfMonth(lm);
+        to = endOfMonth(lm);
+        break;
+      }
+    }
+
+    setDateFilter(preset);
+    setRangeFilter({
+      from: from ? formatISODate(from) : undefined,
+      to: to ? formatISODate(to) : undefined,
+    });
+  };
+
+  // unified date filtering: priority to explicit rangeFilter (from/to) — if none, use dateFilter preset
+  const filteredByDate = React.useMemo(() => {
+    if (!payouts || payouts.length === 0) return [];
+
+    const hasFrom = !!rangeFilter.from;
+    const hasTo = !!rangeFilter.to;
+
+    // If user supplied a custom range (from or to) use it
+    if (hasFrom || hasTo) {
+      let fromBound: Date | null = null;
+      let toBound: Date | null = null;
+      if (hasFrom) {
+        const parsed = new Date(rangeFilter.from as string);
+        if (!Number.isNaN(parsed.getTime())) fromBound = startOfDay(parsed);
+      }
+      if (hasTo) {
+        const parsed = new Date(rangeFilter.to as string);
+        if (!Number.isNaN(parsed.getTime())) toBound = endOfDay(parsed);
+      }
+
+      return payouts.filter((p) => {
+        const d = new Date(p.createdAt);
+        if (isNaN(d.getTime())) return false;
+        if (fromBound && toBound) return d >= fromBound && d <= toBound;
+        if (fromBound) return d >= fromBound;
+        if (toBound) return d <= toBound;
+        return true;
+      });
+    }
+
+    // Otherwise fallback to presets
+    if (dateFilter === "all") return payouts;
+
+    const now = new Date();
+    let fromBound: Date | null = null;
+    let toBound: Date | null = null;
+
+    switch (dateFilter) {
+      case "today":
+        fromBound = startOfDay(now);
+        toBound = endOfDay(now);
+        break;
+      case "yesterday": {
+        const y = new Date(now);
+        y.setDate(now.getDate() - 1);
+        fromBound = startOfDay(y);
+        toBound = endOfDay(y);
+        break;
+      }
+      case "thisWeek":
+        fromBound = startOfWeek(now);
+        toBound = endOfWeek(now);
+        break;
+      case "lastWeek": {
+        const lwRef = new Date(now);
+        lwRef.setDate(now.getDate() - 7);
+        const lwStart = startOfWeek(lwRef);
+        fromBound = lwStart;
+        toBound = endOfWeek(lwStart);
+        break;
+      }
+      case "thisMonth":
+        fromBound = startOfMonth(now);
+        toBound = endOfMonth(now);
+        break;
+      case "lastMonth": {
+        const lm = new Date(now);
+        lm.setMonth(lm.getMonth() - 1);
+        fromBound = startOfMonth(lm);
+        toBound = endOfMonth(lm);
+        break;
+      }
+    }
+
+    if (!fromBound && !toBound) return payouts;
+    return payouts.filter((p) => {
+      const d = new Date(p.createdAt);
+      if (isNaN(d.getTime())) return false;
+      if (fromBound && toBound) return d >= fromBound && d <= toBound;
+      if (fromBound) return d >= fromBound;
+      if (toBound) return d <= toBound;
       return true;
     });
-  }, [filteredByDate, rangeFilter]);
+  }, [payouts, rangeFilter, dateFilter]);
 
-  // Global filter (search) — no seller fields
+  // Global + final filtering
   const finalData = React.useMemo(() => {
-    if (!globalFilter.trim()) return rangeFiltered;
+    const base = filteredByDate;
+    if (!globalFilter.trim()) return base;
     const q = globalFilter.toLowerCase();
-    return rangeFiltered.filter(
+    return base.filter(
       (p) =>
         p.status?.toLowerCase().includes(q) ||
         (p.notes && p.notes.toLowerCase().includes(q)) ||
@@ -201,7 +322,7 @@ export default function MyPayoutsTable() {
         (p.method && p.method.toLowerCase().includes(q)) ||
         p._id.toLowerCase().includes(q)
     );
-  }, [rangeFiltered, globalFilter]);
+  }, [filteredByDate, globalFilter]);
 
   const columns: ColumnDef<Payout>[] = [
     {
@@ -313,29 +434,50 @@ Notes: ${row.original.notes}`
           <label className="text-sm">From:</label>
           <Input
             type="date"
-            onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))}
+            value={rangeFilter.from || ""}
+            onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value || undefined }))}
           />
           <label className="text-sm">To:</label>
           <Input
             type="date"
-            onChange={(e) => setRangeFilter((prev) => ({ ...prev, to: e.target.value }))}
+            value={rangeFilter.to || ""}
+            onChange={(e) => setRangeFilter((prev) => ({ ...prev, to: e.target.value || undefined }))}
           />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setRangeFilter({});
+              setDateFilter("all");
+            }}
+          >
+            Clear
+          </Button>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
-              Filter: {dateFilter} <ChevronDown />
+              {/* show a friendly label */}
+              {dateFilter === "all" ? "Filter: All" :
+               dateFilter === "today" ? "Filter: Today" :
+               dateFilter === "yesterday" ? "Filter: Yesterday" :
+               dateFilter === "thisWeek" ? "Filter: This Week" :
+               dateFilter === "lastWeek" ? "Filter: Last Week" :
+               dateFilter === "thisMonth" ? "Filter: This Month" :
+               "Filter: Last Month"
+              } <ChevronDown />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {["all", "today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth"].map(
-              (option) => (
-                <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </DropdownMenuItem>
-              )
-            )}
+            <DropdownMenuItem onClick={() => applyPreset("all")}>All</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("today")}>Today</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("yesterday")}>Yesterday</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("thisWeek")}>This Week</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("lastWeek")}>Last Week</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("thisMonth")}>This Month</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => applyPreset("lastMonth")}>Last Month</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

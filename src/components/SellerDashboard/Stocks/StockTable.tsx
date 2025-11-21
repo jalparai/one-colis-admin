@@ -92,15 +92,16 @@ export function StocksTable() {
   const [stocks, setStocks] = React.useState<Stock[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [dateFilter, setDateFilter] = React.useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
+
+  // NEW: from / to date range (ISO yyyy-mm-dd strings)
+  const [fromDate, setFromDate] = React.useState<string>("");
+  const [toDate, setToDate] = React.useState<string>("");
 
   // token helper (unchanged)
   function getAuthToken(): string | null {
@@ -143,9 +144,6 @@ export function StocksTable() {
       console.debug("fetchStocks response:", res);
 
       // Normalize possible response shapes:
-      // - res.data may already be an array
-      // - res.data.data may be the array
-      // - res.data.stocks or res.data.items could be the array
       const payload = res.data;
       let final: Stock[] = [];
 
@@ -160,19 +158,15 @@ export function StocksTable() {
       } else if (Array.isArray(payload?.result)) {
         final = payload.result;
       } else {
-        // if payload is object and looks like { success: true, data: [...] } already covered,
-        // otherwise try to coerce to array gracefully:
         final = Array.isArray(payload) ? payload : [];
       }
 
       setStocks(final);
-      // for debugging: if final is empty but payload had something else, log payload
       if (final.length === 0) {
         console.warn("No stocks parsed from response. Full payload:", payload);
       }
     } catch (err: any) {
       console.error("Error fetching stock:", err.response?.data || err.message);
-      // Optionally, if you want to show a specific UI message, set state for that
     } finally {
       setLoading(false);
     }
@@ -182,51 +176,171 @@ export function StocksTable() {
     fetchStocks();
   }, [fetchStocks]);
 
-  // 🟡 Filter stocks by date
+  // helper: strip time (set to start of day)
+  const startOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  // helper: end of day (set to 23:59:59.999)
+  const endOfDay = (d: Date) => {
+    const c = new Date(d);
+    c.setHours(23, 59, 59, 999);
+    return c;
+  };
+
+  // additional helpers for presets
+  const startOfWeek = (d: Date) => {
+    const c = new Date(d);
+    c.setDate(c.getDate() - c.getDay());
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfWeek = (d: Date) => {
+    const s = startOfWeek(d);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 6);
+    return endOfDay(e);
+  };
+  const startOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth(), 1);
+    c.setHours(0, 0, 0, 0);
+    return c;
+  };
+  const endOfMonth = (d: Date) => {
+    const c = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return endOfDay(c);
+  };
+  const formatISODate = (d: Date) => d.toISOString().slice(0, 10);
+
+  // Apply preset: sets dateFilter AND updates fromDate/toDate so both controls stay in sync.
+  const applyPreset = (preset: typeof dateFilter) => {
+    const today = new Date();
+    let from: Date | null = null;
+    let to: Date | null = null;
+
+    switch (preset) {
+      case "all":
+        from = null;
+        to = null;
+        break;
+      case "today":
+        from = startOfDay(today);
+        to = endOfDay(today);
+        break;
+      case "yesterday": {
+        const y = new Date();
+        y.setDate(today.getDate() - 1);
+        from = startOfDay(y);
+        to = endOfDay(y);
+        break;
+      }
+      case "thisWeek":
+        from = startOfWeek(today);
+        to = endOfWeek(today);
+        break;
+      case "lastWeek": {
+        const lwStart = startOfWeek(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7));
+        from = lwStart;
+        to = endOfWeek(lwStart);
+        break;
+      }
+      case "thisMonth":
+        from = startOfMonth(today);
+        to = endOfMonth(today);
+        break;
+      case "lastMonth": {
+        const lm = new Date();
+        lm.setMonth(lm.getMonth() - 1);
+        from = startOfMonth(lm);
+        to = endOfMonth(lm);
+        break;
+      }
+    }
+
+    setDateFilter(preset);
+    setFromDate(from ? formatISODate(from) : "");
+    setToDate(to ? formatISODate(to) : "");
+  };
+
+  // 🟡 Filter stocks by date (now supports From/To range; range takes priority but preset fills the range)
   const filteredData = React.useMemo(() => {
+    // if no stocks yet
+    if (!stocks || stocks.length === 0) return [];
+
+    // If user provided a from/to range (either), use that priority
+    const useRange = !!(fromDate || toDate);
+    if (useRange) {
+      let from: Date | null = null;
+      let to: Date | null = null;
+      if (fromDate) {
+        const parsed = new Date(fromDate);
+        if (!Number.isNaN(parsed.getTime())) from = startOfDay(parsed);
+      }
+      if (toDate) {
+        const parsed = new Date(toDate);
+        if (!Number.isNaN(parsed.getTime())) to = endOfDay(parsed);
+      }
+
+      return stocks.filter((stock) => {
+        if (!stock?.createdAt) return false;
+        const d = new Date(stock.createdAt);
+        if (isNaN(d.getTime())) return false;
+        if (from && to) {
+          return d >= from && d <= to;
+        } else if (from) {
+          return d >= from;
+        } else if (to) {
+          return d <= to;
+        } else {
+          return true;
+        }
+      });
+    }
+
+    // otherwise fallback to existing preset dateFilter behavior
     if (dateFilter === "all") return stocks;
 
     const today = new Date();
     return stocks.filter((stock) => {
       if (!stock?.createdAt) return false;
       const date = new Date(stock.createdAt);
+      if (isNaN(date.getTime())) return false;
 
       switch (dateFilter) {
         case "today":
           return date.toDateString() === today.toDateString();
-        case "yesterday":
+        case "yesterday": {
           const yesterday = new Date(today);
           yesterday.setDate(today.getDate() - 1);
           return date.toDateString() === yesterday.toDateString();
-        case "thisWeek":
-          const weekStart = new Date(today);
-          weekStart.setDate(today.getDate() - today.getDay());
-          weekStart.setHours(0, 0, 0, 0);
-          return date >= weekStart;
-        case "lastWeek":
-          const lastWeekStart = new Date(today);
-          lastWeekStart.setDate(today.getDate() - today.getDay() - 7);
-          lastWeekStart.setHours(0, 0, 0, 0);
-          const lastWeekEnd = new Date(lastWeekStart);
-          lastWeekEnd.setDate(lastWeekStart.getDate() + 7);
-          return date >= lastWeekStart && date < lastWeekEnd;
-        case "thisMonth":
-          return (
-            date.getMonth() === today.getMonth() &&
-            date.getFullYear() === today.getFullYear()
-          );
-        case "lastMonth":
-          const lastMonth = new Date(today);
-          lastMonth.setMonth(today.getMonth() - 1);
-          return (
-            date.getMonth() === lastMonth.getMonth() &&
-            date.getFullYear() === lastMonth.getFullYear()
-          );
+        }
+        case "thisWeek": {
+          const weekStart = startOfWeek(today);
+          const weekEnd = endOfWeek(today);
+          return date >= weekStart && date <= weekEnd;
+        }
+        case "lastWeek": {
+          const lastWeekStart = startOfWeek(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7));
+          const lastWeekEnd = endOfWeek(lastWeekStart);
+          return date >= lastWeekStart && date <= lastWeekEnd;
+        }
+        case "thisMonth": {
+          const sm = startOfMonth(today);
+          const em = endOfMonth(today);
+          return date >= sm && date <= em;
+        }
+        case "lastMonth": {
+          const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const sm = startOfMonth(lm);
+          const em = endOfMonth(lm);
+          return date >= sm && date <= em;
+        }
         default:
           return true;
       }
     });
-  }, [dateFilter, stocks]);
+  }, [dateFilter, stocks, fromDate, toDate]);
 
   // 🧩 React Table Setup (added onColumnFiltersChange etc.)
   const table = useReactTable({
@@ -245,10 +359,6 @@ export function StocksTable() {
   if (loading) return <p className="p-4">Loading stock...</p>;
   const exportEndpoints = [
     { label: "Export Stock", url: "https://cod-ecommerce-two.vercel.app/api/seller/stock/export" },
-    //   { label: "Export Sellers", url: "/api/adminb/bulk/seller/export/excal" },
-    //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
-    //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
-    //   { label: "Export Delivery Agents", url: "/api/adminb/bulk/delivery-agents/export/excel" },
   ];
 
   const handleExport = async (url: string): Promise<void> => {
@@ -261,10 +371,8 @@ export function StocksTable() {
 
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
-        // no credentials needed for token-based auth
       } else {
-        // no token — try cookie-based auth: ask browser to include cookies
-        credentials = "include"; // IMPORTANT: server must support CORS with credentials
+        credentials = "include";
       }
 
       const response = await fetch(url, {
@@ -274,7 +382,6 @@ export function StocksTable() {
       });
 
       if (!response.ok) {
-        // get backend error text to help debugging
         const errorText = await response.text().catch(() => "(no body)");
         throw new Error(`Export failed: ${response.status} ${errorText}`);
       }
@@ -297,9 +404,9 @@ export function StocksTable() {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
       console.error("handleExport error:", err);
-      // show UI feedback here if you want
     }
   };
+
   return (
     <div className="w-full">
       {/* Top bar */}
@@ -314,25 +421,61 @@ export function StocksTable() {
         />
 
         {/* Date Filter Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              {dateFilter === "all"
-                ? "All"
-                : dateFilter.replace(/([A-Z])/g, " $1")}
-              <ChevronDown className="ml-2 h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                {dateFilter === "all"
+                  ? "All"
+                  : dateFilter.replace(/([A-Z])/g, " $1")}
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => applyPreset("all")}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("today")}>Today</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("yesterday")}>Yesterday</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("thisWeek")}>This Week</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("lastWeek")}>Last Week</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("thisMonth")}>This Month</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => applyPreset("lastMonth")}>Last Month</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* From / To date inputs (functional range) */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm mr-1">From:</label>
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              aria-label="From date"
+              className="max-w-[160px]"
+            />
+            <label className="text-sm mr-1 ml-2">To:</label>
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              aria-label="To date"
+              className="max-w-[160px]"
+            />
+
+            {/* Clear range button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setDateFilter("all");
+              }}
+            >
+              Clear
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setDateFilter("all")}>All</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("today")}>Today</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("yesterday")}>Yesterday</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("thisWeek")}>This Week</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("lastWeek")}>Last Week</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("thisMonth")}>This Month</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDateFilter("lastMonth")}>Last Month</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </div>
+        </div>
+
         {exportEndpoints.map((item) => (
           <Button
             key={item.label}

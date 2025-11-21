@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,9 @@ import {
 import { ChevronsUpDown, Check } from "lucide-react";
 
 export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
-  const [seller, setSeller] = useState("");
-  const [sellerName, setSellerName] = useState("");
-  const [sellerSearch, setSellerSearch] = useState("");
+  const [seller, setSeller] = useState<string>("");
+  const [sellerName, setSellerName] = useState<string>("");
+  const [sellerSearch, setSellerSearch] = useState<string>("");
   const [sellerOpen, setSellerOpen] = useState(false);
 
   const [sellers, setSellers] = useState<any[]>([]);
@@ -48,7 +48,8 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        setSellers(res.data.data || []);
+        // Support both res.data or res.data.data shapes
+        setSellers(res.data?.data ?? res.data ?? []);
       } catch (err) {
         console.error("Failed to fetch sellers:", err);
       } finally {
@@ -57,6 +58,12 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
     };
     fetchSellers();
   }, []);
+
+  // derived selected seller object
+  const selectedSeller = useMemo(
+    () => sellers.find((s) => s._id === seller) ?? null,
+    [sellers, seller]
+  );
 
   const handleAddPayout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +131,8 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
                   onClick={() => setSellerOpen(!sellerOpen)}
                 >
                   <span className="truncate">
-                    {sellerName || (fetchingSellers ? "Loading sellers..." : "Select Seller")}
+                    {sellerName ||
+                      (fetchingSellers ? "Loading sellers..." : "Select Seller")}
                   </span>
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
@@ -142,18 +150,19 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
 
                   <div className="max-h-48 overflow-y-auto space-y-1">
                     {sellers.filter((s) =>
-                      s.name.toLowerCase().includes(sellerSearch.toLowerCase())
+                      (s.name ?? s.email ?? "").toLowerCase().includes(sellerSearch.toLowerCase())
                     ).length > 0 ? (
                       sellers
                         .filter((s) =>
-                          s.name.toLowerCase().includes(sellerSearch.toLowerCase())
+                          (s.name ?? s.email ?? "").toLowerCase().includes(sellerSearch.toLowerCase())
                         )
                         .map((s) => (
                           <button
                             key={s._id}
+                            type="button" // IMPORTANT: prevent accidental form submit
                             onClick={() => {
                               setSeller(s._id);
-                              setSellerName(s.name);
+                              setSellerName(s.name ?? s.email ?? "");
                               setSellerOpen(false);
                               setSellerSearch("");
                             }}
@@ -174,6 +183,25 @@ export function AddPayout({ onPayoutAdded }: { onPayoutAdded?: () => void }) {
                 </div>
               </PopoverContent>
             </Popover>
+
+            {/* Show bank details for selected seller */}
+            {selectedSeller?.bankDetails && (
+              <div className="pt-2">
+                <div className="text-sm font-medium">Bank Details</div>
+                <div className="grid grid-cols-1 gap-1 text-sm mt-2">
+                  <div>
+                    Account name: {selectedSeller.bankDetails.accountName ?? "—"}
+                  </div>
+                  <div>
+                    Account number: {selectedSeller.bankDetails.accountNumber ?? "—"}
+                  </div>
+                  <div>Bank: {selectedSeller.bankDetails.bankName ?? "—"}</div>
+                  <div>
+                    Bank code: {selectedSeller.bankDetails.bankCode ?? "—"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <Input

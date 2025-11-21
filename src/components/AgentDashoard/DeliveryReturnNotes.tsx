@@ -105,7 +105,7 @@ export default function DeliveryNotesTable() {
   const fetchNotes = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/delivery-notes", {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/delivery-agent/getDeliveryNotes", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 

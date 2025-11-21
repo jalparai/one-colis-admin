@@ -259,7 +259,7 @@ export function EditProfileDialog({
                 )}
               />
 
-              <FormField
+              {/* <FormField
                 control={form.control}
                 name="accountName"
                 render={({ field }) => (
@@ -271,7 +271,7 @@ export function EditProfileDialog({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              /> */}
 
               <FormField
                 control={form.control}
@@ -287,7 +287,7 @@ export function EditProfileDialog({
                 )}
               />
 
-              <FormField
+              {/* <FormField
                 control={form.control}
                 name="bankCode"
                 render={({ field }) => (
@@ -299,7 +299,7 @@ export function EditProfileDialog({
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              /> */}
             </div>
 
             <DialogFooter>
