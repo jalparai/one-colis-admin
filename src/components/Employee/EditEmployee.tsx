@@ -30,12 +30,19 @@ export function EditEmployee({
     customRole?: string;
     permissions?: {
       addStock?: boolean;
+      supportOperations?: boolean;
       manageOrders?: boolean;
+      scanOrders?: boolean;
+      assignOrders?: boolean;
+      assignPickups?: boolean;
       assignProducts?: boolean;
       assignPayouts?: boolean;
-      assignPickups?: boolean;
       SupportTick?: boolean;
       managePickups?: boolean;
+      manageSellers?: boolean;
+      manageInvoices?: boolean;
+      manageWarehouse?: boolean;
+      manageDeliveryAgents?: boolean;
     };
   };
   onUpdated: () => void;
@@ -45,49 +52,81 @@ export function EditEmployee({
   const { t } = useTranslation();
   const ns = "employeeAdd";
 
-  const [name, setName] = useState(employee.name || "");
-  const [password, setPassword] = useState("");
-  const [customRole, setCustomRole] = useState(employee.customRole || "");
-  const [permissions, setPermissions] = useState({
-    addStock: employee.permissions?.addStock || false,
-    manageOrders: employee.permissions?.manageOrders || false,
-    assignProducts: employee.permissions?.assignProducts || false,
-    assignPayouts: employee.permissions?.assignPayouts || false,
-    assignPickups: employee.permissions?.assignPickups || false,
-    SupportTick: employee.permissions?.SupportTick || false,
-    managePickups: employee.permissions?.managePickups || false,
-  });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [formData, setFormData] = useState({
+    name: employee.name || "",
+    email: employee.email || "",
+    password: "",
+    customRole: employee.customRole || "",
+    permissions: {
+      addStock: employee.permissions?.addStock || false,
+      supportOperations: employee.permissions?.supportOperations || false,
+      manageOrders: employee.permissions?.manageOrders || false,
+      scanOrders: employee.permissions?.scanOrders || false,
+      assignOrders: employee.permissions?.assignOrders || false,
+      assignPickups: employee.permissions?.assignPickups || false,
+      assignProducts: employee.permissions?.assignProducts || false,
+      assignPayouts: employee.permissions?.assignPayouts || false,
+      SupportTick: employee.permissions?.SupportTick || false,
+      managePickups: employee.permissions?.managePickups || false,
+      manageSellers: employee.permissions?.manageSellers || false,
+      manageInvoices: employee.permissions?.manageInvoices || false,
+      manageWarehouse: employee.permissions?.manageWarehouse || false,
+      manageDeliveryAgents: employee.permissions?.manageDeliveryAgents || false,
+    },
+  });
 
   // Sync employee data when modal opens or employee changes
   useEffect(() => {
     if (employee) {
-      setName(employee.name || "");
-      setCustomRole(employee.customRole || "");
-      setPermissions({
-        addStock: employee.permissions?.addStock || false,
-        manageOrders: employee.permissions?.manageOrders || false,
-        assignProducts: employee.permissions?.assignProducts || false,
-        assignPayouts: employee.permissions?.assignPayouts || false,
-        assignPickups: employee.permissions?.assignPickups || false,
-        SupportTick: employee.permissions?.SupportTick || false,
-        managePickups: employee.permissions?.managePickups || false,
+      setFormData({
+        name: employee.name || "",
+        email: employee.email || "",
+        password: "",
+        customRole: employee.customRole || "",
+        permissions: {
+          addStock: employee.permissions?.addStock || false,
+          supportOperations: employee.permissions?.supportOperations || false,
+          manageOrders: employee.permissions?.manageOrders || false,
+          scanOrders: employee.permissions?.scanOrders || false,
+          assignOrders: employee.permissions?.assignOrders || false,
+          assignPickups: employee.permissions?.assignPickups || false,
+          assignProducts: employee.permissions?.assignProducts || false,
+          assignPayouts: employee.permissions?.assignPayouts || false,
+          SupportTick: employee.permissions?.SupportTick || false,
+          managePickups: employee.permissions?.managePickups || false,
+          manageSellers: employee.permissions?.manageSellers || false,
+          manageInvoices: employee.permissions?.manageInvoices || false,
+          manageWarehouse: employee.permissions?.manageWarehouse || false,
+          manageDeliveryAgents: employee.permissions?.manageDeliveryAgents || false,
+        },
       });
-      setPassword("");
+      setMessage("");
     }
   }, [employee, open]);
 
-  const handlePermissionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setPermissions((prev) => ({
-      ...prev,
-      [name]: checked,
-    }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, checked, type } = e.target;
+
+    if (name in formData.permissions) {
+      setFormData((prev) => ({
+        ...prev,
+        permissions: { ...prev.permissions, [name]: checked },
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setMessage("");
 
     try {
       const token = localStorage.getItem("token");
@@ -99,12 +138,7 @@ export function EditEmployee({
 
       await axios.put(
         `https://cod-ecommerce-two.vercel.app/api/admin/employees/${employee._id}`,
-        {
-          name,
-          password,
-          customRole,
-          permissions,
-        },
+        formData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -112,10 +146,10 @@ export function EditEmployee({
       onUpdated();
       onClose();
     } catch (err: any) {
-      console.error(err);
-      toast.error(
-        err.response?.data?.message || t(`${ns}.errorGenericUpdate`)
-      );
+      const errorMsg =
+        err.response?.data?.message || t(`${ns}.errorGenericUpdate`);
+      setMessage(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -123,62 +157,79 @@ export function EditEmployee({
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent>
+      <SheetContent className="overflow-scroll">
         <SheetHeader>
           <SheetTitle>{t(`${ns}.editTitle`)}</SheetTitle>
           <SheetDescription>{t(`${ns}.editDescription`)}</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleUpdate} className="grid gap-6 px-4">
-          {/* Name Field */}
+        <form onSubmit={handleUpdate} className="grid gap-6 px-4 py-4">
+          {/* Name */}
           <div className="grid gap-3">
             <Label htmlFor="name">{t(`${ns}.fields.name`)}</Label>
             <Input
               id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
               required
             />
           </div>
 
-          {/* Password Field */}
+          {/* Email */}
+          <div className="grid gap-3">
+            <Label htmlFor="email">{t(`${ns}.fields.email`)}</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          {/* Password */}
           <div className="grid gap-3">
             <Label htmlFor="password">{t(`${ns}.fields.password`)}</Label>
             <Input
               id="password"
+              name="password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={handleChange}
               placeholder={t(`${ns}.placeholders.password`)}
             />
           </div>
 
-          {/* Custom Role Field */}
+          {/* Custom Role */}
           <div className="grid gap-3">
             <Label htmlFor="customRole">{t(`${ns}.fields.customRole`)}</Label>
             <Input
               id="customRole"
               name="customRole"
-              value={customRole}
-              onChange={(e) => setCustomRole(e.target.value)}
+              value={formData.customRole}
+              onChange={handleChange}
               placeholder={t(`${ns}.placeholders.customRole`)}
               required
             />
           </div>
 
-          {/* Permissions Section */}
+          {/* Permissions */}
           <div className="border-t pt-4">
-            <Label className="font-semibold text-sm mb-2 block">
+            <Label className="font-semibold mb-2 text-sm">
               {t(`${ns}.permissionsTitle`)}
             </Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              {Object.keys(permissions).map((key) => (
-                <label key={key} className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll capitalize">
+            <div className="flex flex-col gap-3 mt-2 text-sm">
+              {Object.keys(formData.permissions).map((key) => (
+                <label key={key} className="flex items-center gap-2 capitalize">
                   <input
                     type="checkbox"
                     name={key}
-                    checked={permissions[key as keyof typeof permissions] || false}
-                    onChange={handlePermissionChange}
+                    checked={
+                      formData.permissions[key as keyof typeof formData.permissions]
+                    }
+                    onChange={handleChange}
                     className="w-4 h-4"
                   />
                   {t(`${ns}.permissions.${key}`)}
@@ -186,6 +237,8 @@ export function EditEmployee({
               ))}
             </div>
           </div>
+
+          {message && <p className="text-sm text-red-500">{message}</p>}
 
           <SheetFooter>
             <Button type="submit" disabled={loading}>

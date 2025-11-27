@@ -1,3 +1,6 @@
+// ---------------------------------------------------------------------------
+// AddEmployee.tsx  (Corrected Permissions)
+// ---------------------------------------------------------------------------
 "use client";
 
 import { useState } from "react";
@@ -23,8 +26,8 @@ interface AddEmployeeProps {
 }
 
 export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
-  const { t } = useTranslation(); // Using default namespace
-  const ns = "employeeAdd"; // parent namespace
+  const { t } = useTranslation();
+  const ns = "employeeAdd";
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -35,19 +38,28 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
     email: "",
     password: "",
     customRole: "",
+    // FIXED PERMISSIONS → EXACT MATCH WITH API
     permissions: {
       addStock: false,
+      supportOperations: false,
       manageOrders: false,
+      scanOrders: false,
+      assignOrders: false,
+      assignPickups: false,
       assignProducts: false,
       assignPayouts: false,
-      assignPickups: false,
       SupportTick: false,
       managePickups: false,
-    },
+      manageSellers: false,
+      manageInvoices: false,
+      manageWarehouse: false,
+      manageDeliveryAgents: false,
+    }
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, checked } = e.target;
+
     if (name in formData.permissions) {
       setFormData((prev) => ({
         ...prev,
@@ -87,18 +99,24 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
         customRole: "",
         permissions: {
           addStock: false,
+          supportOperations: false,
           manageOrders: false,
+          scanOrders: false,
+          assignOrders: false,
+          assignPickups: false,
           assignProducts: false,
           assignPayouts: false,
-          assignPickups: false,
           SupportTick: false,
           managePickups: false,
+          manageSellers: false,
+          manageInvoices: false,
+          manageWarehouse: false,
+          manageDeliveryAgents: false,
         },
       });
 
       setOpen(false);
     } catch (err: any) {
-      console.error("Error adding employee:", err);
       const errorMsg = err.response?.data?.message || t(`${ns}.errorGeneric`);
       setMessage(errorMsg);
       toast.error(errorMsg);
@@ -122,90 +140,66 @@ export function AddEmployee({ onEmployeeAdded }: AddEmployeeProps) {
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="grid gap-6 px-4 py-4">
-          {/* Name */}
+          {/* Text inputs */}
           <div className="grid gap-3">
             <Label htmlFor="name">{t(`${ns}.fields.name`)}</Label>
-            <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
+            <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
           </div>
 
-          {/* Email */}
           <div className="grid gap-3">
             <Label htmlFor="email">{t(`${ns}.fields.email`)}</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
+            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
           </div>
 
-          {/* Password */}
           <div className="grid gap-3">
             <Label htmlFor="password">{t(`${ns}.fields.password`)}</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
+            <Input id="password" name="password" type="password" value={formData.password} onChange={handleChange} required />
           </div>
 
-          {/* Role */}
           <div className="grid gap-3">
             <Label htmlFor="customRole">{t(`${ns}.fields.customRole`)}</Label>
-            <Input
-              id="customRole"
-              name="customRole"
-              value={formData.customRole}
-              onChange={handleChange}
-              placeholder={t(`${ns}.placeholders.customRole`)}
-              required
-            />
+            <Input id="customRole" name="customRole" value={formData.customRole}
+              onChange={handleChange} placeholder={t(`${ns}.placeholders.customRole`)} required />
           </div>
 
           {/* Permissions */}
-          <div className="border-t pt-4">
-            <Label className="font-semibold mb-2 text-sm">
-              {t(`${ns}.permissionsTitle`)}
-            </Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 text-sm">
-              {Object.keys(formData.permissions).map((key) => (
-                <label key={key} className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll capitalize">
-                  <input
-                    type="checkbox"
-                    name={key}
-                    checked={formData.permissions[key as keyof typeof formData.permissions]}
-                    onChange={handleChange}
-                    className="w-4 h-4"
-                  />
-                  {t(`${ns}.permissions.${key}`)}
-                </label>
-              ))}
-            </div>
-          </div>
+        <div className="border-t pt-4">
+  <Label className="font-semibold mb-2 text-sm">
+    {t(`${ns}.permissionsTitle`)}
+  </Label>
 
-          {/* Error Message */}
+  <div className="flex flex-col gap-3 mt-2 text-sm">
+    {Object.keys(formData.permissions).map((key) => (
+      <label
+        key={key}
+        className="flex items-center gap-2 capitalize"
+      >
+        <input
+          type="checkbox"
+          name={key}
+          checked={
+            formData.permissions[
+              key as keyof typeof formData.permissions
+            ]
+          }
+          onChange={handleChange}
+          className="w-4 h-4"
+        />
+        {t(`${ns}.permissions.${key}`)}
+      </label>
+    ))}
+  </div>
+</div>
+
+
           {message && <p className="text-sm text-red-500">{message}</p>}
 
-          {/* Footer */}
           <SheetFooter>
             <Button type="submit" disabled={loading}>
               {loading ? t(`${ns}.submit.adding`) : t(`${ns}.submit.add`)}
             </Button>
             <SheetClose asChild>
-              <Button type="button" variant="outline">
-                {t(`${ns}.close`)}
-              </Button>
+              <Button variant="outline" type="button">{t(`${ns}.close`)}</Button>
             </SheetClose>
           </SheetFooter>
         </form>

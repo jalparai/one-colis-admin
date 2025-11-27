@@ -4,95 +4,144 @@ import * as React from "react";
 import axios from "axios";
 import {
   type ColumnDef,
-  type RowData,
+  type ColumnFiltersState,
+  type SortingState,
+  type VisibilityState,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type RowData,
   flexRender,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronsUpDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown, DownloadIcon, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import toast from "react-hot-toast";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+// import { AddOrder } from "./AddOrder";
+// import { ImportReadyOrdersButton } from "@/components/ui/import-ready-orders";
+// import { AddReadyOrder } from "./AddReadyOrder";
+// import EditOrder from "./EditOrder";
 
-// ✅ Types
+// ---------- Types ----------
+// NOTE: items now include optional productId so frontend passes productId when editing/creating
 export type Order = {
-  id?: string
-  _id?: string
-  seller: string
-  sellerEmail: string
+  id: string; // normalized id (from o.id ?? o._id)
+  seller: string;
+  orderId: string;
+
+  sellerEmail?: string;
   items: {
-    productName: string
-    quantity: number
-    unitPrice: number
-    total: number
-  }[]
-  itemsTotal: number
-  totalAmount: number
-  status: string
-  notes: string
-  createdAt: string
-  updatedAt: string
-}
+    productId?: string | null;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total?: number;
+  }[];
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    postalCode?: string;
+  };
+  itemsTotal?: number;
+  totalAmount: number;
+  status: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
 type Agent = {
-  id: string
-  name: string
-  email: string
-  // ...existing fields may exist on server (_id etc.)
-}
-function getStoredUser(): any | null {
-  if (typeof window === "undefined") return null
-  const raw = localStorage.getItem("user")
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === "object" && parsed.user ? parsed.user : parsed
-  } catch (e) {
-    return null
-  }
-}
+  id: string;
+  name: string;
+  email?: string;
+};
 
-function hasAnyPermission(permissionsObj: any, keys: string[]) {
-  if (!permissionsObj || typeof permissionsObj !== "object") return false
-  return keys.some((k) => {
-    const v = permissionsObj[k]
-    if (typeof v === "string") return v.toLowerCase() === "true"
-    return Boolean(v)
-  })
-}
-
-// ✅ Extend TableMeta to allow refresh
+// Extend TableMeta for refresh callback
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
-    refresh?: () => void
+    refresh?: () => void;
   }
 }
 
+// ---------- Status options ----------
+const statuses = [
+  "pending",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "ready",
+  "confirmed",
+  "returned",
+  "collected",
+];
 
-// ✅ Columns (actions removed)
-// Replace the previous getOrderColumns() actions column with this updated function
-const getOrderColumns = (): ColumnDef<Order>[] => {
-  return [
-    { accessorKey: "seller", header: "Seller" },
+// ---------- Columns factory (pass callbacks) ----------
+export const getOrderColumns = (
+  onStatusUpdate: (id: string, status: string) => Promise<void>,
+  onDelete: (id: string) => Promise<void>,
+  onUpdated?: () => void,
+    onPrintLabel?: (id: string) => Promise<void> // <-- new optional callback
+): ColumnDef<Order>[] => [
+   {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    },
+    {
+      accessorKey: "orderId",
+      header: "# Order ID",
+      cell: ({ row }) => {
+        const orderId = row.getValue("orderId") as string;
+        return <div className="font-mono text-xs text-muted-foreground">{orderId}</div>;
+      },
+    },
+    {
+      accessorKey: "seller",
+      header: "Seller",
+      cell: ({ row }) => <div>{row.getValue("seller")}</div>,
+    },
     {
       accessorKey: "sellerEmail",
       header: "Email",
@@ -109,282 +158,436 @@ const getOrderColumns = (): ColumnDef<Order>[] => {
         </ul>
       ),
     },
+
+    // --- Customer columns ---
+    {
+      id: "customer_name",
+      header: "Customer Name",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.name ?? "—"}</div>,
+    },
+    {
+      id: "customer_phone",
+      header: "Phone",
+      accessorKey: "customer",
+      cell: ({ row }) => <div className="font-mono text-sm">{row.original.customer?.phone ?? "—"}</div>,
+    },
+    {
+      id: "customer_address",
+      header: "Address",
+      accessorKey: "customer",
+      cell: ({ row }) => <div className="truncate max-w-xs">{row.original.customer?.address ?? "—"}</div>,
+    },
+    {
+      id: "customer_city",
+      header: "City",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.city ?? "—"}</div>,
+    },
+    {
+      id: "customer_postal",
+      header: "Postal Code",
+      accessorKey: "customer",
+      cell: ({ row }) => <div>{row.original.customer?.postalCode ?? "—"}</div>,
+    },
+
+
+    {
+      accessorKey: "quantity",
+      header: "Quantity",
+      cell: ({ row }) => (
+        <ul className="list-none pl-0">
+          {row.original.items.map((item, idx) => (
+            <li key={idx}>{item.quantity}</li>
+          ))}
+        </ul>
+      ),
+    },
+        // --- Print Label column (separate from actions) ---
+ 
     {
       accessorKey: "totalAmount",
-      header: "Total",
-      cell: ({ row }) => <div>${row.getValue("totalAmount")}</div>,
+      header: "Total Amount",
+      cell: ({ row }) => <div>{row.getValue("totalAmount")}</div>,
     },
     {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
-        const status = (row.getValue("status") as string) || "";
-        const color =
-          status.toLowerCase() === "pending"
-            ? "bg-yellow-50 text-yellow-700"
-            : status.toLowerCase() === "confirmed"
-            ? "bg-indigo-50 text-indigo-700"
-            : status.toLowerCase() === "delivered"
-            ? "bg-green-50 text-green-700"
-            : "bg-gray-50 text-gray-700";
-        return (
-          <span className={`px-2 py-1 text-xs rounded-full font-semibold ${color}`}>
-            {status}
-          </span>
-        );
+        const status = (row.getValue("status") ?? "") as string;
+        const getStatusColor = (s: string) => {
+          switch (s.toLowerCase()) {
+            case "pending":
+              return "bg-yellow-50 text-yellow-700";
+            case "confirmed":
+              return "bg-indigo-50 text-indigo-700";
+            case "shipped":
+            case "delivered":
+              return "bg-green-50 text-green-700";
+            case "cancelled":
+              return "bg-rose-50 text-rose-700";
+            default:
+              return "bg-gray-50 text-gray-700";
+          }
+        };
+        return <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}>{status}</span>;
       },
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => <div>{row.getValue("notes") ?? "—"}</div>,
     },
     {
       accessorKey: "createdAt",
       header: "Date",
       cell: ({ row }) => <div>{new Date(row.getValue("createdAt") as string).toLocaleDateString()}</div>,
     },
-    {
-      id: "actions",
-      header: "Actions/Assign",
-      cell: ({ row, table }) => {
-        const [deleteOpen, setDeleteOpen] = React.useState(false);
-        const [assignOpen, setAssignOpen] = React.useState(false);
-        const [loading, setLoading] = React.useState(false);
-        const [agents, setAgents] = React.useState<Agent[]>([]);
-        const [selectedAgent, setSelectedAgent] = React.useState("");
-        const [filteredAgents, setFilteredAgents] = React.useState<Agent[]>([]);
+   {
+      id: "print_label",
+      header: "Label",
+      cell: ({ row }) => {
+        const order = row.original;
+        const [downloading, setDownloading] = React.useState(false);
+        const isReady = order.status === "ready";
 
-        // permissions (only permission check here)
-        const storedUser = getStoredUser();
-        const permissions = storedUser?.permissions ?? {};
-        const hasAssignPermission = hasAnyPermission(permissions, ["assignPickups"]);
-
-        // row status (normalized)
-        const rowStatus = (row.original.status ?? "").toString().trim().toLowerCase();
-
-        // final gate: only allow assign when permission exists AND status is "pickup"
-        const allowAssign = hasAssignPermission && rowStatus === "pickup_requested";
-
-        React.useEffect(() => {
-          if (!assignOpen) return;
-
-          if (!allowAssign) {
-            // Defensive: should not happen because menu disables, but guard anyway
-            toast.error("You cannot assign this order — only pickups can be assigned.");
-            setAssignOpen(false);
+        const onClick = async () => {
+          if (!onPrintLabel) {
+            console.warn("onPrintLabel handler not provided");
             return;
           }
-
-          const fetchAgents = async () => {
-            try {
-              const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-              const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents", {
-                headers: { Authorization: `Bearer ${token}` },
-                validateStatus: () => true,
-              });
-
-              const raw = Array.isArray(res.data?.data) ? res.data.data : [];
-              const normalized: Agent[] = raw
-                .map((a: any) => ({
-                  id: a?.id ?? a?._id,
-                  name: a?.name ?? "",
-                  email: a?.email ?? "",
-                }))
-                .filter((a: Agent, i: number, arr: Agent[]) => Boolean(a.id) && i === arr.findIndex((x) => x.id === a.id));
-
-              setAgents(normalized);
-              setFilteredAgents(normalized);
-            } catch (err) {
-              console.error("❌ Failed to fetch agents", err);
-              toast.error("Could not load agents");
-            }
-          };
-
-          fetchAgents();
-        }, [assignOpen, allowAssign]);
-
-        const handleDelete = async () => {
+          setDownloading(true);
           try {
-            setLoading(true);
-            const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-            const orderId = row?.original?._id ?? row?.original?.id;
-            if (!orderId) {
-              toast.error("Order ID missing.");
-              return;
-            }
-
-            const res = await axios.delete(
-              `https://cod-ecommerce-two.vercel.app/api/admin/delete-order/${orderId}`,
-              { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
-            );
-
-            if (res.status >= 200 && res.status < 300) {
-              toast.success("Order deleted");
-              setDeleteOpen(false);
-              table.options.meta?.refresh?.();
-            } else {
-              console.error("Delete failed", res.status, res.data);
-              toast.error(res.data?.message ?? `Delete failed (${res.status})`);
-            }
+            await onPrintLabel(order.id);
           } catch (err) {
-            console.error("❌ Failed to delete order", err);
-            toast.error("Failed to delete order");
+            console.error("Print label error:", err);
+          } finally {
+            setDownloading(false);
+          }
+        };
+
+        return isReady ? (
+          <Button size="sm" onClick={onClick} disabled={downloading}>
+            {/* {downloading ? "Downloading..." : "Label Export"} */}
+            <DownloadIcon />
+          </Button>
+        ) : (
+          <div className="text-sm text-muted-foreground">—</div>
+        );
+      },
+      enableSorting: false,
+    },
+
+    // Actions column — uses callbacks passed in
+    {
+      header: "Action",
+      id: "actions",
+      cell: ({ row, table }) => {
+        const order = row.original;
+        const [statusOpen, setStatusOpen] = React.useState(false);
+        const [deleteOpen, setDeleteOpen] = React.useState(false);
+        const [selectedStatus, setSelectedStatus] = React.useState<string>(order.status);
+        const [loading, setLoading] = React.useState(false);
+        const [pickupLoading, setPickupLoading] = React.useState(false);
+        const [editOpen, setEditOpen] = React.useState(false);
+        const [selectedOrder, setSelectedOrder] = React.useState<Order | null>(null);
+
+        const isReady = order.status === "ready";
+
+        // add these hooks near the top of the cell (where other hooks live)
+const [assignOpen, setAssignOpen] = React.useState(false);
+const [agents, setAgents] = React.useState<Agent[]>([]);
+const [selectedAgentId, setSelectedAgentId] = React.useState<string>(""); // default empty string
+const [assignLoading, setAssignLoading] = React.useState(false);
+
+// fetch agents when dialog opens
+React.useEffect(() => {
+  if (!assignOpen) return;
+  let cancelled = false;
+  const fetchAgents = async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents", {
+        headers: { Authorization: `Bearer ${token}` },
+        validateStatus: () => true,
+      });
+      const raw = Array.isArray(res.data?.data) ? res.data.data : [];
+      const normalized: Agent[] = raw
+        .map((a: any) => ({
+          id: a?.id ?? a?._id,
+          name: a?.name ?? (a?.email ?? "Unnamed"),
+          email: a?.email ?? "",
+        }))
+        .filter((a: Agent) => Boolean(a.id));
+      if (!cancelled) setAgents(normalized);
+    } catch (err) {
+      console.error("Failed to fetch agents", err);
+      toast.error("Could not load agents");
+    }
+  };
+  fetchAgents();
+  return () => {
+    cancelled = true;
+  };
+}, [assignOpen]);
+
+// assign handler
+// ensure selectedAgentId state is: const [selectedAgentId, setSelectedAgentId] = React.useState<string>("");
+
+const handleAssignToAgent = async () => {
+  if (!selectedAgentId) {
+    toast.error("Select an agent first");
+    return;
+  }
+  setAssignLoading(true);
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const res = await axios.post(
+      `${base}/api/admin/assign/orders/${selectedAgentId}`,
+      { orderIds: [order.id] },
+      { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
+    );
+
+    if (res.status >= 200 && res.status < 300) {
+      // After successful assign, update status to assigned_to_agent via your existing callback
+      try {
+        await onStatusUpdate(order.id, "assigned_to_agent");
+      } catch (err) {
+        // console.error("Failed to update status after assign:", err);
+        // still treat assign as success but warn user
+        toast.success("Order assigned to agent — but failed to update status. Refresh to verify.");
+        setAssignOpen(false);
+        setSelectedAgentId("");
+        onUpdated?.();
+        table.options.meta?.refresh?.();
+        return;
+      }
+
+      toast.success("Order assigned to agent and status updated");
+      setAssignOpen(false);
+      setSelectedAgentId("");
+      onUpdated?.();
+      table.options.meta?.refresh?.();
+    } else {
+      // surface server message when available
+      const msg = res.data?.message ?? `Assign failed (${res.status})`;
+      toast.error(msg);
+    }
+  } catch (err: any) {
+    console.error("Assign error", err);
+    toast.error(err?.response?.data?.message ?? "Network error while assigning");
+  } finally {
+    setAssignLoading(false);
+  }
+};
+
+
+
+
+        const handleUpdate = async () => {
+          if (!selectedStatus) {
+            toast.error("Select a status first");
+            return;
+          }
+          setLoading(true);
+          try {
+            await onStatusUpdate(order.id, selectedStatus);
+            onUpdated?.();
+            table.options.meta?.refresh?.();
+            toast.success("Status saved");
+            setStatusOpen(false);
+          } catch (err) {
+            toast.error("Could not update status");
           } finally {
             setLoading(false);
           }
         };
 
-        const handleAssign = async () => {
-          if (!selectedAgent) {
-            toast.error("Please select an agent first");
-            return;
-          }
-
-          const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-          if (!token) {
-            toast.error("Not authenticated. Please login again.");
-            return;
-          }
-
-          const orderId = row?.original?._id ?? row?.original?.id;
-          if (!orderId) {
-            toast.error("Order ID missing.");
-            return;
-          }
-
+        const handleDeleteLocal = async () => {
+          setLoading(true);
           try {
-            setLoading(true);
-            const res = await axios.post(
-              `https://cod-ecommerce-two.vercel.app/api/admin/assign/pickups/${selectedAgent}`,
-              { orderIds: [orderId] },
-              { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
-            );
-
-            if (res.status >= 200 && res.status < 300) {
-              toast.success("Pickup assigned successfully");
-              setAssignOpen(false);
-              setSelectedAgent("");
-              table.options.meta?.refresh?.();
-            } else {
-              console.error("Assign failed", res.status, res.data);
-              toast.error(res.data?.message ?? `Assign failed (${res.status})`);
-            }
-          } catch (err: any) {
-            console.error("Failed to assign pickup", err.response?.data || err.message);
-            toast.error("Could not assign pickup. Please try again.");
+            await onDelete(order.id);
+            onUpdated?.();
+            table.options.meta?.refresh?.();
+            setDeleteOpen(false);
+          } catch (err) {
+            console.error("Delete error:", err);
+            toast.error("Could not delete order");
           } finally {
             setLoading(false);
+          }
+        };
+
+        const handlePickupRequest = async () => {
+          try {
+            setPickupLoading(true);
+            const res = await axios.post(
+              `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order.id}/request-pickup`,
+              {},
+              { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+            );
+            alert(res.data.message || "Pickup requested successfully");
+            // Use the API's expected status string
+            await onStatusUpdate(order.id, "pickup_request");
+            onUpdated?.();
+          } catch (err: any) {
+            alert(err.response?.data?.message || "Error requesting pickup");
+          } finally {
+            setPickupLoading(false);
           }
         };
 
         return (
           <>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
+  <DropdownMenuTrigger asChild>
+    <Button variant="ghost" className="h-8 w-8 p-0">
+      <span className="sr-only">Open menu</span>
+      <MoreHorizontal className="h-4 w-4" />
+    </Button>
+  </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+  <DropdownMenuContent align="end">
+    <DropdownMenuLabel>Actions</DropdownMenuLabel>
 
-                {/* Assign item: only actionable when allowAssign === true */}
-                {allowAssign ? (
-                  <DropdownMenuItem onClick={() => setAssignOpen(true)}>Assign Pickup to Agent</DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      toast.error(
-                        hasAssignPermission
-                          ? "Only orders with status 'pickup' can be assigned."
-                          : "You don't have permission to assign pickups."
-                      )
-                    }
-                    className="opacity-50 cursor-not-allowed"
-                  >
-                    Assign Pickup to Agent
-                  </DropdownMenuItem>
-                )}
+    {/* <DropdownMenuItem
+      onClick={() => {
+        setSelectedOrder(order);
+        setEditOpen(true);
+      }}
+    >
+      Edit Order
+    </DropdownMenuItem> */}
 
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setDeleteOpen(true)}>Delete</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+    <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
 
-            {/* Delete Modal */}
+    <DropdownMenuSeparator />
+ 
+    {/* Assign to agent: only allow if order is ready */}
+    <DropdownMenuItem
+      onClick={() => {
+        if (!isReady) {
+          toast.error("Only orders with 'ready' status can be assigned");
+          return;
+        }
+        setAssignOpen(true);
+      }}
+    >
+      Assign to Agent
+    </DropdownMenuItem>
+
+    <DropdownMenuSeparator />
+
+    <DropdownMenuItem onClick={() => setDeleteOpen(true)}>Delete Order</DropdownMenuItem>
+
+    {isReady && (
+      <>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={pickupLoading} onClick={handlePickupRequest}>
+          {pickupLoading ? "Requesting..." : "Pickup Request"}
+        </DropdownMenuItem>
+      </>
+    )}
+  </DropdownMenuContent>
+</DropdownMenu>
+
+            {/* <EditOrder
+              order={selectedOrder}
+              open={editOpen}
+              onOpenChange={(v) => setEditOpen(v)}
+              onOrderUpdated={() => {
+                // refresh parent table or re-fetch whatever is needed
+                onUpdated?.();
+                table.options.meta?.refresh?.();
+              }}
+            /> */}
+
+          {/* Assign Dialog */}
+<Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Assign Order to Agent</DialogTitle>
+      <div className="text-sm text-muted-foreground mt-1">Pick a delivery agent to assign this ready order.</div>
+    </DialogHeader>
+
+    <div className="py-4">
+<Select value={selectedAgentId} onValueChange={(v) => setSelectedAgentId(String(v))}>
+  <SelectTrigger>
+    <SelectValue placeholder={agents.length ? "Select agent" : "No agents available"} />
+  </SelectTrigger>
+  <SelectContent>
+    {agents.length ? (
+      agents.map((a) => (
+        <SelectItem key={a.id} value={a.id}>
+          {a.name} {a.email ? `(${a.email})` : ""}
+        </SelectItem>
+      ))
+    ) : (
+      // use a non-empty value and disable it so user cannot select it
+      <SelectItem key="no-agents" value="__no_agents" disabled>
+        No agents
+      </SelectItem>
+    )}
+  </SelectContent>
+</Select>
+
+
+    </div>
+
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setAssignOpen(false)} disabled={assignLoading}>
+        Cancel
+      </Button>
+      <Button onClick={handleAssignToAgent} disabled={assignLoading}>
+        {assignLoading ? "Assigning..." : "Assign"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+  {/* Status Dialog */}
+            <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Update Order Status</DialogTitle>
+                  <div className="text-sm text-muted-foreground mt-1">Select the new status for this order.</div>
+                </DialogHeader>
+                <div className="py-4">
+                  <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setStatusOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUpdate} disabled={loading}>
+                    {loading ? "Saving..." : "Save"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete confirm */}
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete order?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. The order will be permanently removed.
-                  </AlertDialogDescription>
+                  <AlertDialogTitle>Delete Order with {order.items.map((i) => i.productName).join(", ")}?</AlertDialogTitle>
+                  <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} disabled={loading} className="bg-red-600 hover:bg-red-700">
+                  <AlertDialogAction onClick={handleDeleteLocal} disabled={loading} className="bg-red-600 hover:bg-red-700">
                     {loading ? "Deleting..." : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Assign Modal */}
-            <AlertDialog open={assignOpen} onOpenChange={setAssignOpen}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Assign Order</AlertDialogTitle>
-                  <AlertDialogDescription>Select an agent to assign this order.</AlertDialogDescription>
-                </AlertDialogHeader>
-
-                <div className="my-4">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" role="combobox" className="w-full justify-between">
-                        {selectedAgent ? agents.find((a) => a.id === selectedAgent)?.name : "Select Agent..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-
-                    <PopoverContent className="w-[300px] p-2">
-                      <div className="flex flex-col gap-2">
-                        <input
-                          type="text"
-                          placeholder="Search agent..."
-                          className="border px-2 py-1 rounded-md text-sm"
-                          onChange={(e) => {
-                            const q = e.target.value.toLowerCase();
-                            const filtered = agents.filter(
-                              (a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q)
-                            );
-                            setFilteredAgents(filtered);
-                          }}
-                        />
-
-                        <div className="max-h-48 overflow-y-auto">
-                          {(filteredAgents.length ? filteredAgents : agents).map((agent) => (
-                            <div
-                              key={agent.id}
-                              className={`px-3 py-2 text-sm rounded-md cursor-pointer hover:bg-gray-100 ${
-                                selectedAgent === agent.id ? "bg-gray-100" : ""
-                              }`}
-                              onClick={() => setSelectedAgent(agent.id)}
-                            >
-                              {agent.name} ({agent.email})
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleAssign}
-                    disabled={loading || !selectedAgent || agents.length === 0}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    {loading ? "Assigning..." : "Assign"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -394,40 +597,85 @@ const getOrderColumns = (): ColumnDef<Order>[] => {
       },
     },
   ];
-};
 
-
-// ✅ Main Component
+// ---------- OrdersTable component ----------
+// ---------- OrdersTable component (REPLACE your existing OrdersTable function with this) ----------
 export function EmployeeOrdersTable() {
   const [orders, setOrders] = React.useState<Order[]>([]);
-  const [filteredOrders, setFilteredOrders] = React.useState<Order[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [search, setSearch] = React.useState("");
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({});
+  const [globalFilter, setGlobalFilter] = React.useState("");
   const [dateFilter, setDateFilter] = React.useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
+  const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
+  // new: dedicated city filter (input will update this)
+  const [cityFilter, setCityFilter] = React.useState("");
 
-  // fetch orders and filter out pickup_requested
+  // --- Bulk action state ---
+  const [assignBulkOpen, setAssignBulkOpen] = React.useState(false);
+  const [assignBulkLoading, setAssignBulkLoading] = React.useState(false);
+  const [selectedAgentIdBulk, setSelectedAgentIdBulk] = React.useState<string>("");
+  const [agents, setAgents] = React.useState<Agent[]>([]);
+  const [deleteBulkOpen, setDeleteBulkOpen] = React.useState(false);
+  const [deleteBulkLoading, setDeleteBulkLoading] = React.useState(false);
+
   const fetchOrders = React.useCallback(async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        "https://cod-ecommerce-two.vercel.app/api/employee/employee/get-all-orders",
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const allOrders: Order[] = res.data?.data || [];
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      // filter out any orders with status "pickup_requested" (case-insensitive)
-      const visible = allOrders.filter(
-        (o) => (o.status ?? "").toLowerCase()
-      );
+      // Normalize IDs and ensure items include productId + productName + quantity + unitPrice
+      const raw = res.data?.data || [];
+      const normalized = raw.map((o: any) => {
+        const itemsRaw = Array.isArray(o.items) ? o.items : [];
+        const items = itemsRaw.map((it: any) => {
+          const productId = it.productId ?? it.product?._id ?? it._id ?? null;
+          const productName = it.productName ?? it.product?.name ?? it.name ?? "";
+          const quantity = Number(it.quantity ?? it.qty ?? 0);
+          const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
+          const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
+          return {
+            productId,
+            productName,
+            quantity,
+            unitPrice,
+            total,
+          };
+        });
 
-      setOrders(visible);
-      setFilteredOrders(visible);
+        const customer = (o.customer && typeof o.customer === "object") ? {
+          name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
+          phone: o.customer.phone ?? o.customer.mobile ?? undefined,
+          address: o.customer.address ?? o.customer.addr ?? undefined,
+          city: o.customer.city ?? undefined,
+          postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
+        } : undefined;
+
+        return {
+          id: o.id ?? o._id ?? String(Math.random()),
+          orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : undefined) ?? "",
+          seller:
+            typeof o.seller === "object" ? (o.seller.name ?? o.seller.company ?? o.seller._id) : o.seller ?? o.sellerName ?? "",
+          sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
+          items,
+          customer,
+          itemsTotal: o.itemsTotal ?? o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          status: o.status ?? "",
+          notes: o.notes ?? "",
+          createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
+        } as Order;
+      });
+
+      setOrders(normalized);
     } catch (err) {
-      console.error("Fetch orders failed", err);
-      toast.error("Failed to fetch orders");
+      console.error("Error fetching orders:", err);
     } finally {
       setLoading(false);
     }
@@ -437,110 +685,585 @@ export function EmployeeOrdersTable() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // local filtering (search + date), operates on already filtered `orders`
+  // Fetch agents when bulk-assign dialog opens
   React.useEffect(() => {
-    let filtered = [...orders];
+    if (!assignBulkOpen) return;
+    let cancelled = false;
+    const fetchAgents = async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/get-delivery-agents", {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
+        const raw = Array.isArray(res.data?.data) ? res.data.data : [];
+        const normalized: Agent[] = raw
+          .map((a: any) => ({
+            id: a?.id ?? a?._id,
+            name: a?.name ?? (a?.email ?? "Unnamed"),
+            email: a?.email ?? "",
+          }))
+          .filter((a: Agent) => Boolean(a.id));
+        if (!cancelled) setAgents(normalized);
+      } catch (err) {
+        console.error("Failed to fetch agents", err);
+        toast.error("Could not load agents");
+      }
+    };
+    fetchAgents();
+    return () => {
+      cancelled = true;
+    };
+  }, [assignBulkOpen]);
 
-    if (search.trim()) {
-      filtered = filtered.filter((o) => (o.sellerEmail || "").toLowerCase().includes(search.toLowerCase()));
+  // Update status API -> **admin** endpoint using normalized `id`
+  const handleStatusUpdate = async (id: string, status: string) => {
+    if (!id) {
+      toast.error("Missing order id");
+      return;
     }
 
-    const today = new Date();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const prev = orders.find((o) => o.id === id);
+    // optimistic UI
+    if (prev) setOrders((p) => p.map((o) => (o.id === id ? { ...o, status } : o)));
 
-    filtered = filtered.filter((order) => {
-      const created = new Date(order.createdAt);
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.error("No auth token found. Please login.");
+      // rollback
+      if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
+      return;
+    }
+
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const attempts = [
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/${id}/status`,
+        body: { status },
+      },
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/status`,
+        body: { orderId: id, status },
+      },
+      {
+        method: "patch" as const,
+        url: `${base}/api/admin/orders/${id}/status`,
+        body: { status },
+      },
+    ];
+
+    let succeeded = false;
+    const errors: any[] = [];
+
+    for (const a of attempts) {
+      try {
+        console.info("[status-update] trying:", a.method.toUpperCase(), a.url, a.body);
+        const res =
+          a.method === "patch"
+            ? await axios.patch(a.url, a.body, { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true })
+            : await axios.post(a.url, a.body, { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true });
+
+        console.info("[status-update] response:", a.url, res.status, res.data);
+
+        if (res.status >= 200 && res.status < 300) {
+          succeeded = true;
+          toast.success("Order status updated");
+          // refresh authoritative data
+          await fetchOrders();
+          break;
+        } else {
+          errors.push({ url: a.url, status: res.status, data: res.data });
+          // if auth problem, surface and stop
+          if (res.status === 401 || res.status === 403) {
+            toast.error(`Auth error (${res.status}). Make sure you are using an admin token for admin endpoints.`);
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.error("[status-update] network error for", a.url, err);
+        errors.push({ url: a.url, error: err?.message ?? err });
+      }
+    }
+
+    if (!succeeded) {
+      console.error("[status-update] all attempts failed:", errors);
+      toast.error("Status update failed — check console network logs.");
+      // rollback optimistic UI
+      if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
+    }
+  };
+
+  // Delete API (admin) - single
+  const handleDelete = async (id: string) => {
+    if (!id) {
+      toast.error("Missing order id");
+      return;
+    }
+
+    const prev = orders.find((o) => o.id === id);
+    // optimistic UI
+    setOrders((p) => p.filter((o) => o.id !== id));
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.error("No auth token found. Please login.");
+      // rollback
+      if (prev) setOrders((p) => [prev, ...p]);
+      return;
+    }
+
+    const base = "https://cod-ecommerce-two.vercel.app";
+    const attempts = [{ method: "delete" as const, url: `${base}/api/admin/delete-order/${id}` }];
+
+    let succeeded = false;
+    const errors: any[] = [];
+
+    for (const a of attempts) {
+      try {
+        console.info("[delete-order] trying:", a.method.toUpperCase(), a.url);
+        const res = await axios.delete(a.url, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
+
+        console.info("[delete-order] response:", a.url, res.status, res.data);
+
+        if (res.status >= 200 && res.status < 300) {
+          succeeded = true;
+          toast.success("Order deleted");
+          // refresh authoritative list
+          await fetchOrders();
+          break;
+        } else {
+          errors.push({ url: a.url, status: res.status, data: res.data });
+          if (res.status === 401 || res.status === 403) {
+            toast.error(`Auth error (${res.status}). Make sure token has required admin permissions.`);
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.error("[delete-order] network error for", a.url, err);
+        errors.push({ url: a.url, error: err?.message ?? err });
+      }
+    }
+
+    if (!succeeded) {
+      console.error("[delete-order] all attempts failed:", errors);
+      toast.error("Delete failed — check console for network logs.");
+      // rollback optimistic removal
+      if (prev) setOrders((p) => [prev, ...p]);
+    }
+  };
+
+  // --- Bulk Delete handler ---
+  const handleDeleteSelected = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (!selectedRows.length) {
+      toast.error("No orders selected");
+      return;
+    }
+    const ids = selectedRows.map((r) => r.original.id);
+
+    // optimistic remove
+    const prevOrders = orders.slice();
+    setOrders((p) => p.filter((o) => !ids.includes(o.id)));
+
+    setDeleteBulkLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        toast.error("No auth token found. Please login.");
+        setOrders(prevOrders);
+        return;
+      }
+      const base = "https://cod-ecommerce-two.vercel.app";
+
+      // delete each - can be parallelized
+      const promises = ids.map((id) =>
+        axios.delete(`${base}/api/admin/delete-order/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const failed = results.filter((res) => !(res.status >= 200 && res.status < 300));
+
+      if (failed.length) {
+        console.error("Bulk delete failures:", failed);
+        toast.error("Some deletes failed — check console");
+        // refresh from server to get authoritative state
+        await fetchOrders();
+      } else {
+        toast.success("Selected orders deleted");
+        await fetchOrders();
+      }
+      setDeleteBulkOpen(false);
+      // clear selection
+      table.resetRowSelection();
+    } catch (err) {
+      console.error("Bulk delete error", err);
+      toast.error("Bulk delete failed");
+      await fetchOrders();
+    } finally {
+      setDeleteBulkLoading(false);
+    }
+  };
+
+  // --- Bulk Assign handler ---
+  const handleAssignSelected = async () => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (!selectedRows.length) {
+      toast.error("No orders selected");
+      return;
+    }
+    const ids = selectedRows.map((r) => r.original.id);
+
+    // only allow assign if all selected are ready (your per-row required behavior)
+    const notReady = selectedRows.filter((r) => r.original.status !== "ready");
+    if (notReady.length) {
+      toast.error("Only orders with 'ready' status can be assigned. Deselect others or update their status first.");
+      return;
+    }
+    if (!selectedAgentIdBulk) {
+      toast.error("Select an agent first");
+      return;
+    }
+
+    setAssignBulkLoading(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        toast.error("No auth token found. Please login.");
+        return;
+      }
+      const base = "https://cod-ecommerce-two.vercel.app";
+      const res = await axios.post(
+        `${base}/api/admin/assign/orders/${selectedAgentIdBulk}`,
+        { orderIds: ids },
+        { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
+      );
+
+      if (res.status >= 200 && res.status < 300) {
+        toast.success("Orders assigned to agent");
+        // attempt to update status for each (server might already update them)
+        await fetchOrders();
+        setAssignBulkOpen(false);
+        setSelectedAgentIdBulk("");
+        table.resetRowSelection();
+      } else {
+        const msg = res.data?.message ?? `Assign failed (${res.status})`;
+        toast.error(msg);
+      }
+    } catch (err: any) {
+      console.error("Assign error", err);
+      toast.error(err?.response?.data?.message ?? "Network error while assigning");
+    } finally {
+      setAssignBulkLoading(false);
+    }
+  };
+
+  // Date filtering logic (same as yours)
+  const filteredOrders = React.useMemo(() => {
+    if (dateFilter === "all") return orders;
+
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
+
+    return orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+
       switch (dateFilter) {
         case "today":
-          return created >= startOfToday && created < endOfToday;
+          return createdAt >= startOfDay(now) && createdAt <= endOfDay(now);
+
         case "yesterday": {
-          const startOfYesterday = new Date(startOfToday.getTime() - oneDay);
-          return created >= startOfYesterday && created < startOfToday;
+          const y = new Date(now);
+          y.setDate(now.getDate() - 1);
+          return createdAt >= startOfDay(y) && createdAt <= endOfDay(y);
         }
+
         case "thisWeek": {
-          const startOfWeek = new Date(today);
-          startOfWeek.setDate(today.getDate() - today.getDay());
-          return created >= startOfWeek && created <= today;
+          const day = now.getDay(); // 0 = Sunday
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - day); // start of week
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= weekStart && createdAt <= weekEnd;
         }
-        case "lastWeek": {
-          const startLastWeek = new Date(today);
-          startLastWeek.setDate(today.getDate() - today.getDay() - 7);
-          const endLastWeek = new Date(startLastWeek);
-          endLastWeek.setDate(startLastWeek.getDate() + 6);
-          return created >= startLastWeek && created <= endLastWeek;
-        }
+
+        case "lastWeek":
+          const lastWeekStart = new Date(now);
+          lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+          lastWeekStart.setHours(0, 0, 0, 0);
+          const lastWeekEnd = new Date(lastWeekStart);
+          lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+          lastWeekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
+
         case "thisMonth":
-          return created.getMonth() === today.getMonth() && created.getFullYear() === today.getFullYear();
-        case "lastMonth": {
-          const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-          return created.getMonth() === lastMonth.getMonth() && created.getFullYear() === lastMonth.getFullYear();
-        }
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          return createdAt >= thisMonthStart && createdAt <= thisMonthEnd;
+
+        case "lastMonth":
+          const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+          return createdAt >= lastMonthStart && createdAt <= lastMonthEnd;
+
         default:
           return true;
       }
     });
+  }, [orders, dateFilter]);
+  // ----- Add this download helper to OrdersTable (above useReactTable) -----
+  const handleDownloadLabel = async (orderId: string) => {
+    if (!orderId) {
+      toast.error("Missing order id");
+      return;
+    }
+    let loadingToastId: string | undefined;
+    try {
+      loadingToastId = toast.loading("Downloading label...");
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) throw new Error("Missing authentication token");
 
-    setFilteredOrders(filtered);
-  }, [search, dateFilter, orders]);
+      const endpoint = `https://cod-ecommerce-two.vercel.app/api/seller/orders/${orderId}/shipping-label`;
+
+      const res = await axios.get(endpoint, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+
+      const contentType = res.headers?.["content-type"] || "application/octet-stream";
+      let filename = "label";
+      const disposition = res.headers?.["content-disposition"];
+      if (disposition) {
+        const fnStarMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+        const fnMatch = disposition.match(/filename="?([^";]+)"?/);
+        if (fnStarMatch && fnStarMatch[1]) {
+          try {
+            filename = decodeURIComponent(fnStarMatch[1]);
+          } catch {
+            filename = fnStarMatch[1];
+          }
+        } else if (fnMatch && fnMatch[1]) {
+          filename = fnMatch[1];
+        }
+      } else {
+        if (contentType.includes("pdf")) filename += ".pdf";
+        else if (contentType.includes("html")) filename += ".html";
+        else if (contentType.includes("zip")) filename += ".zip";
+        else if (contentType.includes("text")) filename += ".txt";
+        else filename += ".bin";
+      }
+
+      const blob = new Blob([res.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Label downloaded");
+    } catch (err: any) {
+      console.error("Download label error", err);
+      const errData = err?.response?.data;
+      if (errData instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => alert(reader.result as string);
+        reader.readAsText(errData);
+      } else {
+        toast.error(err?.response?.data?.message || err?.message || "Error downloading label");
+      }
+    } finally {
+      if (loadingToastId) toast.dismiss(loadingToastId);
+      // optionally refresh or re-fetch orders if required:
+      // await fetchOrders();
+    }
+  };
+
+  // Apply range + search
+  const timeFilteredOrders = React.useMemo(() => {
+    return filteredOrders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      const from = rangeFilter.from ? new Date(rangeFilter.from) : null;
+      const to = rangeFilter.to ? new Date(rangeFilter.to) : null;
+      if (from && createdAt < from) return false;
+      if (to && createdAt > to) return false;
+      return true;
+    });
+  }, [filteredOrders, rangeFilter]);
+
+   const finalOrders = React.useMemo(() => {
+    // If cityFilter is provided, use it to filter by customer.city only
+    if (cityFilter && cityFilter.trim()) {
+      const q = cityFilter.toLowerCase();
+      return timeFilteredOrders.filter((o) => (o.customer?.city ?? "").toLowerCase().includes(q));
+    }
+
+    // Otherwise fall back to globalFilter (existing behavior)
+    if (!globalFilter.trim()) return timeFilteredOrders;
+    const q = globalFilter.toLowerCase();
+    return timeFilteredOrders.filter((o) => {
+      return (
+        (o.seller ?? "").toLowerCase().includes(q) ||
+        (o.sellerEmail ?? "").toLowerCase().includes(q) ||
+        (o.status ?? "").toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        (o.customer?.phone ?? "").toLowerCase().includes(q) ||
+        o.items.some(
+          (it) =>
+            it.productName.toLowerCase().includes(q) ||
+            String(it.quantity).includes(q) ||
+            String(it.unitPrice).includes(q)
+        )
+      );
+    });
+  }, [timeFilteredOrders, globalFilter, cityFilter]);
 
   const table = useReactTable({
-    data: filteredOrders,
-    columns: getOrderColumns(),
+    data: finalOrders,
+    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders,handleDownloadLabel),
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 50 } },
     meta: { refresh: fetchOrders },
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
+
+  const exportEndpoints = [
+    { label: "Export Orders", url: "http://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" },
+  ];
+
+  const handleExport = async (url: string): Promise<void> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Failed to export data");
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = "export.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error(error);
+      alert("Error exporting file!");
+    }
+  };
 
   if (loading) return <p className="p-4">Loading orders...</p>;
 
+  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+
   return (
-    <div className="w-full space-y-4">
-      {/* Filters Row */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-          <input
-            type="text"
-            placeholder="Search by email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border rounded-md px-3 py-1 w-64"
-          />
+    <div className="w-full">
+      {/* Top bar */}
+      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
+  <Input
+    placeholder="Filter by city..."
+    value={cityFilter}
+    onChange={(e) => setCityFilter(e.target.value)}
+    className="max-w-sm"
+  />
+
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-2">
+          <label>From:</label>
+          <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, from: e.target.value }))} />
+          <label>To:</label>
+          <Input type="date" onChange={(e) => setRangeFilter((prev) => ({ ...prev, to: e.target.value }))} />
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              Filter: {dateFilter.charAt(0).toUpperCase() + dateFilter.slice(1)}
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
+            <Button variant="outline">Filter: {dateFilter} <ChevronDown /></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {["all", "today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth"].map(
-              (option) => (
-                <DropdownMenuItem key={option} onClick={() => setDateFilter(option as any)}>
-                  {option.charAt(0).toUpperCase() + option.slice(1)}
-                </DropdownMenuItem>
-              )
-            )}
+            {[{ key: "all", label: "All" }, { key: "today", label: "Today" }, { key: "yesterday", label: "Yesterday" }, { key: "thisWeek", label: "This Week" }, { key: "lastWeek", label: "Last Week" }, { key: "thisMonth", label: "This Month" }, { key: "lastMonth", label: "Last Month" }].map((option) => (
+              <DropdownMenuItem key={option.key} onClick={() => setDateFilter(option.key as typeof dateFilter)}>
+                {option.label}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <div className="flex gap-2 items-center">
+          {/* Conditionally show bulk action buttons when selection exists */}
+          {selectedCount > 0 && (
+            <>
+              <Button onClick={() => setAssignBulkOpen(true)}>
+                Assign Selected ({selectedCount})
+              </Button>
+
+              <Button variant="destructive" onClick={() => setDeleteBulkOpen(true)}>
+                Delete Selected ({selectedCount})
+              </Button>
+            </>
+          )}
+              {/* <ImportReadyOrdersButton
+            endpoint="https://cod-ecommerce-two.vercel.app/api/admin/ready-order/bulk-upload"
+            label="Import Ready Orders"
+            onSuccess={fetchOrders}
+          />
+          <Button
+            onClick={() =>
+              window.open(
+                "https://1drv.ms/x/c/3c77c4662797e2f6/IQBZ16V_2su7R62uupIfg-qcAf_H1M__8UKwBeGdcXci2k8?e=AzlxPi",
+                "_blank"
+              )
+            }
+          >
+            View Excal Example
+          </Button> */}
+
+{/*       
+          <AddReadyOrder onOrderAdded={fetchOrders} />
+          <AddOrder onOrderAdded={fetchOrders} /> */}
+        </div>
       </div>
 
-      {/* Orders Table */}
+      {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} Excal
+        </Button>
+      ))}
+
+      {/* Table */}
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
+                  <TableHead key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
                 ))}
               </TableRow>
             ))}
@@ -549,7 +1272,7 @@ export function EmployeeOrdersTable() {
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
@@ -557,7 +1280,7 @@ export function EmployeeOrdersTable() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={table.getAllColumns().length} className="text-center py-4">
+                <TableCell colSpan={10} className="h-24 text-center">
                   No orders found.
                 </TableCell>
               </TableRow>
@@ -566,16 +1289,74 @@ export function EmployeeOrdersTable() {
         </Table>
       </div>
 
-      {/* Pagination */}
-      <div className="flex justify-between items-center py-2">
-        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-          Previous
-        </Button>
-
-        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-          Next
-        </Button>
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <div className="text-muted-foreground flex-1 text-sm">{table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s) selected.</div>
+        <div className="space-x-2">
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            Previous
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </Button>
+        </div>
       </div>
+
+      {/* Bulk Assign Dialog */}
+      <Dialog open={assignBulkOpen} onOpenChange={setAssignBulkOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Selected Orders to Agent</DialogTitle>
+            <div className="text-sm text-muted-foreground mt-1">Select a delivery agent to assign the selected ready orders.</div>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Select value={selectedAgentIdBulk} onValueChange={(v) => setSelectedAgentIdBulk(String(v))}>
+              <SelectTrigger>
+                <SelectValue placeholder={agents.length ? "Select agent" : "No agents available"} />
+              </SelectTrigger>
+              <SelectContent>
+                {agents.length ? (
+                  agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} {a.email ? `(${a.email})` : ""}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem key="no-agents" value="__no_agents" disabled>
+                    No agents
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignBulkOpen(false)} disabled={assignBulkLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignSelected} disabled={assignBulkLoading}>
+              {assignBulkLoading ? "Assigning..." : `Assign (${selectedCount})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirm */}
+      <AlertDialog open={deleteBulkOpen} onOpenChange={setDeleteBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedCount} selected order(s)?</AlertDialogTitle>
+            <AlertDialogDescription>This action will delete the selected orders and cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteBulkLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteSelected} disabled={deleteBulkLoading} className="bg-red-600 hover:bg-red-700">
+              {deleteBulkLoading ? "Deleting..." : `Delete (${selectedCount})`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+

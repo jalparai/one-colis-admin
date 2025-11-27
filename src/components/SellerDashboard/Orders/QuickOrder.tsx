@@ -16,7 +16,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import toast from "react-hot-toast"
-import { Check, ChevronsUpDownIcon } from "lucide-react"
+import { Check, ChevronsUpDown } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 type Seller = {
@@ -30,6 +30,11 @@ type Item = {
   unitPrice: number
 }
 
+type CityFee = { 
+  city: string
+  fee?: number 
+}
+
 export function AddReadyOrder({
   onOrderAdded,
   open: externalOpen,
@@ -39,6 +44,8 @@ export function AddReadyOrder({
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
+  const API_BASE = "https://cod-ecommerce-two.vercel.app"
+  
   const [sellerId, setSellerId] = useState("")
   const [sellers, setSellers] = useState<Seller[]>([])
 
@@ -57,13 +64,24 @@ export function AddReadyOrder({
   const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // City fees state
+  const [cityFees, setCityFees] = useState<CityFee[]>([])
+  const [cityLoading, setCityLoading] = useState(false)
+  const [cityOpen, setCityOpen] = useState(false)
+  const [citySearch, setCitySearch] = useState("")
+
+  const selectedCityFee = cityFees.find(c => c.city === customerCity)?.fee
+  const filteredCities = cityFees.filter(c => 
+    c.city.toLowerCase().includes(citySearch.toLowerCase())
+  )
+
   // Fetch sellers for dropdown
   useEffect(() => {
     const fetchSellers = async () => {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
         if (!token) return
-        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/sellers", {
+        const res = await axios.get(`${API_BASE}/api/admin/sellers`, {
           headers: { Authorization: `Bearer ${token}` },
           validateStatus: () => true,
         })
@@ -81,6 +99,48 @@ export function AddReadyOrder({
     }
     fetchSellers()
   }, [])
+
+  // Fetch city fees
+  useEffect(() => {
+    async function fetchCityFees() {
+      setCityLoading(true)
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+        const res = await fetch(`${API_BASE}/api/admin/city-fees`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+
+        if (!res.ok) throw new Error("Failed to fetch city fees")
+        const resData = await res.json()
+        
+        // Normalize different possible shapes from the API
+        const rawList: any[] = Array.isArray(resData) 
+          ? resData 
+          : (resData?.data ?? resData?.cityFees ?? [])
+        
+        const normalized: CityFee[] = (rawList || []).map((c: any) => ({
+          city: String(
+            c.city ?? c.name ?? c.cityName ?? c.city_name ?? c.name_en ?? ""
+          ).trim(),
+          fee: c.fee !== undefined 
+            ? Number(c.fee) 
+            : (c.charge ?? c.amount ?? undefined) !== undefined 
+            ? Number(c.charge ?? c.amount) 
+            : undefined,
+        })).filter(cf => cf.city)
+        
+        setCityFees(normalized)
+      } catch (err) {
+        console.error("Unable to load city fees", err)
+        toast.error("Unable to load city fees")
+      } finally {
+        setCityLoading(false)
+      }
+    }
+
+    fetchCityFees()
+  }, [])
+
   const filteredSellers = sellers.filter((s) =>
     s.name.toLowerCase().includes(searchInput.toLowerCase())
   )
@@ -112,12 +172,18 @@ export function AddReadyOrder({
       const payload = {
         sellerId,
         customer: {
-          name: customerName,
-          phone: customerPhone,
-          address: customerAddress,
-          city: customerCity,
-          postalCode: customerPostalCode,
+          name: customerName.trim(),
+          phone: customerPhone.trim(),
+          address: customerAddress.trim(),
+          city: customerCity.trim(),
+          postalCode: customerPostalCode.trim() || undefined,
         },
+        // Also send at root level for backward compatibility
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerAddress: customerAddress.trim(),
+        customerCity: customerCity.trim(),
+        customerPostalCode: customerPostalCode.trim() || undefined,
         items: items.map((it) => ({
           productName: it.productName,
           quantity: Number(it.quantity),
@@ -126,7 +192,7 @@ export function AddReadyOrder({
         notes,
       }
 
-      await axios.post("https://cod-ecommerce-two.vercel.app/api/seller/orders/ready", payload, {
+      await axios.post(`${API_BASE}/api/seller/orders/ready`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
@@ -153,31 +219,120 @@ export function AddReadyOrder({
   }
 
   return (
-  <Sheet open={externalOpen} onOpenChange={externalOnOpenChange}>
-  {/* Only show the internal trigger when this component is used standalone
-          (i.e. parent didn't pass `open` prop). */}
+    <Sheet open={externalOpen} onOpenChange={externalOnOpenChange}>
+      {/* Only show the internal trigger when this component is used standalone */}
       {typeof externalOpen === "undefined" && (
         <SheetTrigger asChild>
           <Button>+ Add Ready Order</Button>
         </SheetTrigger>
-      )}      <SheetContent>
+      )}
+      
+      <SheetContent>
         <SheetHeader>
           <SheetTitle>Create Ready Order</SheetTitle>
           <SheetDescription>Fill in the details to create a ready order.</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll py-2 overflow-scroll">
-          {/* Seller */}
-
+        <form onSubmit={handleSubmit} className="grid flex-1 auto-rows-min gap-6 px-4 overflow-scroll py-2">
           {/* Customer Info */}
           <div className="grid gap-2">
             <Label>Customer Info</Label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input placeholder="Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
-              <Input placeholder="Phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} required />
-              <Input placeholder="Address" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} required />
-              <Input placeholder="City" value={customerCity} onChange={(e) => setCustomerCity(e.target.value)} required />
-              <Input placeholder="Postal Code" value={customerPostalCode} onChange={(e) => setCustomerPostalCode(e.target.value)} />
+              <Input 
+                placeholder="Name" 
+                value={customerName} 
+                onChange={(e) => setCustomerName(e.target.value)} 
+                required 
+              />
+              <Input 
+                placeholder="Phone" 
+                value={customerPhone} 
+                onChange={(e) => setCustomerPhone(e.target.value)} 
+                required 
+              />
+              <Input 
+                placeholder="Address" 
+                value={customerAddress} 
+                onChange={(e) => setCustomerAddress(e.target.value)} 
+                required 
+              />
+
+              {/* City Select with Popover */}
+              <div>
+                <Popover open={cityOpen} onOpenChange={setCityOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={cityOpen}
+                      className="w-full justify-between bg-transparent"
+                      type="button"
+                    >
+                      <span className="truncate">
+                        {customerCity || (cityLoading ? "Loading cities..." : "Select city...")}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent className="w-full p-0" align="start">
+                    <div className="p-2 space-y-2">
+                      <Input
+                        placeholder="Search city..."
+                        value={citySearch}
+                        onChange={(e) => setCitySearch(e.target.value)}
+                        className="h-8"
+                        autoFocus
+                      />
+
+                      <div className="max-h-48 overflow-y-auto space-y-1">
+                        {cityLoading ? (
+                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                            Loading cities...
+                          </div>
+                        ) : filteredCities.length > 0 ? (
+                          filteredCities.map((c) => (
+                            <button
+                              key={c.city}
+                              type="button"
+                              onClick={() => {
+                                setCustomerCity(c.city)
+                                setCitySearch("")
+                                setCityOpen(false)
+                              }}
+                              className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${
+                                customerCity === c.city ? "bg-accent text-accent-foreground" : ""
+                              }`}
+                            >
+                              <span>
+                                {c.city}
+                                {c.fee !== undefined ? ` — ${c.fee} DH` : ""}
+                              </span>
+                              {customerCity === c.city && <Check className="h-4 w-4" />}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                            No cities found
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {selectedCityFee !== undefined && (
+                  <div className="text-sm mt-1 text-muted-foreground">
+                    Delivery fee: {selectedCityFee} DH
+                  </div>
+                )}
+              </div>
+
+              <Input 
+                placeholder="Postal Code" 
+                value={customerPostalCode} 
+                onChange={(e) => setCustomerPostalCode(e.target.value)} 
+              />
             </div>
           </div>
 
@@ -195,9 +350,8 @@ export function AddReadyOrder({
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 mt-3 gap-2">
-                  <div className="">
+                  <div>
                     <Label className="mb-2">Qty</Label>
-
                     <Input
                       type="number"
                       min={1}
@@ -209,7 +363,6 @@ export function AddReadyOrder({
                   </div>
                   <div>
                     <Label className="mb-2">Amount</Label>
-
                     <Input
                       type="number"
                       step="0.01"
@@ -221,9 +374,13 @@ export function AddReadyOrder({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button type="button" variant="outline" onClick={() => addItem()}>Add</Button>
+                  <Button type="button" variant="outline" onClick={() => addItem()}>
+                    Add
+                  </Button>
                   {items.length > 1 && (
-                    <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>Remove</Button>
+                    <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>
+                      Remove
+                    </Button>
                   )}
                 </div>
               </div>
@@ -233,14 +390,21 @@ export function AddReadyOrder({
           {/* Notes */}
           <div className="grid gap-3">
             <Label htmlFor="notes">Notes</Label>
-            <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+            <Input 
+              id="notes" 
+              value={notes} 
+              onChange={(e) => setNotes(e.target.value)} 
+              placeholder="Optional notes" 
+            />
           </div>
 
           <SheetFooter className="gap-2">
             <SheetClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </SheetClose>
-            <Button type="submit" disabled={loading}>{loading ? "Creating..." : "Create"}</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create"}
+            </Button>
           </SheetFooter>
         </form>
       </SheetContent>

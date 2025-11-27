@@ -529,6 +529,33 @@ export function StocksTable() {
 
   if (loading) return <p className="p-4">Loading stocks...</p>
 
+    const exportEndpoints = [
+    // { label: "Export Employees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
+    // { label: "Export Sellers", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/seller/export/excal" },
+  //   { label: "Export Warehouses", url: "/api/adminb/bulk/warehouse/export/excal" },
+  //   { label: "Export Payout Managers", url: "/api/adminb/bulk/payout-manager/export/excel" },
+    { label: "Export Stock", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/stock/export/pdf" },
+  ];
+  
+const handleExport = async (url: RequestInfo): Promise<void> => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to export data");
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = "export.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error(error);
+    alert("Error exporting filec!");
+  }
+};
+
   return (
     <div className="w-full">
       {/* Top bar */}
@@ -578,6 +605,18 @@ export function StocksTable() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+            {exportEndpoints.map((item) => (
+        <Button
+          key={item.label}
+          variant="outline"
+          className="mb-3"
+          onClick={() => handleExport(item.url)}
+        >
+          {item.label} 
+        </Button>
+      ))}
+
 
       {/* Bulk actions (shows when >=1 row selected) */}
       <div className="flex gap-2 items-center mb-2">

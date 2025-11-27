@@ -64,6 +64,7 @@ export type Employee = {
   name: string
   email: string
   role: string
+  customRole?: string   // <-- ADD THIS
   createdAt: string
 }
 
@@ -154,10 +155,16 @@ export function EmployeesTable() {
         cell: ({ row }) => <div className="lowercase">{row.getValue("email")}</div>,
       },
       {
-        accessorKey: "role",
+        accessorKey: "customRole",
         header: t(e("table.role")),
-        cell: ({ row }) => <div>{row.getValue("role")}</div>,
+        cell: ({ row }) => {
+          const cRole = row.original.customRole
+          const defaultRole = row.original.role
+          return <div>{cRole ? cRole : defaultRole}</div>
+        },
       },
+
+
       {
         accessorKey: "createdAt",
         header: t(e("table.registeredDate")),
@@ -330,27 +337,70 @@ export function EmployeesTable() {
     { label: "exportEmployees", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/employee/export/excal" },
   ]
 
-  const handleExport = async (url: string): Promise<void> => {
-    try {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error("Failed to export data")
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-
-      const a = document.createElement("a")
-      a.href = downloadUrl
-      a.download = "export.xlsx"
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-
-      window.URL.revokeObjectURL(downloadUrl)
-    } catch (error) {
-      console.error(error)
-      alert(t(e("export.error")))
+const handleExport = async (url: string): Promise<void> => {
+  try {
+    const response = await fetch(url, { method: "GET" })
+    if (!response.ok) {
+      // try to parse JSON error if returned
+      const ct = response.headers.get("content-type") || ""
+      if (ct.includes("application/json")) {
+        const err = await response.json()
+        throw new Error(err?.message || "Failed to export data")
+      }
+      throw new Error("Failed to export data")
     }
+
+    const contentType = response.headers.get("content-type") || ""
+    // if server returned JSON (error info), parse and throw
+    if (contentType.includes("application/json")) {
+      const errJson = await response.json()
+      throw new Error(errJson?.message || "Server returned JSON instead of file")
+    }
+
+    const blob = await response.blob()
+
+    // helper: extract filename from Content-Disposition header
+    const getFileNameFromContentDisposition = (cd: string | null): string | null => {
+      if (!cd) return null
+      // common patterns: filename="name.pdf" or filename*=UTF-8''name.pdf
+      const fileNameMatch = /filename\*?=(?:UTF-8'')?["']?([^;"']+)["']?/i.exec(cd)
+      if (fileNameMatch && fileNameMatch[1]) {
+        try { return decodeURIComponent(fileNameMatch[1]) } catch { return fileNameMatch[1] }
+      }
+      return null
+    }
+
+    const contentDisposition = response.headers.get("content-disposition")
+    const guessedName =
+      getFileNameFromContentDisposition(contentDisposition) ??
+      (contentType.includes("pdf") ? "export.pdf" : contentType.includes("spreadsheet") || url.toLowerCase().includes("excel") || url.toLowerCase().includes("excal") ? "export.xlsx" : "export.bin")
+
+    // For old IE
+    if ((window as any).navigator && (window as any).navigator.msSaveOrOpenBlob) {
+      ;(window as any).navigator.msSaveOrOpenBlob(blob, guessedName)
+      return
+    }
+
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = downloadUrl
+    a.download = guessedName
+    // some browsers require anchor to be in DOM
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+
+    // revoke after a short delay so the download has time to start
+    setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl)
+    }, 1000)
+  } catch (error) {
+    console.error("Export error:", error)
+    // keep your existing localization call
+    alert(t(e("export.error")))
   }
+}
+
 
   return (
     <div className="w-full">
@@ -395,7 +445,7 @@ export function EmployeesTable() {
             entityType="employees"
             config={ENTITY_CONFIGS.employees}
             onImportSuccess={fetchEmployees}
-            onExportSuccess={() => {}}
+            onExportSuccess={() => { }}
           />
 
 
@@ -436,7 +486,7 @@ export function EmployeesTable() {
           className="mb-3"
           onClick={() => handleExport(item.url)}
         >
-          {t(e("export." + item.label))}
+          {t(e("export." + item.label))} Excel
         </Button>
       ))}
 

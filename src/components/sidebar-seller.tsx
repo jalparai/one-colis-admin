@@ -61,7 +61,7 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
         icon: BoxIcon,
       },
       {
-        title: "Support",
+        title: "Tickets",
         titleKey: "sellerSidebar.tickets",
         url: `/${locale}/seller/Tickets`,
         icon: TicketIcon,
@@ -84,12 +84,12 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
         url: `/${locale}/seller/payouts`,
         icon: FileIcon,
       },
-      {
-        title: "Delivery Collection",
-        titleKey: "sellerSidebar.deliveryCollection",
-        url: `/${locale}/seller/Delivery`,
-        icon: PackageIcon,
-      },
+      // {
+      //   title: "Delivery Collection",
+      //   titleKey: "sellerSidebar.deliveryCollection",
+      //   url: `/${locale}/seller/Delivery`,
+      //   icon: PackageIcon,
+      // },
       {
         title: "Check City Fee",
         titleKey: "sellerSidebar.cityFee",

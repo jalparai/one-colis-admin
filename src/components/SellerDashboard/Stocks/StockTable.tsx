@@ -7,6 +7,7 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  getFilteredRowModel,
   useReactTable,
   flexRender,
   SortingState,
@@ -70,7 +71,7 @@ export const stockColumns: ColumnDef<Stock>[] = [
     header: "Price",
     cell: ({ row }) => {
       const price = row.getValue("price") as number;
-      return <div>${(price ?? 0).toFixed(2)}</div>;
+      return <div>{(price ?? 0).toFixed(2)} DH</div>;
     },
   },
   {
@@ -102,6 +103,9 @@ export function StocksTable() {
   // NEW: from / to date range (ISO yyyy-mm-dd strings)
   const [fromDate, setFromDate] = React.useState<string>("");
   const [toDate, setToDate] = React.useState<string>("");
+
+  // NEW: pagination state - default pageSize set to 50 so the table shows > 10 items
+  const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 50 });
 
   // token helper (unchanged)
   function getAuthToken(): string | null {
@@ -350,13 +354,16 @@ export function StocksTable() {
     onColumnFiltersChange: setColumnFilters,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
+    state: { sorting, columnFilters, columnVisibility, rowSelection, pagination },
   });
 
   if (loading) return <p className="p-4">Loading stock...</p>;
+
   const exportEndpoints = [
     { label: "Export Stock", url: "https://cod-ecommerce-two.vercel.app/api/seller/stock/export" },
   ];
@@ -532,7 +539,7 @@ export function StocksTable() {
       {/* Pagination */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="text-muted-foreground flex-1 text-sm">
-          {table.getRowModel().rows.length} items
+          {table.getFilteredRowModel().rows.length} items
         </div>
         <div className="space-x-2">
           <Button

@@ -374,12 +374,7 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
-      {/* Quick Actions */}
-      <Card className=":data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card *:data-[slot=card]:shadow-sm">
-        <CardHeader className="items-center justify-between">
-          <CardTitle className="mb-2">Quick Actions</CardTitle>
-
-          <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+   <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
             <input
               className="px-3 py-1 rounded-md border bg-white"
               placeholder="Search orders..."
@@ -391,9 +386,10 @@ export default function ReportsPage() {
             <select
               value={dateFilter}
               onChange={(e) => {
-                setDateFilter(e.target.value as any);
-                setFromDate(null);
-                setToDate(null);
+                setDateFilter(e.target.value as any)
+                // clear manual from/to when using preset filters
+                setFromDate(null)
+                setToDate(null)
               }}
               className="px-3 py-1 rounded-md border bg-white"
               aria-label="Filter date range"
@@ -413,8 +409,9 @@ export default function ReportsPage() {
                 type="date"
                 value={fromDate ?? ""}
                 onChange={(e) => {
-                  setFromDate(e.target.value || null);
-                  if (e.target.value) setDateFilter("all");
+                  setFromDate(e.target.value || null)
+                  // when using manual range, clear preset filter
+                  if (e.target.value) setDateFilter('all')
                 }}
                 className="px-3 py-1 rounded-md border bg-white"
                 aria-label="From date"
@@ -427,8 +424,8 @@ export default function ReportsPage() {
                 type="date"
                 value={toDate ?? ""}
                 onChange={(e) => {
-                  setToDate(e.target.value || null);
-                  if (e.target.value) setDateFilter("all");
+                  setToDate(e.target.value || null)
+                  if (e.target.value) setDateFilter('all')
                 }}
                 className="px-3 py-1 rounded-md border bg-white"
                 aria-label="To date"
@@ -438,127 +435,15 @@ export default function ReportsPage() {
             <button
               type="button"
               onClick={() => {
-                setFromDate(null);
-                setToDate(null);
-                setDateFilter("all");
+                setFromDate(null)
+                setToDate(null)
+                setDateFilter('all')
               }}
               className="px-3 py-1 rounded-md border bg-white text-sm"
             >
               Clear
             </button>
           </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-4 gap-4">
-            {[
-              {
-                title: "Create New Order Based on Stock",
-                icon: IconShoppingBag,
-                color: "text-blue-600",
-                action: () => setOpenAddOrder(true),
-                bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-              },
-              {
-                title: "Create New Ready Order",
-                icon: IconShoppingBag,
-                color: "text-blue-600",
-                action: () => setOpenAddReadyOrder(true),
-                bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-              },
-              {
-                title: "Create Support Ticket",
-                icon: IconTicket,
-                color: "text-green-600",
-                action: () => setOpenAddTicket(true),
-                bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
-              },
-              {
-                title: "Invoices",
-                icon: IconFile,
-                color: "text-green-600",
-                link: "/en/seller/Invoices",
-                bg: "from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/10",
-              },
-            ].map((act, i) => {
-              const CardIcon = act.icon!;
-              const cardClasses = `group border border-gray-200/40 dark:border-gray-800/40 bg-gradient-to-br ${act.bg} rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-md cursor-pointer`;
-
-              if (act.action) {
-                return (
-                  <div
-                    key={i}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        act.action && act.action();
-                      }
-                    }}
-                    onClick={() => act.action && act.action()}
-                    className={cardClasses}
-                  >
-                    <CardContent className="flex items-center justify-between p-5">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{act.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Open form →</p>
-                      </div>
-                      <CardIcon className={`h-7 w-7 ${act.color} group-hover:scale-110 transition-transform`} />
-                    </CardContent>
-                  </div>
-                );
-              }
-
-              return (
-                <Link key={i} href={act.link ?? "#"}>
-                  <div className={cardClasses}>
-                    <CardContent className="flex items-center justify-between p-5">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{act.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Open →</p>
-                      </div>
-                      <CardIcon className={`h-7 w-7 ${act.color} group-hover:scale-110 transition-transform`} />
-                    </CardContent>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </CardContent>
-
-        <AddOrder
-          open={openAddOrder}
-          onOpenChange={setOpenAddOrder}
-          onOrderAdded={() => {
-            setOpenAddOrder(false);
-            fetchData();
-            toast.success("Order added successfully!");
-          }}
-        />
-
-        {openAddReadyOrder && (
-          <AddReadyOrder
-            open={openAddReadyOrder}
-            onOpenChange={setOpenAddReadyOrder}
-            onOrderAdded={() => {
-              setOpenAddReadyOrder(false);
-              fetchData();
-              toast.success("Ready order added successfully!");
-            }}
-          />
-        )}
-
-        <AddTicket
-          open={openAddTicket}
-          onOpenChange={setOpenAddTicket}
-          onTicketAdded={() => {
-            setOpenAddTicket(false);
-            fetchData();
-          }}
-        />
-      </Card>
-
       {/* Stats grid (ALL home page data here, without charts) */}
       <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-4 @5xl/main:grid-cols-4">
         {/* Total Product */}
@@ -817,40 +702,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Recent Orders table (no charts) */}
-      {recentOrdersList.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((hg) => (
-                  <TableRow key={hg.id}>
-                    {hg.headers.map((h) => (
-                      <TableHead key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="text-center text-gray-500 py-10">No recent orders match the selected filter.</CardContent>
-        </Card>
-      )}
+    
 
       {/* Top Products */}
       <Card className="shadow-sm border-border/60 hover:shadow-md transition-all">
@@ -945,6 +797,40 @@ export default function ReportsPage() {
           )}
         </CardContent>
       </Card>
+        {/* Recent Orders table (no charts) */}
+      {recentOrdersList.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((hg) => (
+                  <TableRow key={hg.id}>
+                    {hg.headers.map((h) => (
+                      <TableHead key={h.id}>{flexRender(h.column.columnDef.header, h.getContext())}</TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="text-center text-gray-500 py-10">No recent orders match the selected filter.</CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -346,9 +346,9 @@ export default function MyPayoutsTable() {
         );
       },
     },
-    { accessorKey: "amount", header: "Amount", cell: ({ row }) => `₨ ${row.original.amount}` },
-    { accessorKey: "fees", header: "Fees", cell: ({ row }) => `₨ ${row.original.fees}` },
-    { accessorKey: "netAmount", header: "Net", cell: ({ row }) => `₨ ${row.original.netAmount}` },
+    { accessorKey: "amount", header: "Amount", cell: ({ row }) => `${row.original.amount} DH` },
+    { accessorKey: "fees", header: "Fees", cell: ({ row }) => `${row.original.fees} DH` },
+    { accessorKey: "netAmount", header: "Net", cell: ({ row }) => `${row.original.netAmount} DH` },
     {
       accessorKey: "status",
       header: "Status",

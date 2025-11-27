@@ -65,7 +65,7 @@ export default function InvoicesTableAdmin() {
 
   // low-level fetch that returns array (does not mutate state)
   const fetchInvoicesRaw = React.useCallback(async (): Promise<Invoice[]> => {
-    const endpoint = "https://cod-ecommerce-two.vercel.app/api/admin/get-all-invoices";
+    const endpoint = "https://cod-ecommerce-two.vercel.app/api/seller/get-all-invoices";
     const res = await axios.get(endpoint, {
       headers: token ? { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" } : { "Cache-Control": "no-cache" },
       params: { _t: Date.now() }, // cache buster

@@ -61,7 +61,6 @@ export type Order = {
     name?: string;
     phone?: string;
     address?: string;
-
   };
 }
 
@@ -79,11 +78,14 @@ export function HomeDashboard() {
   const [sellerRevenue, setSellerRevenue] = useState<any | null>(null)
 
   const [searchQuery, setSearchQuery] = useState("")
-    const [fromDate, setFromDate] = useState<string | null>(null)
+  const [fromDate, setFromDate] = useState<string | null>(null)
   const [toDate, setToDate] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<
     "all" | "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month"
   >("all")
+
+  // delivery & collection (API)
+  const [deliveryCollection, setDeliveryCollection] = useState<any | null>(null)
 
   // derived counts
   const [processingOrders, setProcessingOrders] = useState<number>(0)
@@ -244,17 +246,30 @@ export function HomeDashboard() {
     }
   }, [])
 
+  const fetchDeliveryCollection = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+    if (!token) return
+    try {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/stats/delivery-collection", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setDeliveryCollection(res.data?.data || null)
+    } catch (err) {
+      console.error("Error fetching delivery & collection:", err)
+      setDeliveryCollection(null)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
     fetchRevenueData()
     fetchSellerRevenue()
-  }, [fetchData, fetchRevenueData, fetchSellerRevenue])
+    fetchDeliveryCollection()
+  }, [fetchData, fetchRevenueData, fetchSellerRevenue, fetchDeliveryCollection])
 
   // ---------- filtering derived state ----------
   const filteredOrders = useMemo(() => {
     if (!allOrders || allOrders.length === 0) return []
-
-    const nowLocal = new Date()
 
     return allOrders.filter((order) => {
       // apply date range filter (use preset dateFilter unless overridden by from/to)
@@ -290,6 +305,28 @@ export function HomeDashboard() {
     if (!filteredOrders || filteredOrders.length === 0) return 0
     return filteredOrders.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0)
   }, [filteredOrders])
+
+  // ---------- compute delivery/collection from filteredOrders so the card respects the same filter ----------
+  const deliverySummaryFromFiltered = useMemo(() => {
+    const keys = ["pending", "processing", "shipped", "delivered", "cancelled", "ready"]
+    const init: Record<string, { count: number; totalAmount: number }> = {}
+    keys.forEach((k) => (init[k] = { count: 0, totalAmount: 0 }))
+
+    for (const o of filteredOrders) {
+      const s = (o.status || "").toLowerCase()
+      // try to map common synonyms
+      const mapKey = keys.includes(s) ? s : s === "returned" ? "cancelled" : s
+      if (!init[mapKey]) continue
+      init[mapKey].count += 1
+      init[mapKey].totalAmount += Number(o.totalAmount || 0)
+    }
+
+    return init
+  }, [filteredOrders])
+
+  // helper to pick between API summary (all-time) and filtered summary
+  const useFilteredView = dateFilter !== "all" || fromDate || toDate || searchQuery.trim() !== ""
+  const displayedDeliverySummary = useFilteredView ? deliverySummaryFromFiltered : deliveryCollection?.statusSummary ?? null
 
   // ---------- small UI helpers ----------
   const percent = (part: number, total: number) => {
@@ -340,7 +377,7 @@ export function HomeDashboard() {
       icon: IconShoppingBag,
       color: "text-blue-600",
       bg: "from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/10",
-      action: () => setOpenAddReadyOrder(true), // ✅ this opens modal
+      action: () => setOpenAddReadyOrder(true),
     },
     {
       title: "Create Support Ticket",
@@ -369,7 +406,6 @@ export function HomeDashboard() {
     {
       header: "Customer",
       id: "customer_group",
-      // a compact customer cell that shows name + phone on two lines
       cell: ({ row }) => (
         <div className="text-sm">
           <div className="font-medium">{row.original.customer?.name ?? "—"}</div>
@@ -387,7 +423,7 @@ export function HomeDashboard() {
     {
       header: "Total Amount",
       accessorKey: "totalAmount",
-      cell: ({ row }) => <div>DH {Number(row.original.totalAmount || 0).toLocaleString()}</div>,
+      cell: ({ row }) => <div>{Number(row.original.totalAmount || 0).toLocaleString()} DH</div>,
     },
     {
       header: "Status",
@@ -426,6 +462,22 @@ export function HomeDashboard() {
     columns: orderColumns,
     getCoreRowModel: getCoreRowModel(),
   })
+
+  // small helper for safe read of displayedDeliverySummary
+  const readDisplayed = (key: string) => ({
+    count: displayedDeliverySummary?.[key]?.count ?? 0,
+    totalAmount: displayedDeliverySummary?.[key]?.totalAmount ?? 0,
+  })
+const STATUS_COLORS: Record<string, string> = {
+  pending: "#dab15f",        // Yellow
+  confirmed: "#3b82f6",      // Blue
+  shipped: "#8b5cf6",        // Purple
+  delivered: "#22c55e",      // Green
+  canceled: "#ef4444",       // Red
+  returned: "#a855f7",       // Violet
+  processing: "#06b6d4",     // Cyan
+  default: "#9ca3af",        // Gray fallback
+};
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -580,8 +632,6 @@ export function HomeDashboard() {
           />
         )}
 
-
-
         <AddTicket
           open={openAddTicket}
           onOpenChange={setOpenAddTicket}
@@ -593,30 +643,33 @@ export function HomeDashboard() {
       </Card>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 gap-6 @xl/main:grid-cols-4 @5xl/main:grid-cols-4">
+      {/* added items-stretch so children with h-full will be equal height */}
+      <div className="grid grid-cols-1 gap-6 items-stretch @xl/main:grid-cols-4 @5xl/main:grid-cols-4">
         {/* Total Stocks */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Total Product</CardTitle>
             </div>
             <IconPackage className="text-blue-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{loading ? "..." : (totalStocks ?? 0)}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>In inventory</div>
-                <div className="text-xs mt-1">Updated just now</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{loading ? "..." : (totalStocks ?? 0)}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>In inventory</div>
+                  <div className="text-xs mt-1">Updated just now</div>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                <span>+{Math.round((totalStocks ?? 0) * 0.08 || 0)}% month</span>
+              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                  <IconArrowUpRight className="h-4 w-4 text-green-500" />
+                  <span>+{Math.round((totalStocks ?? 0) * 0.08 || 0)}% month</span>
+                </div>
+                <div className="text-xs">SKU count</div>
               </div>
-              <div className="text-xs">SKU count</div>
             </div>
 
             <div className="mt-3">
@@ -626,7 +679,7 @@ export function HomeDashboard() {
         </Card>
 
         {/* Total Orders */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Total Orders</CardTitle>
@@ -634,23 +687,25 @@ export function HomeDashboard() {
             <IconShoppingBag className="text-indigo-500 h-6 w-6" />
           </CardHeader>
 
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{loading ? "..." : (totalOrders ?? 0)}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{newOrdersToday !== null ? `${newOrdersToday} new today` : "…"}</div>
-                <div className="text-xs mt-1">
-                  {totalOrders ? `${percent(newOrdersToday ?? 0, totalOrders)}% today` : ""}
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{loading ? "..." : (totalOrders ?? 0)}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{newOrdersToday !== null ? `${newOrdersToday} new today` : "…"}</div>
+                  <div className="text-xs mt-1">
+                    {totalOrders ? `${percent(newOrdersToday ?? 0, totalOrders)}% today` : ""}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                <span>+{totalOrders ? Math.round((totalOrders as number) * 0.12) : 0}% this week</span>
+              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                  <IconArrowUpRight className="h-4 w-4 text-green-500" />
+                  <span>+{totalOrders ? Math.round((totalOrders as number) * 0.12) : 0}% this week</span>
+                </div>
+                <div className="text-xs">Orders total</div>
               </div>
-              <div className="text-xs">Orders total</div>
             </div>
 
             <div className="mt-3">
@@ -660,31 +715,33 @@ export function HomeDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card className="hover:shadow-lg transition-all duration-200">
+
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Total Revenue</CardTitle>
             </div>
             <IconTrendingUp className="text-green-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            {/* Always compute revenue from the currently filtered orders so presets and manual ranges apply */}
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">
-                {loading ? "..." : Number(totalRevenueFromFilteredOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">
+                  {loading ? "..." : Number(totalRevenueFromFilteredOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{filteredOrders.length != null ? `${filteredOrders.length} orders` : "—"}</div>
+                  <div className="text-xs mt-1">{dateFilter === 'all' ? (sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "") : "Net: calculated from filtered orders"}</div>
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{filteredOrders.length != null ? `${filteredOrders.length} orders` : "—"}</div>
-                <div className="text-xs mt-1">{dateFilter === 'all' ? (sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "") : "Net: calculated from filtered orders"}</div>
-              </div>
-            </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                <span>{`${Number(totalRevenueFromFilteredOrders || 0).toFixed(2)} this period`}</span>
+              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                  <IconArrowUpRight className="h-4 w-4 text-green-500" />
+                  <span>{`${Number(totalRevenueFromFilteredOrders || 0).toFixed(2)} this period`}</span>
+                </div>
+                <div className="text-xs">Revenue</div>
               </div>
-              <div className="text-xs">Revenue</div>
             </div>
 
             <div className="mt-3">
@@ -697,29 +754,32 @@ export function HomeDashboard() {
             )}
           </CardContent>
         </Card>
+
         {/* Processing */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Processing Orders</CardTitle>
             </div>
             <IconLoader2 className="text-yellow-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{processingOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{totalOrders ? `${percent(processingOrders, totalOrders)}% of orders` : "—"}</div>
-                <div className="text-xs mt-1">Avg handling time: 1.2h</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{processingOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{totalOrders ? `${percent(processingOrders, totalOrders)}% of orders` : "—"}</div>
+                  <div className="text-xs mt-1">Avg handling time: 1.2h</div>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                <IconArrowDownRight className="h-4 w-4 text-rose-500" />
-                <span>-{processingOrders ? Math.round(processingOrders * 0.05) : 0} since last week</span>
+              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                  <IconArrowDownRight className="h-4 w-4 text-rose-500" />
+                  <span>-{processingOrders ? Math.round(processingOrders * 0.05) : 0} since last week</span>
+                </div>
+                <div className="text-xs">Fulfillment</div>
               </div>
-              <div className="text-xs">Fulfillment</div>
             </div>
 
             <div className="mt-3">
@@ -729,7 +789,7 @@ export function HomeDashboard() {
         </Card>
 
         {/* Ready */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Ready Orders</CardTitle>
@@ -737,23 +797,25 @@ export function HomeDashboard() {
             <IconTruckDelivery className="text-green-500 h-6 w-6" />
           </CardHeader>
 
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{readyOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{readyOrders ? `${percent(readyOrders, Math.max(1, totalOrders ?? 1))}% ready` : "—"}</div>
-                <div className="text-xs mt-1">
-                  {readyOrders > 0 ? `${Math.max(1, Math.round(readyOrders * 0.1))} to ship` : "No shipments"}
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{readyOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{readyOrders ? `${percent(readyOrders, Math.max(1, totalOrders ?? 1))}% ready` : "—"}</div>
+                  <div className="text-xs mt-1">
+                    {readyOrders > 0 ? `${Math.max(1, Math.round(readyOrders * 0.1))} to ship` : "No shipments"}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-              <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                <span>+{readyOrders ? Math.round(readyOrders * 0.03) : 0} new today</span>
+              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+                  <IconArrowUpRight className="h-4 w-4 text-green-500" />
+                  <span>+{readyOrders ? Math.round(readyOrders * 0.03) : 0} new today</span>
+                </div>
+                <div className="text-xs">Dispatch queue</div>
               </div>
-              <div className="text-xs">Dispatch queue</div>
             </div>
 
             <div className="mt-3">
@@ -761,21 +823,23 @@ export function HomeDashboard() {
             </div>
           </CardContent>
         </Card>
-      
+
         {/* Pending */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Pending Orders</CardTitle>
             </div>
             <IconLoader2 className="text-orange-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{pendingOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{totalOrders ? `${percent(pendingOrders, totalOrders)}% of orders` : "—"}</div>
-                <div className="text-xs mt-1">Awaiting action</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{pendingOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{totalOrders ? `${percent(pendingOrders, totalOrders)}% of orders` : "—"}</div>
+                  <div className="text-xs mt-1">Awaiting action</div>
+                </div>
               </div>
             </div>
 
@@ -786,19 +850,21 @@ export function HomeDashboard() {
         </Card>
 
         {/* Delivered */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Delivered Orders</CardTitle>
             </div>
             <IconTruckDelivery className="text-emerald-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{deliveredOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{totalOrders ? `${percent(deliveredOrders, totalOrders)}% delivered` : "—"}</div>
-                <div className="text-xs mt-1">Success rate</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{deliveredOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{totalOrders ? `${percent(deliveredOrders, totalOrders)}% delivered` : "—"}</div>
+                  <div className="text-xs mt-1">Success rate</div>
+                </div>
               </div>
             </div>
 
@@ -809,19 +875,21 @@ export function HomeDashboard() {
         </Card>
 
         {/* Returned */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Return Orders</CardTitle>
             </div>
             <IconRotate2 className="text-red-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{returnOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{totalOrders ? `${percent(returnOrders, totalOrders)}% returns` : "—"}</div>
-                <div className="text-xs mt-1">Return rate</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{returnOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{totalOrders ? `${percent(returnOrders, totalOrders)}% returns` : "—"}</div>
+                  <div className="text-xs mt-1">Return rate</div>
+                </div>
               </div>
             </div>
 
@@ -832,19 +900,21 @@ export function HomeDashboard() {
         </Card>
 
         {/* Pickup */}
-        <Card className="hover:shadow-lg transition-all duration-200">
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
               <CardTitle>Pickup Orders</CardTitle>
             </div>
             <IconMapPin className="text-purple-500 h-6 w-6" />
           </CardHeader>
-          <CardContent>
-            <div className="flex items-baseline justify-between">
-              <div className="text-3xl font-semibold">{pickupOrders}</div>
-              <div className="text-sm text-muted-foreground text-right">
-                <div>{totalOrders ? `${percent(pickupOrders, totalOrders)}% for pickup` : "—"}</div>
-                <div className="text-xs mt-1">Ready to collect</div>
+          <CardContent className="flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-3xl font-semibold">{pickupOrders}</div>
+                <div className="text-sm text-muted-foreground text-right">
+                  <div>{totalOrders ? `${percent(pickupOrders, totalOrders)}% for pickup` : "—"}</div>
+                  <div className="text-xs mt-1">Ready to collect</div>
+                </div>
               </div>
             </div>
 
@@ -853,6 +923,44 @@ export function HomeDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* --- Delivery & Cash Collection (now respects filters) --- */}
+        <Card className="hover:shadow-lg transition-all duration-200 h-full">
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <CardTitle>Delivery & Cash Collection</CardTitle>
+            </div>
+            <IconFile className="text-sky-500 h-6 w-6" />
+          </CardHeader>
+
+          <CardContent className="flex-1 flex flex-col justify-between">
+            {/* status summary: use displayedDeliverySummary which picks filtered view when filters applied */}
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                {['pending','processing','shipped','delivered','ready','cancelled'].map((k) => {
+                  const item = readDisplayed(k)
+                  return (
+                    <div key={k} className="text-sm">
+                      <div className="text-xs text-muted-foreground">{k.charAt(0).toUpperCase() + k.slice(1)}</div>
+                      <div className="flex gap-2 items-center">
+     <div className="text-lg font-semibold">{displayedDeliverySummary ? item.count : '...'}</div>
+                      <div className="text-xs text-muted-foreground">{displayedDeliverySummary ? Number(item.totalAmount).toLocaleString() : ''} DH</div>
+                   
+                      </div>
+                 
+                    </div>
+                  )
+                })}
+              </div>
+
+             
+
+          
+            </div>
+
+               </CardContent>
+        </Card>
+
       </div>
 
       {/* Charts */}
@@ -864,19 +972,23 @@ export function HomeDashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
-                <Pie
-                  data={orderData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  label
-                >
-                  {orderData.map((_, idx) => (
-                    <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
-                  ))}
-                </Pie>
+             <Pie
+  data={orderData}
+  dataKey="value"
+  nameKey="name"
+  innerRadius={60}
+  outerRadius={100}
+  paddingAngle={5}
+  label
+>
+  {orderData.map((item, idx) => (
+    <Cell
+      key={idx}
+      fill={STATUS_COLORS[item.name?.toLowerCase()] || STATUS_COLORS.default}
+    />
+  ))}
+</Pie>
+
                 <Tooltip />
                 <Legend />
               </PieChart>
@@ -894,14 +1006,21 @@ export function HomeDashboard() {
                 <XAxis dataKey="status" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+<Bar dataKey="count" radius={[6, 6, 0, 0]}>
+  {chartData.map((entry, idx) => (
+    <Cell
+      key={`bar-${idx}`}
+      fill={
+        STATUS_COLORS[entry.status?.toLowerCase()] || STATUS_COLORS.default
+      }
+    />
+  ))}
+</Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
-
-
 
       {/* Orders table or empty state */}
       {recentOrdersList.length > 0 ? (

@@ -196,7 +196,7 @@ export function DeliveryFeeChecker() {
                   displayedCityFees.map((c) => (
                     <div key={c.city} className="grid grid-cols-2 gap-0 px-4 py-2 border-t last:border-b">
                       <div className="truncate">{c.city}</div>
-                      <div className="text-right font-semibold">{typeof c.fee === "number" ? `₨ ${c.fee}` : "-"}</div>
+                      <div className="text-right font-semibold">{typeof c.fee === "number" ? `${c.fee} DH` : "-"}</div>
                     </div>
                   ))
                 )}

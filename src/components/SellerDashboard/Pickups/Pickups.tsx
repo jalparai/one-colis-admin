@@ -68,7 +68,7 @@ export const pickupColumns: ColumnDef<Pickup>[] = [
       return (
         <div>
           {items.map((i, idx) => (
-            <div key={idx}>dh-{i.unitPrice}</div>
+            <div key={idx}>{i.unitPrice} DH</div>
           ))}
         </div>
       );
@@ -91,7 +91,7 @@ export const pickupColumns: ColumnDef<Pickup>[] = [
   {
     accessorKey: "totalAmount",
     header: "Total Amount",
-    cell: ({ row }) => <div>dh-{row.getValue("totalAmount")}</div>,
+    cell: ({ row }) => <div>{row.getValue("totalAmount")} DH</div>,
   },
   {
     accessorKey: "notes",

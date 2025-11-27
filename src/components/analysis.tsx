@@ -114,6 +114,12 @@ export type Order = {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  // optional fields that might exist in your real order schema:
+  // city?: string;
+  // deliveryCity?: string;
+  // shippingCity?: string;
+  // pickupAt?: string;
+  // deliveredAt?: string;
 };
 interface CollectedPendingData {
   totalOrders: number;
@@ -332,7 +338,7 @@ export default function Analysis() {
     let mounted = true;
 
     async function fetchData() {
-      setLoading(true);
+      // setLoading(true);
       setError(null);
 
       try {
@@ -585,107 +591,172 @@ export default function Analysis() {
   const pendingCount = filteredPendingOrders.length;
   const pendingRate = allOrdersCount > 0 ? (pendingCount / allOrdersCount) * 100 : 0;
 
-  // compute seller revenue from filtered orders
+  // ----------------- FIXED: service revenue fetch & usage (keeps API fallback) -----------------
+  // keep a small state for service revenue coming from the API endpoint and loading
+  const [statsState, setStatsState] = useState<{ totalRevenue: number; loading: boolean }>({ totalRevenue: 0, loading: true });
+
+// Fixed useEffect - simplified to always use API response
+useEffect(() => {
+  let mounted = true;
+
+  async function fetchRevenue() {
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        if (mounted) setStatsState({ totalRevenue: 0, loading: false });
+        return;
+      }
+
+      const params = buildParams(dateFilter, customStart, customEnd);
+      const baseUrl = "https://cod-ecommerce-two.vercel.app/api/admin/service-revenue";
+      const url = appendParamsToUrl(baseUrl, params);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!mounted) return;
+
+      if (res.ok) {
+        const data = await res.json();
+        // Use the API's totalRevenue directly
+        const revenue = data?.totalRevenue ?? 0;
+        if (mounted) setStatsState({ totalRevenue: revenue, loading: false });
+      } else {
+        console.error("Service-Revenue API failed:", res.status);
+        if (mounted) setStatsState({ totalRevenue: 0, loading: false });
+      }
+    } catch (err) {
+      console.error("Failed to fetch service revenue:", err);
+      if (mounted) setStatsState({ totalRevenue: 0, loading: false });
+    }
+  }
+
+  fetchRevenue();
+  return () => {
+    mounted = false;
+  };
+}, [dateFilter, customStart, customEnd]);
+  // ----------------- exact per-order-based calculations (replace existing parts) -----------------
+
+  // helper: delivered predicate (adjust regex if your statuses differ)
+  const isDelivered = (o: Order) => /deliv|delivered/i.test(o.status ?? "");
+
+  // build city->fee map from metrics.cityFees (safe)
+  const cityFeesMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!metrics?.cityFees) return map;
+    for (const f of metrics.cityFees) {
+      if (!f || !f.city) continue;
+      map[(f.city || "").trim().toLowerCase()] = Number(f.fee || 0);
+    }
+    return map;
+  }, [metrics?.cityFees]);
+
+  // 1) Total Seller Revenue for filtered range (strict: only delivered orders)
   const sellerRevenueFiltered = useMemo(() => {
-    return filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders
+      .filter(isDelivered)
+      .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
   }, [filteredOrders]);
 
-  // estimate service revenue for filtered range by scaling the fetched total service revenue
-  const serviceRevenueFiltered = useMemo(() => {
-    const totalOrdersCountAll = orders.length;
-    if (totalOrdersCountAll > 0) {
-      const totalService = totalServiceRevenueAllTime ?? 0;
-      return (filteredOrders.length / totalOrdersCountAll) * totalService;
+  // 2) Total Service Revenue (exact per-order if city available; otherwise fallback to API estimate)
+const serviceRevenueFiltered = useMemo(() => {
+  // For "all time" filter, use the API response directly
+  if (dateFilter === "all") {
+    return statsState?.totalRevenue ?? 0;
+  }
+
+  // For date-filtered views, compute from filtered orders
+  if (!filteredOrders || filteredOrders.length === 0) return 0;
+
+  let totalRevenue = 0;
+
+  for (const order of filteredOrders) {
+    if (!isDelivered(order)) continue;
+
+    // Get city from order (adjust field names based on your schema)
+    const cityCandidate =
+      (order as any).city ||
+      (order as any).deliveryCity ||
+      (order as any).shippingCity ||
+      "";
+    
+    const cityKey = String(cityCandidate).trim().toLowerCase();
+    
+    if (cityKey && cityFeesMap[cityKey] !== undefined) {
+      totalRevenue += Number(cityFeesMap[cityKey] || 0);
     }
-    if (totalOrdersFromMetrics > 0) {
-      return (filteredOrders.length / totalOrdersFromMetrics) * totalServiceRevenueAllTime;
-    }
-    return totalServiceRevenueAllTime;
-  }, [filteredOrders, orders.length, totalServiceRevenueAllTime, totalOrdersFromMetrics]);
+  }
 
-  const netProfitFiltered = sellerRevenueFiltered - serviceRevenueFiltered;
+  return totalRevenue;
+}, [
+  dateFilter,
+  filteredOrders,
+  cityFeesMap,
+  statsState?.totalRevenue,
+]);
 
-  // compute return/delivery rates from filteredOrders when possible
-  const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
-    if (filteredOrders.length === 0) {
-      return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
-    }
+  // 3) Average delivery time (hours) computed from orders if timestamps are available, else fallback to metrics
+  const avgDeliveryHoursComputed = useMemo(() => {
+    if (!filteredOrders || filteredOrders.length === 0) return avgDeliveryHoursAllTime;
 
-    const returned = filteredOrders.filter((o) => /return/i.test(o.status)).length;
-    const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status)).length;
+    const durationsHours: number[] = [];
 
-    const rr = ((returned / filteredOrders.length) * 100).toFixed(1);
-    const dr = ((delivered / filteredOrders.length) * 100).toFixed(1);
-    return { returnRateFiltered: rr, deliveryRateFiltered: dr };
-  }, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
-
-  const avgDeliveryHours = avgDeliveryHoursAllTime;
-
-  // lightweight ref to hold stats.totalRevenue fetched in the other effect (we'll keep same logic for fetching stats below)
-  const [statsState, setStatsState] = useState({ totalRevenue: 0, loading: true });
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function fetchRevenue() {
-      try {
-        const token = localStorage.getItem("token");
-
-        if (!token) {
-          if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
-          return;
-        }
-
-        // Append date params so service revenue query can be scoped if server supports it
-        const params = buildParams(dateFilter, customStart, customEnd);
-        const url = appendParamsToUrl(`/api/admin/service-revenue?group=total`, params);
-
-        const res = await fetch(url, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-        });
-
-        const text = await res.text();
-        let data = null;
-        try {
-          if (res.headers.get("content-type")?.includes("application/json")) {
-            data = JSON.parse(text);
-          } else {
-            // keep a concise console warning but don't break parsing
-            console.warn("service-revenue returned non-JSON (status:", res.status, ")");
-          }
-        } catch (e) {
-          console.error("JSON parse failed for service-revenue:", e, text);
-        }
-
-        if (!res.ok) {
-          if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
-          return;
-        }
-
-        const apiRevenue = typeof data?.totalRevenue === "number" ? data.totalRevenue : null;
-        if (mounted) {
-          setStatsState({ totalRevenue: apiRevenue ?? totalServiceRevenueAllTime ?? 0, loading: false });
-        }
-      } catch (err) {
-        console.error("Failed to fetch service revenue (client):", err);
-        if (mounted) setStatsState({ totalRevenue: totalServiceRevenueAllTime ?? 0, loading: false });
-      }
+    for (const o of filteredOrders) {
+      if (!isDelivered(o)) continue;
+      // try common timestamp fields (adjust to your schema)
+      const pickup = (o as any).pickupAt || (o as any).pickupDate || o.createdAt;
+      const delivered = (o as any).deliveredAt || (o as any).deliveryDate || (o as any).updatedAt;
+      if (!pickup || !delivered) continue;
+      const p = new Date(pickup);
+      const d = new Date(delivered);
+      if (isNaN(p.getTime()) || isNaN(d.getTime())) continue;
+      const diffHours = (d.getTime() - p.getTime()) / (1000 * 60 * 60);
+      if (diffHours >= 0) durationsHours.push(diffHours);
     }
 
-    fetchRevenue();
-    return () => {
-      mounted = false;
-    };
-  }, [dateFilter, customStart, customEnd, totalServiceRevenueAllTime]);
+    if (durationsHours.length === 0) return avgDeliveryHoursAllTime;
+    const avg = durationsHours.reduce((a, b) => a + b, 0) / durationsHours.length;
+    return Math.round(avg); // keep integer hours; change if you prefer fractional
+  }, [filteredOrders, avgDeliveryHoursAllTime]);
+
+  // 4) Net profit filtered (seller profit after delivery fees) — strict per formulas
+  const netProfitFiltered = useMemo(() => {
+    return sellerRevenueFiltered - serviceRevenueFiltered;
+  }, [sellerRevenueFiltered, serviceRevenueFiltered]);
+
+  // Optionally expose avgDeliveryHoursComputed as avgDeliveryHours for UI
+  const avgDeliveryHours = avgDeliveryHoursComputed;
 
   // ----------------- Dashboard cards now use filtered calculations -----------------
   const formatDH = (amount: number) =>
     `${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} DH`;
+
+
+  // ----------------- Return / Delivery rates for filteredOrders -----------------
+const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
+  // if no filtered orders, fall back to the all-time rates computed from metrics
+  if (!filteredOrders || filteredOrders.length === 0) {
+    return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
+  }
+
+  const total = filteredOrders.length;
+  const returned = filteredOrders.filter((o) => /return/i.test(o.status ?? "")).length;
+  const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status ?? "")).length;
+
+  const rr = total > 0 ? ((returned / total) * 100).toFixed(1) : returnRateAllTime;
+  const dr = total > 0 ? ((delivered / total) * 100).toFixed(1) : deliveryRateAllTime;
+
+  return { returnRateFiltered: rr, deliveryRateFiltered: dr };
+}, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
 
   const dashboardMetrics: DashboardMetricCard[] = [
     {
@@ -962,55 +1033,64 @@ export default function Analysis() {
             </Select>
 
             {/* Custom range inputs (shown when dateFilter === 'custom') */}
-            {dateFilter === "custom" && (
-              <div className="flex items-center gap-2 ml-2">
-                <input
-                  type="date"
-                  value={customStart ?? ""}
-                  onChange={(e) => setCustomStart(e.target.value || null)}
-                  className="px-2 py-1 rounded-md border bg-white"
-                />
-                <span className="text-sm">—</span>
-                <input
-                  type="date"
-                  value={customEnd ?? ""}
-                  onChange={(e) => setCustomEnd(e.target.value || null)}
-                  className="px-2 py-1 rounded-md border bg-white"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    // apply custom range by triggering useEffect (customStart/customEnd are deps)
-                    // ensure basic validation
-                    if (!customStart && !customEnd) {
-                      toast.error("Select start and/or end date.");
-                      return;
-                    }
-                    if (customStart && customEnd && new Date(customStart) > new Date(customEnd)) {
-                      toast.error("Start date cannot be after end date.");
-                      return;
-                    }
-                    // set dateFilter to 'custom' (already is) and effect will fetch
-                    setDateFilter("custom");
-                    toast.success("Applied custom date range");
-                  }}
-                >
-                  Apply
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setCustomStart(null);
-                    setCustomEnd(null);
-                    setDateFilter("all");
-                  }}
-                >
-                  Clear
-                </Button>
-              </div>
-            )}
+           {/* Custom range inputs (shown when dateFilter === 'custom') */}
+{dateFilter === "custom" && (
+  <div className="flex items-center gap-2 ml-2">
+    <input
+      type="date"
+      value={customStart ?? ""}
+      onChange={(e) => setCustomStart(e.target.value || null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+      }}
+      className="px-2 py-1 rounded-md border bg-white"
+    />
+    <span className="text-sm">—</span>
+    <input
+      type="date"
+      value={customEnd ?? ""}
+      onChange={(e) => setCustomEnd(e.target.value || null)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.preventDefault();
+      }}
+      className="px-2 py-1 rounded-md border bg-white"
+    />
+
+    <Button
+      type="button"              // <--- prevent default submit behavior
+      size="sm"
+      variant="outline"
+      onClick={() => {
+        if (!customStart && !customEnd) {
+          toast.error("Select start and/or end date.");
+          return;
+        }
+        if (customStart && customEnd && new Date(customStart) > new Date(customEnd)) {
+          toast.error("Start date cannot be after end date.");
+          return;
+        }
+        setDateFilter("custom"); // triggers client-side fetch, no reload
+        toast.success("Applied custom date range");
+      }}
+    >
+      Apply
+    </Button>
+
+    <Button
+      type="button"              // <--- prevent default submit behavior
+      size="sm"
+      variant="ghost"
+      onClick={() => {
+        setCustomStart(null);
+        setCustomEnd(null);
+        setDateFilter("all");
+      }}
+    >
+      Clear
+    </Button>
+  </div>
+)}
+
           </div>
         </div>
 

@@ -362,7 +362,7 @@ export function Home() {
     },
     {
       key: "readyCount",
-      title: "Ready (statusCounts.ready)",
+      title: "Ready",
       value: formatNumber(stats?.statusCounts?.ready),
       subtitle: "Orders ready for action",
       icon: <IconClock className="w-5 h-5" />,

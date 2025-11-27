@@ -1223,12 +1223,23 @@ export function OrdersTable() {
               </Button>
             </>
           )}
-
-          <ImportReadyOrdersButton
+              <ImportReadyOrdersButton
             endpoint="https://cod-ecommerce-two.vercel.app/api/admin/ready-order/bulk-upload"
             label="Import Ready Orders"
             onSuccess={fetchOrders}
           />
+          <Button
+            onClick={() =>
+              window.open(
+                "https://1drv.ms/x/c/3c77c4662797e2f6/IQBZ16V_2su7R62uupIfg-qcAf_H1M__8UKwBeGdcXci2k8?e=AzlxPi",
+                "_blank"
+              )
+            }
+          >
+            View Excal Example
+          </Button>
+
+      
           <AddReadyOrder onOrderAdded={fetchOrders} />
           <AddOrder onOrderAdded={fetchOrders} />
         </div>

@@ -186,18 +186,18 @@ export const getColumns = (
       cell: ({ row }) => {
         const items = row.original.items;
         return (
-     <ul className="list-none pl-4">
-  {items.map((item, idx) => (
-    <li key={`${item.productId ?? item.productName ?? idx}-p`}>
-      ${item.unitPrice}
-    </li>
-  ))}
-</ul>
+          <ul className="list-none pl-4">
+            {items.map((item, idx) => (
+              <li key={`${item.productId ?? item.productName ?? idx}-p`}>
+                {item.unitPrice} DH
+              </li>
+            ))}
+          </ul>
 
         );
       }
-      },
-    
+    },
+
     {
       accessorKey: "totalAmount",
       header: ({ column }) => (
@@ -208,7 +208,7 @@ export const getColumns = (
           Total Amount <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div>${row.getValue("totalAmount")}</div>,
+      cell: ({ row }) => <div>{row.getValue("totalAmount")} DH</div>,
     },
     {
       accessorKey: "status",
@@ -525,6 +525,10 @@ export function OrderTable() {
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
+  // ===================================================================
+  // Fix for OrderTable.tsx - fetchOrders normalization
+  // ===================================================================
+
   const fetchOrders = React.useCallback(async () => {
     try {
       const res = await axios.get(
@@ -533,7 +537,8 @@ export function OrderTable() {
       );
 
       const raw = res.data?.data || [];
-      // Normalize incoming items so each item has productId, productName, quantity, unitPrice, total
+      console.log("Raw orders from API:", raw); // Debug log
+
       const normalized = raw.map((o: any) => {
         const itemsRaw = Array.isArray(o.items) ? o.items : [];
         const items = itemsRaw.map((it: any) => {
@@ -550,32 +555,41 @@ export function OrderTable() {
           o.total ??
           items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0);
 
-        // Preserve the backend DB id (o._id) as the canonical _id used in endpoints.
-        // Keep orderId separate (tracking number / customer-visible id).
         const dbId = o._id ?? o.id ?? (o.order && o.order._id) ?? null;
-
         const orderId =
           o.orderId ?? o.orderID ?? o.order_number ?? o.orderNo ?? o.orderCode ?? o.order?.id ?? o._id ?? "";
 
-        // normalize customer (accept both nested object or flat fields)
-        const customer = (o.customer && typeof o.customer === "object")
-          ? {
+        // Enhanced customer normalization - check multiple possible locations
+        let customer = undefined;
+
+        // Check if customer is a nested object
+        if (o.customer && typeof o.customer === "object") {
+          customer = {
             name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
-            phone: o.customer.phone ?? o.customer.mobile ?? undefined,
-            address: o.customer.address ?? o.customer.addr ?? undefined,
-            city: o.customer.city ?? undefined,
-            postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
-          }
-          : {
-            name: o.customerName ?? o.customer_name ?? o.customer_fullName ?? undefined,
-            phone: o.customerPhone ?? o.customer_phone ?? undefined,
-            address: o.customerAddress ?? undefined,
-            city: o.customerCity ?? undefined,
-            postalCode: o.customerPostal ?? undefined,
+            phone: o.customer.phone ?? o.customer.mobile ?? o.customer.phoneNumber ?? undefined,
+            address: o.customer.address ?? o.customer.addr ?? o.customer.shippingAddress ?? undefined,
+            city: o.customer.city ?? o.customer.cityName ?? undefined,
+            postalCode: o.customer.postalCode ?? o.customer.postal ?? o.customer.zipCode ?? undefined,
           };
+        }
+        // Check if customer fields are at root level
+        else if (o.customerName || o.customer_name || o.customerCity || o.customerPhone) {
+          customer = {
+            name: o.customerName ?? o.customer_name ?? o.customer_fullName ?? undefined,
+            phone: o.customerPhone ?? o.customer_phone ?? o.phone ?? undefined,
+            address: o.customerAddress ?? o.customer_address ?? o.address ?? undefined,
+            city: o.customerCity ?? o.customer_city ?? o.city ?? undefined,
+            postalCode: o.customerPostalCode ?? o.customer_postal ?? o.postalCode ?? undefined,
+          };
+        }
+
+        console.log("Normalized customer for order", orderId, ":", customer); // Debug log
+
+        // Only include customer if at least one field has a value
+        const hasCustomerData = customer && Object.values(customer).some(v => v !== undefined && v !== "");
 
         return {
-          _id: dbId ?? orderId, // prefer real DB id; fallback to orderId when DB id missing
+          _id: dbId ?? orderId,
           orderId,
           seller: o.seller ?? o.sellerName ?? "",
           items,
@@ -584,10 +598,11 @@ export function OrderTable() {
           status: o.status ?? "",
           createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
           updatedAt: o.updatedAt,
-          customer: (customer && Object.values(customer).some(Boolean)) ? customer : undefined,
+          customer: hasCustomerData ? customer : undefined,
         } as Order;
       });
 
+      console.log("Normalized orders:", normalized); // Debug log
       setOrders(normalized);
     } catch (err) {
       console.error("Error fetching orders:", err);
@@ -870,7 +885,16 @@ export function OrderTable() {
           label="Import Orders Based on Stock"
           onSuccess={fetchOrders}
         />
-
+        <Button
+          onClick={() =>
+            window.open(
+              "https://1drv.ms/x/c/3c77c4662797e2f6/IQB9gr52xjE0RaUVvJh4DyogAZ58Lyf4Plb6B9dLy0BOTvc?e=5Cj0pU",
+              "_blank"
+            )
+          }
+        >
+          View Excal Example
+        </Button>
         {exportEndpoints.map((item) => (
           <Button
             key={item.label}
