@@ -68,7 +68,7 @@ export const stockColumns: ColumnDef<Stock>[] = [
   },
   {
     accessorKey: "price",
-    header: "Price",
+    header: "Unit Price",
     cell: ({ row }) => {
       const price = row.getValue("price") as number;
       return <div>{(price ?? 0).toFixed(2)} DH</div>;

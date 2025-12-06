@@ -61,7 +61,7 @@ export function AppSidebarSeller({ ...props }: React.ComponentProps<typeof Sideb
         icon: BoxIcon,
       },
       {
-        title: "Tickets",
+        title: "Support",
         titleKey: "sellerSidebar.tickets",
         url: `/${locale}/seller/Tickets`,
         icon: TicketIcon,

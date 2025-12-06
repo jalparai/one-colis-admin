@@ -24,10 +24,11 @@ type Seller = {
   name: string
 }
 
+// NOTE: unitPrice is now string | number so the input can be empty ""
 type Item = {
   productName: string
   quantity: number
-  unitPrice: number
+  unitPrice: string | number
 }
 
 type CityFee = {
@@ -49,9 +50,8 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState("")
 
-  const [items, setItems] = useState<Item[]>([
-    { productName: "", quantity: 1, unitPrice: 0 },
-  ])
+  // initial item has empty unitPrice so the amount box shows empty (no 0)
+  const [items, setItems] = useState<Item[]>([{ productName: "", quantity: 1, unitPrice: "" }])
 
   const [notes, setNotes] = useState("")
   const [loading, setLoading] = useState(false)
@@ -87,9 +87,7 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
     fetchSellers()
   }, [])
 
-  const filteredSellers = sellers.filter((s) =>
-    s.name.toLowerCase().includes(searchInput.toLowerCase())
-  )
+  const filteredSellers = sellers.filter((s) => s.name.toLowerCase().includes(searchInput.toLowerCase()))
   const selectedSellerName = sellers.find((s) => s.id === sellerId)?.name
 
   // Fetch city fees
@@ -133,7 +131,7 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)))
   }
 
-  const addItem = () => setItems((prev) => [...prev, { productName: "", quantity: 1, unitPrice: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { productName: "", quantity: 1, unitPrice: "" }])
   const removeItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,6 +154,17 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
       const token = localStorage.getItem("token")
       if (!token) throw new Error("Authentication token missing")
 
+      // convert unitPrice safely: empty -> 0, otherwise Number(...)
+      const itemsPayload = items.map((it) => {
+        const raw = String(it.unitPrice ?? "").trim()
+        const priceNum = raw === "" ? 0 : Number(raw)
+        return {
+          productName: it.productName,
+          quantity: Number(it.quantity),
+          unitPrice: Number.isFinite(priceNum) ? priceNum : 0,
+        }
+      })
+
       const payload = {
         sellerId,
         customer: {
@@ -165,19 +174,15 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
           city: customerCity,
           postalCode: customerPostalCode,
         },
-        items: items.map((it) => ({
-          productName: it.productName,
-          quantity: Number(it.quantity),
-          unitPrice: Number(it.unitPrice) || 0,
-        })),
+        items: itemsPayload,
         notes,
       }
 
+      // NOTE: your original endpoint used /api/admin/create/orders/ready in latest snippet
       await axios.post(`${API_BASE}/api/admin/create/orders/ready`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      // show success toast after creation completes
       toast.success("Ready order created successfully")
 
       // reset
@@ -187,7 +192,7 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
       setCustomerAddress("")
       setCustomerCity("")
       setCustomerPostalCode("")
-      setItems([{ productName: "", quantity: 1, unitPrice: 0 }])
+      setItems([{ productName: "", quantity: 1, unitPrice: "" }])
       setNotes("")
 
       onOrderAdded?.()
@@ -253,17 +258,16 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                             setSearchInput("")
                             setOpen(false)
                           }}
-                          className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${sellerId === s.id ? "bg-accent text-accent-foreground" : ""
-                            }`}
+                          className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${
+                            sellerId === s.id ? "bg-accent text-accent-foreground" : ""
+                          }`}
                         >
                           <span>{s.name}</span>
                           {sellerId === s.id && <Check className="h-4 w-4" />}
                         </button>
                       ))
                     ) : (
-                      <div className="px-2 py-2 text-sm text-muted-foreground text-center">
-                        No sellers found
-                      </div>
+                      <div className="px-2 py-2 text-sm text-muted-foreground text-center">No sellers found</div>
                     )}
                   </div>
                 </div>
@@ -324,21 +328,16 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                             </button>
                           ))
                         ) : (
-                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">
-                            No cities found
-                          </div>
+                          <div className="px-2 py-2 text-sm text-muted-foreground text-center">No cities found</div>
                         )}
                       </div>
                     </div>
                   </PopoverContent>
                 </Popover>
 
-                {selectedCityFee !== undefined && (
-                  <div className="text-sm mt-1">Delivery fee: {selectedCityFee}</div>
-                )}
+                {selectedCityFee !== undefined && <div className="text-sm mt-1">Delivery fee: {selectedCityFee}</div>}
               </div>
 
-              <Input placeholder="Postal Code" value={customerPostalCode} onChange={(e) => setCustomerPostalCode(e.target.value)} />
             </div>
           </div>
 
@@ -358,7 +357,6 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 mt-3 gap-2">
                   <div className="">
                     <Label className="mb-2">Qty</Label>
-
                     <Input
                       type="number"
                       min={1}
@@ -370,22 +368,20 @@ export function AddReadyOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                   </div>
                   <div>
                     <Label className="mb-2">Amount</Label>
-
+                    {/* keep value as string so field can be empty; convert on submit */}
                     <Input
                       type="number"
                       step="0.01"
                       min={0}
                       placeholder="Unit Price"
-                      value={it.unitPrice}
-                      onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })}
+                      value={String(it.unitPrice ?? "")}
+                      onChange={(e) => updateItem(idx, { unitPrice: e.target.value })}
                     />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
                   <Button type="button" variant="outline" onClick={() => addItem()}>Add</Button>
-                  {items.length > 1 && (
-                    <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>Remove</Button>
-                  )}
+                  {items.length > 1 && <Button type="button" variant="destructive" onClick={() => removeItem(idx)}>Remove</Button>}
                 </div>
               </div>
             ))}

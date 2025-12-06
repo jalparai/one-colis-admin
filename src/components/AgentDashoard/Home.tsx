@@ -466,8 +466,13 @@ export function Home() {
 
       {/* Recent Orders (bottom) */}
       <div className="mt-8 px-4 lg:px-6">
-        <h2 className="text-lg font-semibold mb-3">Recent Orders</h2>
+<div className="mt-3 flex justify-between items-center">
+          <h2 className="text-lg font-semibold mb-3">Recent Orders</h2>
 
+          <Button size="sm" variant="outline" onClick={() => fetchRecentOrders()}>
+            Refresh Recent
+          </Button>
+        </div>
         {recentLoading ? (
           <div className="p-4">Loading recent orders…</div>
         ) : recentError ? (
@@ -505,11 +510,7 @@ export function Home() {
           </div>
         )}
 
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" variant="outline" onClick={() => fetchRecentOrders()}>
-            Refresh Recent
-          </Button>
-        </div>
+        
       </div>
     </div>
   );

@@ -94,6 +94,7 @@ export function HomeDashboard() {
   const [returnOrders, setReturnOrders] = useState<number>(0)
   const [deliveredOrders, setDeliveredOrders] = useState<number>(0)
   const [pickupOrders, setPickupOrders] = useState<number>(0)
+  const [cancelledOrders, setCancelledOrders] = useState<number>(0)
   const [totalOrders, setTotalOrders] = useState<number | null>(null)
   const [newOrdersToday, setNewOrdersToday] = useState<number | null>(null)
 
@@ -296,6 +297,9 @@ export function HomeDashboard() {
     setReturnOrders(countBy("returned"))
     setDeliveredOrders(countBy("delivered"))
     setPickupOrders(countBy("pickup"))
+    // cancelled may be spelled 'cancelled' or 'canceled' in source data, handle both
+    const cancelledCount = filtered.filter((o) => ["cancelled", "canceled"].includes(((o.status || "").toLowerCase()))).length
+    setCancelledOrders(cancelledCount)
     setTotalOrders(filtered.length)
     setNewOrdersToday(countToday(filtered, "createdAt"))
   }, [filteredOrders])
@@ -351,6 +355,7 @@ export function HomeDashboard() {
     { name: "Delivered", value: deliveredOrders },
     { name: "Returned", value: returnOrders },
     { name: "Pickup", value: pickupOrders },
+    { name: "Cancelled", value: cancelledOrders },
   ]
 
   const chartData = [
@@ -360,6 +365,7 @@ export function HomeDashboard() {
     { status: "Delivered", count: deliveredOrders },
     { status: "Returned", count: returnOrders },
     { status: "Pickup", count: pickupOrders },
+    { status: "Cancelled", count: cancelledOrders },
   ]
 
   // ---------- Quick actions array ----------
@@ -430,12 +436,15 @@ export function HomeDashboard() {
       accessorKey: "status",
       cell: ({ row }) => {
         const status = row.original.status
+        const statusLower = (status || "").toLowerCase()
         const color =
-          status === "Delivered"
+          statusLower === "delivered"
             ? "bg-green-100 text-green-800"
-            : status === "Returned"
+            : statusLower === "returned"
               ? "bg-red-100 text-red-800"
-              : "bg-gray-100 text-gray-700"
+              : statusLower === "cancelled" || statusLower === "canceled"
+                ? "bg-red-100 text-red-800"
+                : "bg-gray-100 text-gray-700"
         return <span className={`px-2 py-1 rounded-full text-xs font-semibold ${color}`}>{status}</span>
       },
     },
@@ -473,7 +482,8 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "#3b82f6",      // Blue
   shipped: "#8b5cf6",        // Purple
   delivered: "#22c55e",      // Green
-  canceled: "#ef4444",       // Red
+  canceled: "#ef4444",       // Red (american spelling)
+  cancelled: "#ef4444",      // Red (british spelling)
   returned: "#a855f7",       // Violet
   processing: "#06b6d4",     // Cyan
   default: "#9ca3af",        // Gray fallback
@@ -945,7 +955,7 @@ const STATUS_COLORS: Record<string, string> = {
                       <div className="flex gap-2 items-center">
      <div className="text-lg font-semibold">{displayedDeliverySummary ? item.count : '...'}</div>
                       <div className="text-xs text-muted-foreground">{displayedDeliverySummary ? Number(item.totalAmount).toLocaleString() : ''} DH</div>
-                   
+                    
                       </div>
                  
                     </div>

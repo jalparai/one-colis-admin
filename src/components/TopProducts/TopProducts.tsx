@@ -253,7 +253,7 @@ export default function TopProductsPage() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" angle={-45} textAnchor="end" interval={0} height={60} tick={{ fontSize: 12 }} />
                   <YAxis />
-                  <Tooltip cursor={{ fill: "rgba(0,0,0,0.05)" }} formatter={(value: number) => `$${value.toLocaleString()}`} />
+                  <Tooltip cursor={{ fill: "rgba(0,0,0,0.05)" }} formatter={(value: number) => `${value.toLocaleString()} DH`} />
                   <Bar dataKey="revenue" fill="#2BC3F1" radius={[8, 8, 0, 0]} barSize={50} />
                 </BarChart>
               </ResponsiveContainer>
@@ -284,7 +284,7 @@ export default function TopProductsPage() {
                     <TableCell className="font-medium truncate max-w-[250px]">{product.name}</TableCell>
                     <TableCell className="text-right">{product.quantity}</TableCell>
                     <TableCell className="text-right">{product.ordersCount}</TableCell>
-                    <TableCell className="text-right font-semibold text-[#2BC3F1]">${product.revenue.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-semibold text-[#2BC3F1]">{product.revenue.toLocaleString()} DH</TableCell>
                   </TableRow>
                 ))}
                 {products.length === 0 && !loading && (

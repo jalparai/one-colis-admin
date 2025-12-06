@@ -114,19 +114,16 @@ export type Order = {
   notes: string;
   createdAt: string;
   updatedAt: string;
-  // optional fields that might exist in your real order schema:
-  // city?: string;
-  // deliveryCity?: string;
-  // shippingCity?: string;
-  // pickupAt?: string;
-  // deliveredAt?: string;
+  // optional: additional fields may exist in your real schema (city, fees, deliveredAt, pickupAt, sellerAmount, etc.)
 };
+
 interface CollectedPendingData {
   totalOrders: number;
   collected: { count: number; percentage: string };
   pending: { count: number; percentage: string };
   ratio: { collectedToPending: string };
 }
+
 // ----------------- Component -----------------
 export default function Analysis() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -595,168 +592,241 @@ export default function Analysis() {
   // keep a small state for service revenue coming from the API endpoint and loading
   const [statsState, setStatsState] = useState<{ totalRevenue: number; loading: boolean }>({ totalRevenue: 0, loading: true });
 
-// Fixed useEffect - simplified to always use API response
-useEffect(() => {
-  let mounted = true;
+  // Fixed useEffect - simplified to always use API response
+  useEffect(() => {
+    let mounted = true;
 
-  async function fetchRevenue() {
-    try {
-      const token = localStorage.getItem("token");
+    async function fetchRevenue() {
+      try {
+        const token = localStorage.getItem("token");
 
-      if (!token) {
+        if (!token) {
+          if (mounted) setStatsState({ totalRevenue: 0, loading: false });
+          return;
+        }
+
+        const params = buildParams(dateFilter, customStart, customEnd);
+        const baseUrl = "https://cod-ecommerce-two.vercel.app/api/admin/service-revenue";
+        const url = appendParamsToUrl(baseUrl, params);
+
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+        });
+
+        if (!mounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          // Use the API's totalRevenue directly
+          const revenue = data?.totalRevenue ?? 0;
+          if (mounted) setStatsState({ totalRevenue: revenue, loading: false });
+        } else {
+          console.error("Service-Revenue API failed:", res.status);
+          if (mounted) setStatsState({ totalRevenue: 0, loading: false });
+        }
+      } catch (err) {
+        console.error("Failed to fetch service revenue:", err);
         if (mounted) setStatsState({ totalRevenue: 0, loading: false });
-        return;
       }
-
-      const params = buildParams(dateFilter, customStart, customEnd);
-      const baseUrl = "https://cod-ecommerce-two.vercel.app/api/admin/service-revenue";
-      const url = appendParamsToUrl(baseUrl, params);
-
-      const res = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      });
-
-      if (!mounted) return;
-
-      if (res.ok) {
-        const data = await res.json();
-        // Use the API's totalRevenue directly
-        const revenue = data?.totalRevenue ?? 0;
-        if (mounted) setStatsState({ totalRevenue: revenue, loading: false });
-      } else {
-        console.error("Service-Revenue API failed:", res.status);
-        if (mounted) setStatsState({ totalRevenue: 0, loading: false });
-      }
-    } catch (err) {
-      console.error("Failed to fetch service revenue:", err);
-      if (mounted) setStatsState({ totalRevenue: 0, loading: false });
     }
-  }
 
-  fetchRevenue();
-  return () => {
-    mounted = false;
+    fetchRevenue();
+    return () => {
+      mounted = false;
+    };
+  }, [dateFilter, customStart, customEnd]);
+  // ----------------- exact per-order-based calculations (replacement) -----------------
+
+  /* ---------- Replacement calculation block ---------- */
+
+  /** Safe numeric picker — provide likely field names used by various APIs
+   *  Add extra keys here if your API uses different names (e.g. seller_net_amount, city_selected_fee, etc.)
+   */
+  const pickNumber = (obj: any, keys: string[]) => {
+    if (!obj) return 0;
+    for (const k of keys) {
+      const v = obj[k];
+      if (v == null) continue;
+      const n = Number(v);
+      if (!Number.isNaN(n)) return n;
+    }
+    return 0;
   };
-}, [dateFilter, customStart, customEnd]);
-  // ----------------- exact per-order-based calculations (replace existing parts) -----------------
 
-  // helper: delivered predicate (adjust regex if your statuses differ)
+  /** Helper: is order delivered (fuzzy match) */
   const isDelivered = (o: Order) => /deliv|delivered/i.test(o.status ?? "");
 
-  // build city->fee map from metrics.cityFees (safe)
+  /** Build city->fee map from metrics.cityFees (case-insensitive keys) */
   const cityFeesMap = useMemo(() => {
     const map: Record<string, number> = {};
     if (!metrics?.cityFees) return map;
     for (const f of metrics.cityFees) {
       if (!f || !f.city) continue;
-      map[(f.city || "").trim().toLowerCase()] = Number(f.fee || 0);
+      map[(String(f.city).trim().toLowerCase())] = Number(f.fee || 0);
     }
     return map;
   }, [metrics?.cityFees]);
 
-  // 1) Total Seller Revenue for filtered range (strict: only delivered orders)
+  /** 1) Seller revenue for current view
+   *   - If "all": use aggregated topSellers total as fallback (all-time)
+   *   - Else: prefer explicit seller amount fields on order, otherwise fallback to order.totalAmount
+   */
   const sellerRevenueFiltered = useMemo(() => {
-    if (!filteredOrders || filteredOrders.length === 0) return 0;
-    return filteredOrders
-      .filter(isDelivered)
-      .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-  }, [filteredOrders]);
-
-  // 2) Total Service Revenue (exact per-order if city available; otherwise fallback to API estimate)
-const serviceRevenueFiltered = useMemo(() => {
-  // For "all time" filter, use the API response directly
-  if (dateFilter === "all") {
-    return statsState?.totalRevenue ?? 0;
-  }
-
-  // For date-filtered views, compute from filtered orders
-  if (!filteredOrders || filteredOrders.length === 0) return 0;
-
-  let totalRevenue = 0;
-
-  for (const order of filteredOrders) {
-    if (!isDelivered(order)) continue;
-
-    // Get city from order (adjust field names based on your schema)
-    const cityCandidate =
-      (order as any).city ||
-      (order as any).deliveryCity ||
-      (order as any).shippingCity ||
-      "";
-    
-    const cityKey = String(cityCandidate).trim().toLowerCase();
-    
-    if (cityKey && cityFeesMap[cityKey] !== undefined) {
-      totalRevenue += Number(cityFeesMap[cityKey] || 0);
+    if (dateFilter === "all") {
+      // prefer metrics sum if available (already defined earlier)
+      return totalSellerRevenueAllTime || 0;
     }
-  }
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((sum, o) => {
+      if (!isDelivered(o)) return sum; // only count delivered orders (same logic you used)
+      // common seller-side numeric fields
+      const sellerAmt = pickNumber(o as any, [
+        "sellerAmount",
+        "seller_amount",
+        "sellerEarnings",
+        "sellerEarningsAmount",
+        "seller_net",
+        "net_amount",
+        "netAmount",
+        "sellerTotal",
+      ]);
+      if (sellerAmt) return sum + sellerAmt;
+      // fallback: order totalAmount
+      return sum + (Number((o as any).totalAmount) || 0);
+    }, 0);
+  }, [filteredOrders, dateFilter, totalSellerRevenueAllTime]);
 
-  return totalRevenue;
-}, [
-  dateFilter,
-  filteredOrders,
-  cityFeesMap,
-  statsState?.totalRevenue,
-]);
+  /** 2) Service revenue (city-selected fees) for current view
+   *   - Prefer explicit per-order fee fields (cityFee/serviceFee/fees array)
+   *   - If order has city but no explicit fee, use metrics.cityFees mapping
+   *   - If no per-order data exists for the filtered range, fallback to API statsState.totalRevenue
+   */
+  const serviceRevenueFiltered = useMemo(() => {
+    // all-time -> prefer aggregated from metrics or API
+    if (dateFilter === "all") {
+      return totalServiceRevenueAllTime || statsState?.totalRevenue || 0;
+    }
 
-  // 3) Average delivery time (hours) computed from orders if timestamps are available, else fallback to metrics
-  const avgDeliveryHoursComputed = useMemo(() => {
-    if (!filteredOrders || filteredOrders.length === 0) return avgDeliveryHoursAllTime;
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
 
-    const durationsHours: number[] = [];
+    let total = 0;
+    let hadAnyPerOrderFee = false;
 
     for (const o of filteredOrders) {
       if (!isDelivered(o)) continue;
-      // try common timestamp fields (adjust to your schema)
-      const pickup = (o as any).pickupAt || (o as any).pickupDate || o.createdAt;
-      const delivered = (o as any).deliveredAt || (o as any).deliveryDate || (o as any).updatedAt;
-      if (!pickup || !delivered) continue;
-      const p = new Date(pickup);
-      const d = new Date(delivered);
-      if (isNaN(p.getTime()) || isNaN(d.getTime())) continue;
-      const diffHours = (d.getTime() - p.getTime()) / (1000 * 60 * 60);
-      if (diffHours >= 0) durationsHours.push(diffHours);
+
+      // 1) try direct per-order numeric fields
+      const perOrderFee = pickNumber(o as any, [
+        "cityFee",
+        "city_fee",
+        "serviceFee",
+        "service_fee",
+        "service_charge",
+        "deliveryFee",
+        "delivery_fee",
+      ]);
+      if (perOrderFee) {
+        total += perOrderFee;
+        hadAnyPerOrderFee = true;
+        continue;
+      }
+
+      // 2) try fees array (common structure: fees: [{type,name,amount}])
+      const feesArr = (o as any).fees;
+      if (Array.isArray(feesArr) && feesArr.length > 0) {
+        const found = feesArr.find((f: any) => {
+          const name = String(f?.name ?? f?.type ?? "").toLowerCase();
+          return name.includes("city") || name.includes("service") || name.includes("delivery") || name.includes("fee");
+        });
+        if (found && (found.amount || found.value || found.amt)) {
+          total += Number(found.amount ?? found.value ?? found.amt ?? 0);
+          hadAnyPerOrderFee = true;
+          continue;
+        }
+      }
+
+      // 3) fallback: if order has a city, map it via cityFeesMap
+      const cityCandidate =
+        (o as any).city ||
+        (o as any).deliveryCity ||
+        (o as any).shippingCity ||
+        (o as any).billingCity ||
+        "";
+      const cityKey = String(cityCandidate).trim().toLowerCase();
+      if (cityKey && cityFeesMap[cityKey] !== undefined) {
+        total += Number(cityFeesMap[cityKey] || 0);
+        // don't mark hadAnyPerOrderFee true here — this is derived from metrics map
+        continue;
+      }
+
+      // if we reach here there was no explicit fee & no city mapping; skip (can't infer)
     }
 
-    if (durationsHours.length === 0) return avgDeliveryHoursAllTime;
-    const avg = durationsHours.reduce((a, b) => a + b, 0) / durationsHours.length;
-    return Math.round(avg); // keep integer hours; change if you prefer fractional
-  }, [filteredOrders, avgDeliveryHoursAllTime]);
+    // If we calculated nothing from per-order sources but API returned a value for this range,
+    // it's better to fallback to the API (statsState) than show zero.
+    if (!hadAnyPerOrderFee && (statsState?.totalRevenue || 0) > 0) {
+      // The API's totalRevenue should be for the same date range (your fetch uses buildParams)
+      return statsState.totalRevenue;
+    }
 
-  // 4) Net profit filtered (seller profit after delivery fees) — strict per formulas
+    return total;
+  }, [filteredOrders, dateFilter, cityFeesMap, statsState?.totalRevenue, totalServiceRevenueAllTime]);
+
+  /** 3) Commission & delivery charges sums (if present) — to make net more accurate */
+  const commissionSumFiltered = useMemo(() => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((s, o) => {
+      if (!isDelivered(o)) return s;
+      return s + pickNumber(o as any, ["commission", "platformFee", "platform_fee", "adminFee", "fee"]);
+    }, 0);
+  }, [filteredOrders]);
+
+  const deliveryChargesSumFiltered = useMemo(() => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((s, o) => {
+      if (!isDelivered(o)) return s;
+      return s + pickNumber(o as any, ["deliveryFee", "shippingFee", "shipmentFee", "delivery_charge", "shipping_charge"]);
+    }, 0);
+  }, [filteredOrders]);
+
+  /** 4) Net profit for filtered view:
+   *    seller revenue minus service revenue minus commission minus delivery charges
+   *    (this can be extended with COGS if order.item cost is available)
+   */
   const netProfitFiltered = useMemo(() => {
-    return sellerRevenueFiltered - serviceRevenueFiltered;
-  }, [sellerRevenueFiltered, serviceRevenueFiltered]);
+    const base = sellerRevenueFiltered - serviceRevenueFiltered;
+    const minusCommission = base - (commissionSumFiltered || 0);
+    const minusDelivery = minusCommission - (deliveryChargesSumFiltered || 0);
+    return minusDelivery;
+  }, [sellerRevenueFiltered, serviceRevenueFiltered, commissionSumFiltered, deliveryChargesSumFiltered]);
 
-  // Optionally expose avgDeliveryHoursComputed as avgDeliveryHours for UI
-  const avgDeliveryHours = avgDeliveryHoursComputed;
+  /* ---------- End replacement block ---------- */
 
   // ----------------- Dashboard cards now use filtered calculations -----------------
   const formatDH = (amount: number) =>
     `${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} DH`;
 
-
   // ----------------- Return / Delivery rates for filteredOrders -----------------
-const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
-  // if no filtered orders, fall back to the all-time rates computed from metrics
-  if (!filteredOrders || filteredOrders.length === 0) {
-    return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
-  }
+  const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
+    // if no filtered orders, fall back to the all-time rates computed from metrics
+    if (!filteredOrders || filteredOrders.length === 0) {
+      return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
+    }
 
-  const total = filteredOrders.length;
-  const returned = filteredOrders.filter((o) => /return/i.test(o.status ?? "")).length;
-  const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status ?? "")).length;
+    const total = filteredOrders.length;
+    const returned = filteredOrders.filter((o) => /return/i.test(o.status ?? "")).length;
+    const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status ?? "")).length;
 
-  const rr = total > 0 ? ((returned / total) * 100).toFixed(1) : returnRateAllTime;
-  const dr = total > 0 ? ((delivered / total) * 100).toFixed(1) : deliveryRateAllTime;
+    const rr = total > 0 ? ((returned / total) * 100).toFixed(1) : returnRateAllTime;
+    const dr = total > 0 ? ((delivered / total) * 100).toFixed(1) : deliveryRateAllTime;
 
-  return { returnRateFiltered: rr, deliveryRateFiltered: dr };
-}, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
+    return { returnRateFiltered: rr, deliveryRateFiltered: dr };
+  }, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
 
   const dashboardMetrics: DashboardMetricCard[] = [
     {
@@ -785,8 +855,8 @@ const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
     },
     {
       title: t("metrics.averageDeliveryTime"),
-      value: `${avgDeliveryHours}h`,
-      trend: avgDeliveryHours < 48 ? "up" : "down",
+      value: `${avgDeliveryHoursAllTime}h`,
+      trend: avgDeliveryHoursAllTime < 48 ? "up" : "down",
       link: `/${locale}/admin/Delivery-Returned`,
     },
     {
@@ -1033,64 +1103,62 @@ const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
             </Select>
 
             {/* Custom range inputs (shown when dateFilter === 'custom') */}
-           {/* Custom range inputs (shown when dateFilter === 'custom') */}
-{dateFilter === "custom" && (
-  <div className="flex items-center gap-2 ml-2">
-    <input
-      type="date"
-      value={customStart ?? ""}
-      onChange={(e) => setCustomStart(e.target.value || null)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.preventDefault();
-      }}
-      className="px-2 py-1 rounded-md border bg-white"
-    />
-    <span className="text-sm">—</span>
-    <input
-      type="date"
-      value={customEnd ?? ""}
-      onChange={(e) => setCustomEnd(e.target.value || null)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.preventDefault();
-      }}
-      className="px-2 py-1 rounded-md border bg-white"
-    />
+            {dateFilter === "custom" && (
+              <div className="flex items-center gap-2 ml-2">
+                <input
+                  type="date"
+                  value={customStart ?? ""}
+                  onChange={(e) => setCustomStart(e.target.value || null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  className="px-2 py-1 rounded-md border bg-white"
+                />
+                <span className="text-sm">—</span>
+                <input
+                  type="date"
+                  value={customEnd ?? ""}
+                  onChange={(e) => setCustomEnd(e.target.value || null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  className="px-2 py-1 rounded-md border bg-white"
+                />
 
-    <Button
-      type="button"              // <--- prevent default submit behavior
-      size="sm"
-      variant="outline"
-      onClick={() => {
-        if (!customStart && !customEnd) {
-          toast.error("Select start and/or end date.");
-          return;
-        }
-        if (customStart && customEnd && new Date(customStart) > new Date(customEnd)) {
-          toast.error("Start date cannot be after end date.");
-          return;
-        }
-        setDateFilter("custom"); // triggers client-side fetch, no reload
-        toast.success("Applied custom date range");
-      }}
-    >
-      Apply
-    </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!customStart && !customEnd) {
+                      toast.error("Select start and/or end date.");
+                      return;
+                    }
+                    if (customStart && customEnd && new Date(customStart) > new Date(customEnd)) {
+                      toast.error("Start date cannot be after end date.");
+                      return;
+                    }
+                    setDateFilter("custom"); // triggers client-side fetch, no reload
+                    toast.success("Applied custom date range");
+                  }}
+                >
+                  Apply
+                </Button>
 
-    <Button
-      type="button"              // <--- prevent default submit behavior
-      size="sm"
-      variant="ghost"
-      onClick={() => {
-        setCustomStart(null);
-        setCustomEnd(null);
-        setDateFilter("all");
-      }}
-    >
-      Clear
-    </Button>
-  </div>
-)}
-
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setCustomStart(null);
+                    setCustomEnd(null);
+                    setDateFilter("all");
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1150,7 +1218,7 @@ const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topSellersChartData}>
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#2BC3F1" }} />
-                      <YAxis tick={{ fontSize: 12, fill: "#E0B660" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                      <YAxis tick={{ fontSize: 12, fill: "#E0B660" }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="revenue" fill="#2BC3F1" radius={[6, 6, 0, 0]} />
                     </BarChart>
@@ -1176,7 +1244,7 @@ const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
                       <Legend />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="Delivered" fill="#E0B660" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="Returned" fill="#E0B660" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="Returned" fill="#2BC3F1" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </ChartContainer>

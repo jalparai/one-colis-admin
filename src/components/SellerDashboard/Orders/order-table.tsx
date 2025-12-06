@@ -110,11 +110,33 @@ const statuses = [
 ];
 
 // Columns
+
 export const getColumns = (
   onStatusUpdate: (id: string, status: string) => Promise<void>,
   onDelete: (id: string) => Promise<void>,
   onUpdated: () => void
 ): ColumnDef<Order>[] => [
+     {
+        id: "select",
+        header: ({ table }) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected() ||
+              (table.getIsSomePageRowsSelected() && "indeterminate")
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      }
+,
     {
       accessorKey: "orderId",
       header: "#Order ID and Tracking Number",
@@ -146,11 +168,6 @@ export const getColumns = (
       header: "City",
       id: "customer_city",
       cell: ({ row }) => <div>{row.original.customer?.city ?? "—"}</div>,
-    },
-    {
-      header: "Postal",
-      id: "customer_postal",
-      cell: ({ row }) => <div>{row.original.customer?.postalCode ?? "—"}</div>,
     },
     {
       accessorKey: "items",
@@ -260,51 +277,58 @@ export const getColumns = (
         return true;
       },
     },
-    {
-      header: "Export Label",
-      id: "export",
-      cell: ({ row }) => {
-        const order = row.original;
+ {
+  header: "Export Label",
+  id: "export",
+  cell: ({ row }) => {
+    const order = row.original;
+    const isReady = order.status === "ready";
 
-        const handleExport = async () => {
-          try {
-            const res = await axios.get(
-              `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order._id}/shipping-label`,
-              {
-                headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-                responseType: "blob",
-              }
-            );
+    if (!isReady) {
+      // show a subtle placeholder when not ready
+      return <div className="text-sm text-muted-foreground">—</div>;
+    }
 
-            const blob = new Blob([res.data], { type: "application/pdf" });
-            const url = window.URL.createObjectURL(blob);
-
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `shipping-label-${order._id}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-          } catch (err: any) {
-            console.error("Error exporting PDF:", err);
-            alert(err.response?.data?.message || "Error downloading PDF");
+    const handleExport = async () => {
+      try {
+        const res = await axios.get(
+          `https://cod-ecommerce-two.vercel.app/api/seller/orders/${order._id}/shipping-label`,
+          {
+            headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+            responseType: "blob",
           }
-        };
-
-        return (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleExport}
-            title="Export Shipping Label"
-            className="cursor-pointer"
-          >
-            <DownloadIcon className="h-4 w-4" />
-          </Button>
         );
-      },
-    },
+
+        const blob = new Blob([res.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `shipping-label-${order._id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err: any) {
+        console.error("Error exporting PDF:", err);
+        alert(err.response?.data?.message || "Error downloading PDF");
+      }
+    };
+
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleExport}
+        title="Export Shipping Label"
+        className="cursor-pointer"
+      >
+        <DownloadIcon className="h-4 w-4" />
+      </Button>
+    );
+  },
+},
+
     {
       header: "Action",
       id: "actions",
@@ -522,6 +546,8 @@ export function OrderTable() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [openAddOrder, setOpenAddOrder] = useState(false);
+const [bulkPickupLoading, setBulkPickupLoading] = useState(false);
+const [bulkExportLoading, setBulkExportLoading] = useState(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
@@ -555,9 +581,9 @@ export function OrderTable() {
           o.total ??
           items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0);
 
-        const dbId = o._id ?? o.id ?? (o.order && o.order._id) ?? null;
-        const orderId =
-          o.orderId ?? o.orderID ?? o.order_number ?? o.orderNo ?? o.orderCode ?? o.order?.id ?? o._id ?? "";
+     const dbId = o._id ?? o.id ?? (o.order && o.order._id) ?? null;
+const orderId =
+  o.orderId ?? o.orderID ?? o.order_number ?? o.orderNo ?? o.orderCode ?? o.order?.id ?? o._id ?? "";
 
         // Enhanced customer normalization - check multiple possible locations
         let customer = undefined;
@@ -588,18 +614,19 @@ export function OrderTable() {
         // Only include customer if at least one field has a value
         const hasCustomerData = customer && Object.values(customer).some(v => v !== undefined && v !== "");
 
-        return {
-          _id: dbId ?? orderId,
-          orderId,
-          seller: o.seller ?? o.sellerName ?? "",
-          items,
-          totalAmount,
-          notes: o.notes ?? "",
-          status: o.status ?? "",
-          createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
-          updatedAt: o.updatedAt,
-          customer: hasCustomerData ? customer : undefined,
-        } as Order;
+      // do NOT fall back to orderId for _id — keep them separate
+return {
+  _id: dbId ?? null,        // real DB id or null if not available
+  orderId,
+  seller: o.seller ?? o.sellerName ?? "",
+  items,
+  totalAmount,
+  notes: o.notes ?? "",
+  status: o.status ?? "",
+  createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
+  updatedAt: o.updatedAt,
+  customer: hasCustomerData ? customer : undefined,
+} as Order;
       });
 
       console.log("Normalized orders:", normalized); // Debug log
@@ -643,6 +670,240 @@ export function OrderTable() {
       console.error("Error deleting order:", err);
     }
   };
+type PickupResult =
+  | { id: string; ok: true; data: any }
+  | { id: string; ok: false; error: any };
+
+// helper to check if id looks like Mongo ObjectId (24 hex chars)
+const looksLikeObjectId = (id: string | null | undefined) =>
+  typeof id === "string" && /^[a-fA-F0-9]{24}$/.test(id);
+
+const handleBulkPickupRequest = async (): Promise<void> => {
+  if (!hasReadySelected) {
+    alert("No ready orders selected for pickup request.");
+    return;
+  }
+
+  setBulkPickupLoading(true);
+  try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    // rows selected that are in 'ready' state
+    const rows = readySelectedRows;
+
+    // partition rows into valid (DB id present) and invalid
+    const validRows = rows.filter((r) => looksLikeObjectId(r.original._id));
+    const invalidRows = rows.filter((r) => !looksLikeObjectId(r.original._id));
+
+    if (invalidRows.length > 0) {
+      console.warn("Skipping rows with invalid/missing DB _id (they were not sent):", invalidRows.map(r => ({ displayOrderId: r.original.orderId, _id: r.original._id })));
+    }
+
+    if (validRows.length === 0) {
+      alert(`No valid DB IDs found for selected ready orders. ${invalidRows.length} order(s) skipped. Check order data.`);
+      setBulkPickupLoading(false);
+      return;
+    }
+
+    // build requests for only the valid rows
+    const requests: Promise<PickupResult>[] = validRows.map((row) =>
+      axios
+        .post(
+          `https://cod-ecommerce-two.vercel.app/api/seller/orders/${row.original._id}/request-pickup`,
+          {},
+          { headers }
+        )
+        .then((res) => ({ id: row.original._id, ok: true, data: res.data } as PickupResult))
+        .catch((err) => {
+          // capture useful diagnostics
+          const status = err?.response?.status ?? null;
+          const respBody = err?.response?.data ?? null;
+          const message = respBody?.message ?? err?.message ?? String(err);
+          console.error("Pickup request failed for id", row.original._id, { status, respBody, message, raw: err });
+          return { id: row.original._id, ok: false, error: { status, respBody, message, raw: err } } as PickupResult;
+        })
+    );
+
+    const results = await Promise.all(requests);
+
+    // successes and failures
+    const successes = results.filter((r) => r.ok).map((r) => r.id);
+    const failures = results
+      .filter((r): r is { id: string; ok: false; error: any } => !r.ok)
+      .map((r) => {
+        const e = r.error;
+        return { id: r.id, status: e?.status ?? "n/a", message: String(e?.message ?? e?.respBody ?? "Server error").slice(0, 400) };
+      });
+
+    console.group("Bulk Pickup Request Results");
+    console.log("Succeeded IDs:", successes);
+    console.log("Failed IDs and messages:", failures);
+    if (invalidRows.length > 0) {
+      console.log("Skipped invalid rows (no DB _id):", invalidRows.map(r => ({ orderId: r.original.orderId, _id: r.original._id })));
+    }
+    console.groupEnd();
+
+    // refresh server state to get accurate statuses
+    await fetchOrders();
+
+    // Keep failed rows selected, clear succeeded ones
+    if (successes.length > 0 || invalidRows.length > 0) {
+      const newSelection: Record<string, boolean> = {};
+      const selected = table.getSelectedRowModel().rows;
+      for (const r of selected) {
+        // keep selection for rows that did NOT succeed
+        if (!successes.includes(r.original._id)) {
+          newSelection[r.id] = true;
+        }
+      }
+      setRowSelection(newSelection);
+    }
+
+    // Build user-facing message
+    const summaryParts = [];
+    if (successes.length) summaryParts.push(`${successes.length} succeeded`);
+    if (failures.length) summaryParts.push(`${failures.length} failed`);
+    if (invalidRows.length) summaryParts.push(`${invalidRows.length} skipped (no DB id)`);
+
+    const summary = summaryParts.length ? `Pickup requested: ${summaryParts.join(", ")}.` : "No actions performed.";
+    let detail = "";
+    if (failures.length) detail += "\n\nFailures:\n" + failures.map(f => `Order ${f.id}: ${f.message}`).join("\n");
+    if (invalidRows.length) detail += "\n\nSkipped (invalid ids):\n" + invalidRows.map(r => `Order ${r.original.orderId} (raw _id: ${String(r.original._id)})`).join("\n");
+
+    alert(summary + (detail ? ("\n" + detail) : ""));
+  } catch (err: any) {
+    console.error("Bulk pickup unexpected error:", err);
+    alert(err?.message || "Unexpected error during bulk pickup.");
+  } finally {
+    setBulkPickupLoading(false);
+  }
+};
+
+type ExportResult =
+  | { id: string; ok: true; blob: Blob }
+  | { id: string; ok: false; error: any };
+
+const handleBulkExportLabels = async (): Promise<void> => {
+  if (!hasReadySelected) {
+    alert("No ready orders selected to export labels.");
+    return;
+  }
+
+  setBulkExportLoading(true);
+  try {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const rows = readySelectedRows; // selected rows that are 'ready'
+    const validRows = rows.filter((r) => looksLikeObjectId(r.original._id));
+    const invalidRows = rows.filter((r) => !looksLikeObjectId(r.original._id));
+
+    if (invalidRows.length > 0) {
+      console.warn(
+        "Skipping rows with invalid/missing DB _id for export:",
+        invalidRows.map((r) => ({ orderId: r.original.orderId, _id: r.original._id }))
+      );
+    }
+
+    if (validRows.length === 0) {
+      alert(`No valid DB IDs found for selected ready orders. ${invalidRows.length} order(s) skipped.`);
+      setBulkExportLoading(false);
+      return;
+    }
+
+    const requests: Promise<ExportResult>[] = validRows.map((row) =>
+      axios
+        .get(
+          `https://cod-ecommerce-two.vercel.app/api/seller/orders/${row.original._id}/shipping-label`,
+          {
+            headers,
+            responseType: "blob",
+            // if using cookie-based auth when no token present
+            withCredentials: token ? false : true,
+          }
+        )
+        .then((res) => ({ id: row.original._id, ok: true, blob: res.data } as ExportResult))
+        .catch((err) => {
+          const status = err?.response?.status ?? null;
+          const respBody = err?.response?.data ?? null;
+          const message = respBody?.message ?? err?.message ?? String(err);
+          console.error("Export label failed for id", row.original._id, { status, respBody, message, raw: err });
+          return { id: row.original._id, ok: false, error: { status, respBody, message, raw: err } } as ExportResult;
+        })
+    );
+
+    const results = await Promise.all(requests);
+
+    const successes = results.filter((r) => r.ok).map((r) => ({ id: r.id, blob: (r as any).blob as Blob }));
+    const failures = results
+      .filter((r): r is { id: string; ok: false; error: any } => !r.ok)
+      .map((r) => {
+        const e = r.error;
+        return { id: r.id, status: e?.status ?? "n/a", message: String(e?.message ?? e?.respBody ?? "Server error").slice(0, 400) };
+      });
+
+    // Trigger downloads for successful blobs
+    for (const s of successes) {
+      try {
+        const url = window.URL.createObjectURL(s.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `shipping-label-${s.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // revoke after short delay so download can start
+        setTimeout(() => window.URL.revokeObjectURL(url), 15000);
+      } catch (err) {
+        console.error("Failed to download blob for", s.id, err);
+        failures.push({ id: s.id, status: "n/a", message: "Failed to save file" });
+      }
+    }
+
+    console.group("Bulk Export Label Results");
+    console.log("Succeeded IDs:", successes.map(s => s.id));
+    console.log("Failed IDs and messages:", failures);
+    if (invalidRows.length > 0) {
+      console.log("Skipped invalid rows (no DB _id):", invalidRows.map(r => ({ orderId: r.original.orderId, _id: r.original._id })));
+    }
+    console.groupEnd();
+
+    // Refresh server state
+    await fetchOrders();
+
+    // Keep failed rows selected, clear succeeded ones
+    if (successes.length > 0 || invalidRows.length > 0) {
+      const newSelection: Record<string, boolean> = {};
+      const selected = table.getSelectedRowModel().rows;
+      for (const r of selected) {
+        if (!successes.some((s) => s.id === r.original._id)) {
+          newSelection[r.id] = true;
+        }
+      }
+      setRowSelection(newSelection);
+    }
+
+    // Build user-facing summary
+    const summaryParts = [];
+    if (successes.length) summaryParts.push(`${successes.length} downloaded`);
+    if (failures.length) summaryParts.push(`${failures.length} failed`);
+    if (invalidRows.length) summaryParts.push(`${invalidRows.length} skipped (no DB id)`);
+    const summary = summaryParts.length ? `Export labels: ${summaryParts.join(", ")}.` : "No actions performed.";
+    let detail = "";
+    if (failures.length) detail += "\n\nFailures:\n" + failures.map(f => `Order ${f.id}: ${f.message}`).join("\n");
+    if (invalidRows.length) detail += "\n\nSkipped (invalid ids):\n" + invalidRows.map(r => `Order ${r.original.orderId} (raw _id: ${String(r.original._id)})`).join("\n");
+
+    alert(summary + (detail ? ("\n" + detail) : ""));
+  } catch (err: any) {
+    console.error("Bulk export unexpected error:", err);
+    alert(err?.message || "Unexpected error during bulk export.");
+  } finally {
+    setBulkExportLoading(false);
+  }
+};
 
   const [dateFilter, setDateFilter] = useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
@@ -719,7 +980,10 @@ export function OrderTable() {
       pagination: { pageIndex: 0, pageSize: 100 },
     },
   });
-
+ const selectedRows = table.getSelectedRowModel().rows ?? [];
+  const readySelectedRows = selectedRows.filter((r) => r.original.status === "ready");
+  const readySelectedCount = readySelectedRows.length;
+  const hasReadySelected = readySelectedCount > 0;
   if (loading) {
     return <p className="p-4">Loading orders...</p>;
   }
@@ -873,7 +1137,25 @@ export function OrderTable() {
             }
           />
         </div>
+ <div className="flex items-center">
+          <Button
+            onClick={handleBulkPickupRequest}
+            disabled={!hasReadySelected || bulkPickupLoading}
+            title={hasReadySelected ? `Request pickup for ${readySelectedCount} order(s)` : "Select ready orders to request pickup"}
+          >
+            {bulkPickupLoading ? "Requesting..." : `Pickup Request${readySelectedCount ? ` (${readySelectedCount})` : ""}`}
+          </Button>
+          <div className="flex items-center">
+  <Button
+    onClick={handleBulkExportLabels}
+    disabled={!hasReadySelected || bulkExportLoading}
+    title={hasReadySelected ? `Export shipping labels for ${readySelectedCount} order(s)` : "Select ready orders to export labels"}
+  >
+    {bulkExportLoading ? "Exporting..." : `Export Labels${readySelectedCount ? ` (${readySelectedCount})` : ""}`}
+  </Button>
+</div>
 
+        </div>
         <ImportReadyOrdersButton
           endpoint="https://cod-ecommerce-two.vercel.app/api/seller/orders-ready/bulk"
           label="Import Ready Orders"

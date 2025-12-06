@@ -24,10 +24,11 @@ type Seller = {
   name: string
 }
 
+// NOTE: unitPrice is now string | number so the input can be empty ""
 type Item = {
   productName: string
   quantity: number
-  unitPrice: number
+  unitPrice: string | number
 }
 
 type CityFee = { 
@@ -57,8 +58,9 @@ export function AddReadyOrder({
   const [open, setOpen] = useState(false)
   const [searchInput, setSearchInput] = useState("")
 
+  // INITIAL ITEM: unitPrice is empty string so the box shows empty (no 0)
   const [items, setItems] = useState<Item[]>([
-    { productName: "", quantity: 1, unitPrice: 0 },
+    { productName: "", quantity: 1, unitPrice: "" },
   ])
 
   const [notes, setNotes] = useState("")
@@ -150,7 +152,7 @@ export function AddReadyOrder({
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)))
   }
 
-  const addItem = () => setItems((prev) => [...prev, { productName: "", quantity: 1, unitPrice: 0 }])
+  const addItem = () => setItems((prev) => [...prev, { productName: "", quantity: 1, unitPrice: "" }])
   const removeItem = (index: number) => setItems((prev) => prev.filter((_, i) => i !== index))
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -169,6 +171,16 @@ export function AddReadyOrder({
       const token = localStorage.getItem("token")
       if (!token) throw new Error("Authentication token missing")
 
+      // Build payload: convert unitPrice string -> number if provided; keep 0 if not specified
+      const itemsPayload = items.map((it) => {
+        const price = typeof it.unitPrice === "string" ? (it.unitPrice.trim() === "" ? 0 : Number(it.unitPrice)) : Number(it.unitPrice)
+        return {
+          productName: it.productName,
+          quantity: Number(it.quantity),
+          unitPrice: isFinite(price) ? price : 0,
+        }
+      })
+
       const payload = {
         sellerId,
         customer: {
@@ -184,11 +196,7 @@ export function AddReadyOrder({
         customerAddress: customerAddress.trim(),
         customerCity: customerCity.trim(),
         customerPostalCode: customerPostalCode.trim() || undefined,
-        items: items.map((it) => ({
-          productName: it.productName,
-          quantity: Number(it.quantity),
-          unitPrice: Number(it.unitPrice) || 0,
-        })),
+        items: itemsPayload,
         notes,
       }
 
@@ -205,7 +213,7 @@ export function AddReadyOrder({
       setCustomerAddress("")
       setCustomerCity("")
       setCustomerPostalCode("")
-      setItems([{ productName: "", quantity: 1, unitPrice: 0 }])
+      setItems([{ productName: "", quantity: 1, unitPrice: "" }])
       setNotes("")
 
       onOrderAdded?.()
@@ -328,11 +336,7 @@ export function AddReadyOrder({
                 )}
               </div>
 
-              <Input 
-                placeholder="Postal Code" 
-                value={customerPostalCode} 
-                onChange={(e) => setCustomerPostalCode(e.target.value)} 
-              />
+             
             </div>
           </div>
 
@@ -363,13 +367,18 @@ export function AddReadyOrder({
                   </div>
                   <div>
                     <Label className="mb-2">Amount</Label>
+                    {/* value is empty string by default; onChange stores raw string so user can delete/backspace freely */}
                     <Input
                       type="number"
                       step="0.01"
                       min={0}
                       placeholder="Unit Price"
-                      value={it.unitPrice}
-                      onChange={(e) => updateItem(idx, { unitPrice: Number(e.target.value) })}
+                      value={it.unitPrice ?? ""}
+                      onChange={(e) => {
+                        // Keep raw input so the field can be empty until user types
+                        // note: e.target.value is a string even for type="number" in React; keep it as-is
+                        updateItem(idx, { unitPrice: e.target.value })
+                      }}
                     />
                   </div>
                 </div>

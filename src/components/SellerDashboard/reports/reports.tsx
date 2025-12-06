@@ -105,6 +105,7 @@ export default function ReportsPage() {
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [topCities, setTopCities] = useState<TopCity[]>([]);
   const [reportsLoading, setReportsLoading] = useState<boolean>(true);
+  const [deliveryCollection, setDeliveryCollection] = useState<any | null>(null)
 
   // helpers
   const parseDate = (d?: string | number | null) => {
@@ -256,12 +257,32 @@ export default function ReportsPage() {
       setReportsLoading(false);
     }
   }, []);
+  const fetchDeliveryCollection = useCallback(async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return;
+    try {
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/stats/delivery-collection", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // helpful debug while developing:
+      console.log("fetchDeliveryCollection response:", res.data);
+
+      // Accept either res.data.data (nested) or res.data (flat) and keep null fallback
+      const payload = res.data?.data ?? res.data ?? null;
+      setDeliveryCollection(payload);
+    } catch (err) {
+      console.error("Error fetching delivery & collection:", err);
+      setDeliveryCollection(null);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
     fetchSellerRevenue();
     fetchReports();
-  }, [fetchData, fetchSellerRevenue, fetchReports]);
+    fetchDeliveryCollection()
+  }, [fetchData, fetchSellerRevenue, fetchReports,fetchDeliveryCollection]);
 
   /* -------------------- Derived filtered orders -------------------- */
 
@@ -366,7 +387,31 @@ export default function ReportsPage() {
       />
     </div>
   );
+  const deliverySummaryFromFiltered = useMemo(() => {
+      const keys = ["pending", "processing", "shipped", "delivered", "cancelled", "ready"]
+      const init: Record<string, { count: number; totalAmount: number }> = {}
+      keys.forEach((k) => (init[k] = { count: 0, totalAmount: 0 }))
+  
+      for (const o of filteredOrders) {
+        const s = (o.status || "").toLowerCase()
+        // try to map common synonyms
+        const mapKey = keys.includes(s) ? s : s === "returned" ? "cancelled" : s
+        if (!init[mapKey]) continue
+        init[mapKey].count += 1
+        init[mapKey].totalAmount += Number(o.totalAmount || 0)
+      }
+  
+      return init
+    }, [filteredOrders])
+  
+    const useFilteredView = dateFilter !== "all" || fromDate || toDate || searchQuery.trim() !== ""
 
+    const displayedDeliverySummary = useFilteredView ? deliverySummaryFromFiltered : deliveryCollection?.statusSummary ?? null
+
+  const readDisplayed = (key: string) => ({
+    count: displayedDeliverySummary?.[key]?.count ?? 0,
+    totalAmount: displayedDeliverySummary?.[key]?.totalAmount ?? 0,
+  })
   const formatCurrency = (v: number) =>
     Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -700,6 +745,42 @@ export default function ReportsPage() {
             </div>
           </CardContent>
         </Card>
+          {/* --- Delivery & Cash Collection (now respects filters) --- */}
+                <Card className="hover:shadow-lg transition-all duration-200 h-full">
+                  <CardHeader className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Delivery & Cash Collection</CardTitle>
+                    </div>
+                    <IconFile className="text-sky-500 h-6 w-6" />
+                  </CardHeader>
+        
+                  <CardContent className="flex-1 flex flex-col justify-between">
+                    {/* status summary: use displayedDeliverySummary which picks filtered view when filters applied */}
+                    <div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {['pending','processing','shipped','delivered','ready','cancelled'].map((k) => {
+                          const item = readDisplayed(k)
+                          return (
+                            <div key={k} className="text-sm">
+                              <div className="text-xs text-muted-foreground">{k.charAt(0).toUpperCase() + k.slice(1)}</div>
+                              <div className="flex gap-2 items-center">
+             <div className="text-lg font-semibold">{displayedDeliverySummary ? item.count : '...'}</div>
+                              <div className="text-xs text-muted-foreground">{displayedDeliverySummary ? Number(item.totalAmount).toLocaleString() : ''} DH</div>
+                            
+                              </div>
+                         
+                            </div>
+                          )
+                        })}
+                      </div>
+        
+                     
+        
+                  
+                    </div>
+        
+                       </CardContent>
+                </Card>
       </div>
 
     

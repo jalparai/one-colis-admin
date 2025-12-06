@@ -303,10 +303,22 @@ export default function EditOrder({ order, open, onOpenChange, onOrderUpdated }:
 
     for (let i = 0; i < fixed.length; i++) {
       const it = fixed[i];
-      if (!it.productId) {
-        invalid.push({ idx: i, reason: "No product selected" });
-        continue;
-      }
+    // If productId missing — allow it only when 'ready' and productName is present
+if (!it.productId) {
+  if (order?.status === "ready") {
+    // require productName for ready orders
+    if (!it.productName || !String(it.productName).trim()) {
+      invalid.push({ idx: i, reason: "Product name is required for 'ready' orders" });
+      continue;
+    }
+    // OK — free-text product name provided for 'ready' order
+  } else {
+    // non-ready orders must have a productId selected
+    invalid.push({ idx: i, reason: "No product selected" });
+    continue;
+  }
+}
+
       if (!stockMap.has(it.productId)) {
         invalid.push({ idx: i, reason: `Unknown productId ${it.productId}` });
         continue;
@@ -448,30 +460,60 @@ export default function EditOrder({ order, open, onOpenChange, onOrderUpdated }:
 
             <div className="space-y-2">
               {items.map((it, idx) => (
-                <div key={it.uid} className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="text-xs">Product {!it.productId && <span className="text-red-500">*</span>}</label>
-                    <select
-                      value={it.productId ?? ""}
-                      onChange={(e) => onSelectProduct(idx, e.target.value)}
-                      className="w-full rounded-md border p-2"
-                    >
-                      <option value="">-- Select product --</option>
-                      {sellerProducts.map((p) => {
-                        const pid = getStockId(p);
-                        const pname = getStockName(p) || "Unnamed";
-                        const avail = getStockAvailable(p);
-                        return (
-                          <option key={pid || pname} value={pid}>
-                            {pname}
-                            {p.sku ? ` (${p.sku})` : ""}
-                            {typeof avail === "number" ? ` — stock: ${avail}` : ""}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <div className="text-xs text-muted-foreground mt-1">{it.productName || (it.productId ? "(product selected)" : "Choose a product")}</div>
-                  </div>
+                <div key={it.uid} className="gap-2 items-end">
+                 {/* Product field — show input when order.status === "ready", otherwise show select */}
+<div className="flex-1">
+  <label className="text-xs">
+    Product{" "}
+    {order?.status === "ready" ? <span className="text-red-500">*</span> : !it.productId ? <span className="text-red-500">*</span> : null}
+  </label>
+
+  {order?.status === "ready" ? (
+    // For 'ready' orders allow typing a product name (required)
+    <div>
+      <Input
+        value={it.productName ?? ""}
+        placeholder="Enter product name"
+        onChange={(e) =>
+          updateItem(idx, {
+            productName: e.target.value,
+            // keep productId empty when user types free-text product name
+            productId: "",
+          })
+        }
+      />
+      <div className="text-xs text-muted-foreground mt-1">
+        Enter product name (must be provided for 'ready' orders).
+      </div>
+    </div>
+  ) : (
+    // Default behavior: select from available stock
+    <div>
+      <select
+        value={it.productId ?? ""}
+        onChange={(e) => onSelectProduct(idx, e.target.value)}
+        className="w-full rounded-md border p-2"
+      >
+        <option value="">-- Select product --</option>
+        {sellerProducts.map((p) => {
+          const pid = getStockId(p);
+          const pname = getStockName(p) || "Unnamed";
+          const avail = getStockAvailable(p);
+          return (
+            <option key={pid || pname} value={pid}>
+              {pname}
+              {p.sku ? ` (${p.sku})` : ""}
+              {typeof avail === "number" ? ` — stock: ${avail}` : ""}
+            </option>
+          );
+        })}
+      </select>
+      <div className="text-xs text-muted-foreground mt-1">
+        {it.productName || (it.productId ? "(product selected)" : "Choose a product")}
+      </div>
+    </div>
+  )}
+</div>
 
                   <div className="w-28">
                     <label className="text-xs">Qty</label>

@@ -93,7 +93,7 @@ export const ProductSelect: React.FC<Props> = ({ value, onChange, placeholder = 
 
           {!loading && !error && items.map(it => (
             <SelectItem key={it.productId} value={it.productId}>
-              {it.name}{typeof it.available === "number" ? ` — ${it.available} in stock` : ""}{it.price ? ` — $${it.price}` : ""}
+              {it.name}{typeof it.available === "number" ? ` — ${it.available} in stock` : ""}{it.price ? ` — ${it.price} DH` : ""}
             </SelectItem>
           ))}
         </SelectContent>

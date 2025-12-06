@@ -26,7 +26,7 @@ type OrderItem = {
   sku?: string | null;
   productName?: string;
   quantity?: number;
-  unitPrice?: number;
+  unitPrice?: number | undefined;
   total?: number;
   open?: boolean;
   searchInput?: string;
@@ -38,7 +38,8 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [sellerId, setSellerId] = useState<string>("");
   const [products, setProducts] = useState<Product[]>([]);
-  const [items, setItems] = useState<OrderItem[]>([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
+  // NOTE: unitPrice is undefined by default so the amount box is blank until set
+  const [items, setItems] = useState<OrderItem[]>([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: undefined }]);
   const [notes, setNotes] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -92,7 +93,7 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
           id: p.productId ?? p._id ?? p.product?._id ?? p.id ?? String(Math.random()),
           name: p.productName ?? p.product?.name ?? p.name ?? p.sku ?? "Unnamed product",
           sku: p.sku ?? p.product?.sku,
-          price: Number(p.price ?? p.unitPrice ?? p.product?.price ?? 0),
+          price: p.price !== undefined ? Number(p.price) : p.unitPrice !== undefined ? Number(p.unitPrice) : (p.product?.price !== undefined ? Number(p.product.price) : undefined),
           sellerId: p.sellerId ?? p.seller?._id ?? p.seller ?? p.product?.seller,
           qty: Number(p.quantity ?? p.stock ?? p.product?.quantity ?? 0),
         }));
@@ -136,24 +137,33 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
 
   const availableProducts = sellerId ? products.filter(p => String(p.sellerId) === String(sellerId)) : products;
 
+  // updateItem now recalculates totals for quantity or unitPrice changes
   const updateItem = (index: number, patch: Partial<OrderItem>) => {
     setItems(prev => {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
+
+      // if productId chosen, fill productName/sku/unitPrice from products
       if (patch.productId) {
         const prod = products.find(p => p.id === patch.productId);
         if (prod) {
           next[index].productName = prod.name;
-          next[index].sku = prod.sku ?? next[index].sku;
-          next[index].unitPrice = prod.price ?? next[index].unitPrice;
+          if (!next[index].sku) next[index].sku = prod.sku ?? next[index].sku;
+          // only set unitPrice from product if patch didn't explicitly set unitPrice (so editing unitPrice by user won't be overridden)
+          if (patch.unitPrice === undefined && prod.price !== undefined) next[index].unitPrice = prod.price;
         }
       }
-      next[index].total = (next[index].unitPrice ?? 0) * (Number(next[index].quantity ?? 0) || 0);
+
+      // ensure numeric values
+      const qty = Number(next[index].quantity ?? 0) || 0;
+      const u = next[index].unitPrice !== undefined ? Number(next[index].unitPrice) : undefined;
+      next[index].total = (u ?? 0) * qty;
+
       return next;
     });
   };
 
-  const addItem = () => setItems(prev => [...prev, { productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
+  const addItem = () => setItems(prev => [...prev, { productId: null, sku: null, productName: "", quantity: 1, unitPrice: undefined }]);
   const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const handleAddOrder = async (e: React.FormEvent) => {
@@ -179,7 +189,6 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
         if (!Number.isFinite(q) || q <= 0) { setMessage(`Invalid quantity at line ${i + 1}`); setLoading(false); return; }
         // ensure sku exists for compatibility
         if (!it.sku) {
-          // try to fill from products list
           const prod = products.find(p => p.id === it.productId);
           if (prod?.sku) it.sku = prod.sku;
         }
@@ -195,8 +204,13 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
           postalCode: customerPostalCode,
         },
         sellerId,
-        // include sku and productId for compatibility
-        items: items.map(it => ({ productId: it.productId, sku: it.sku, quantity: Number(it.quantity) })),
+        // include sku, productId, quantity and unitPrice for compatibility
+        items: items.map(it => ({
+          productId: it.productId,
+          sku: it.sku,
+          quantity: Number(it.quantity),
+          ...(it.unitPrice !== undefined ? { unitPrice: Number(it.unitPrice) } : {}),
+        })),
         notes,
       };
 
@@ -215,7 +229,7 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
         toast.success(createdOrderId ? `Order created: ${createdOrderId}` : "Order created");
 
         setMessage("Order created");
-        setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
+        setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: undefined }]);
         setNotes("");
         setSellerId("");
         setCustomerName("");
@@ -250,7 +264,6 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
   }, []);
 
   const selectedCityFee = cityFees.find(c => c.city === customerCity)?.fee;
-
   const filteredCities = cityFees.filter(c => c.city.toLowerCase().includes(citySearch.toLowerCase()));
 
   return (
@@ -301,7 +314,7 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                             setSellerId(s.id);
                             setSearchInput("");
                             setOpen(false);
-                            setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: 0 }]);
+                            setItems([{ productId: null, sku: null, productName: "", quantity: 1, unitPrice: undefined }]);
                           }}
                           className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${sellerId === s.id ? "bg-accent text-accent-foreground" : ""
                             }`}
@@ -387,7 +400,6 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                 )}
               </div>
 
-              <Input placeholder="Postal Code" value={customerPostalCode} onChange={(e) => setCustomerPostalCode(e.target.value)} />
             </div>
           </div>
 
@@ -433,11 +445,13 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                                   <button
                                     key={p.id}
                                     onClick={() => {
+                                      // set product and fill unitPrice only if product has price
                                       updateItem(idx, {
                                         productId: p.id,
                                         productName: p.name,
                                         sku: p.sku,
-                                        unitPrice: p.price,
+                                        // set unitPrice to prod.price only if defined; updateItem will not override a manually-entered price
+                                        unitPrice: p.price !== undefined ? Number(p.price) : undefined,
                                         searchInput: "",
                                         open: false,
                                       });
@@ -445,7 +459,11 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                                     className={`w-full text-left px-2 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors flex items-center justify-between ${it.productId === p.id ? "bg-accent text-accent-foreground" : ""
                                       }`}
                                   >
-                                    <span>{p.name}{p.sku ? ` (${p.sku})` : ""}</span>
+                                    <span>
+                                      {p.name}
+                                      {p.sku ? ` (${p.sku})` : ""}
+                                      {typeof p.price === "number" ? ` — ${Number(p.price).toLocaleString()} DH` : ""}
+                                    </span>
                                     {it.productId === p.id && <Check className="h-4 w-4" />}
                                   </button>
                                 ))
@@ -463,13 +481,33 @@ export function AddOrder({ onOrderAdded }: { onOrderAdded?: () => void }) {
                   <div className="grid grid-cols-2 mt-4 gap-2">
                     <div className="col-span-1">
                       <Label className="mb-2">Qty</Label>
-                      <Input type="number" min={1} value={it.quantity ?? 1} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value || 0) })} />
+                      <Input
+                        type="number"
+                        min={1}
+                        value={it.quantity ?? 1}
+                        onChange={(e) => updateItem(idx, { quantity: Number(e.target.value || 0) })}
+                      />
                     </div>
 
                     <div className="col-span-1">
-                      <Label className="mb-2">Amount</Label>
-                      <Input value={it.unitPrice ?? ""} readOnly placeholder="unit price" />
+                      <Label className="mb-2">Unit Price (DH)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        placeholder=""
+                        value={it.unitPrice ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const parsed = v === "" ? undefined : parseFloat(v);
+                          updateItem(idx, { unitPrice: parsed });
+                        }}
+                      />
                     </div>
+                  </div>
+
+                  <div className="text-sm mt-2">
+                    Line total: {(Number(it.total ?? 0)).toLocaleString()} DH
                   </div>
 
                   <div className="col-span-12 sm:col-span-12">

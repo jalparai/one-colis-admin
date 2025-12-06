@@ -107,7 +107,8 @@ export const getOrderColumns = (
   onStatusUpdate: (id: string, status: string) => Promise<void>,
   onDelete: (id: string) => Promise<void>,
   onUpdated?: () => void,
-    onPrintLabel?: (id: string) => Promise<void> // <-- new optional callback
+    onPrintLabel?: (id: string) => Promise<void>, // <-- new optional callback
+    canAssign = false 
 ): ColumnDef<Order>[] => [
    {
       id: "select",
@@ -463,19 +464,33 @@ const handleAssignToAgent = async () => {
     <DropdownMenuItem onClick={() => setStatusOpen(true)}>Update Status</DropdownMenuItem>
 
     <DropdownMenuSeparator />
- 
-    {/* Assign to agent: only allow if order is ready */}
-    <DropdownMenuItem
-      onClick={() => {
-        if (!isReady) {
-          toast.error("Only orders with 'ready' status can be assigned");
-          return;
-        }
-        setAssignOpen(true);
-      }}
-    >
-      Assign to Agent
-    </DropdownMenuItem>
+<DropdownMenuItem
+  disabled={!canAssign || !isReady}
+  onClick={() => {
+    // defensive guard — onClick won't fire when disabled but keep it for safety
+    if (!canAssign) {
+      toast.error("You don't have permission to assign orders");
+      return;
+    }
+    if (!isReady) {
+      toast.error("Only 'ready' orders can be assigned");
+      return;
+    }
+    setAssignOpen(true);
+  }}
+>
+  {/* tooltip/title explains why disabled */}
+  <span title={
+    !canAssign ? "You don't have permission to assign orders"
+    : !isReady ? "Only orders with status 'ready' can be assigned"
+    : undefined
+  }>
+    Assign to Agent
+  </span>
+</DropdownMenuItem>
+
+
+
 
     <DropdownMenuSeparator />
 
@@ -622,6 +637,7 @@ export function EmployeeOrdersTable() {
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [deleteBulkOpen, setDeleteBulkOpen] = React.useState(false);
   const [deleteBulkLoading, setDeleteBulkLoading] = React.useState(false);
+const canAssign = userHasPermission("assignOrders");
 
   const fetchOrders = React.useCallback(async () => {
     try {
@@ -789,7 +805,7 @@ export function EmployeeOrdersTable() {
 
     if (!succeeded) {
       console.error("[status-update] all attempts failed:", errors);
-      toast.error("Status update failed — check console network logs.");
+      // toast.error("Status update failed — check console network logs.");
       // rollback optimistic UI
       if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
     }
@@ -964,6 +980,86 @@ export function EmployeeOrdersTable() {
       setAssignBulkLoading(false);
     }
   };
+// call this anywhere in the client to check permissions
+function parseJwt(token: string | null) {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = decodeURIComponent(
+      atob(payload)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+// Improved permission checker — replace your existing function with this
+function userHasPermission(permission: string): boolean {
+  if (typeof window === "undefined") return false;
+  const want = String(permission).toLowerCase();
+
+  // helper to check arrays or object-maps
+  const checkArrayOrObject = (p: any) => {
+    if (!p) return false;
+    if (Array.isArray(p)) {
+      return p.map(String).some((x) => x.toLowerCase() === want);
+    }
+    if (typeof p === "object") {
+      // either { permName: true } or nested
+      // check direct boolean flags
+      if (Object.prototype.hasOwnProperty.call(p, permission)) {
+        return Boolean((p as any)[permission]);
+      }
+      // check any key normalized
+      return Object.keys(p).some((k) => k.toLowerCase() === want && Boolean((p as any)[k]));
+    }
+    return false;
+  };
+
+  try {
+    // 1) user object stored in localStorage
+    const rawUser = localStorage.getItem("user");
+    if (rawUser) {
+      try {
+        const u = JSON.parse(rawUser);
+        if (checkArrayOrObject(u?.permissions)) return true;
+      } catch {}
+    }
+  } catch {}
+
+  try {
+    // 2) dedicated permissions array in localStorage
+    const rawPerm = localStorage.getItem("permissions");
+    if (rawPerm) {
+      try {
+        const arr = JSON.parse(rawPerm);
+        if (checkArrayOrObject(arr)) return true;
+      } catch {}
+    }
+  } catch {}
+
+  try {
+    // 3) try JWT token payload (support array or object)
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (token) {
+      const payload = parseJwt(token);
+      if (payload) {
+        if (checkArrayOrObject(payload.permissions)) return true;
+        if (checkArrayOrObject(payload.user?.permissions)) return true;
+        // some tokens store permissions as flags on user object (user.assignOrders === true)
+        if (checkArrayOrObject(payload.user)) return true;
+      }
+    }
+  } catch {}
+
+  return false;
+}
 
   // Date filtering logic (same as yours)
   const filteredOrders = React.useMemo(() => {
@@ -1134,7 +1230,7 @@ export function EmployeeOrdersTable() {
 
   const table = useReactTable({
     data: finalOrders,
-    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders,handleDownloadLabel),
+    columns: getOrderColumns(handleStatusUpdate, handleDelete, fetchOrders,handleDownloadLabel,canAssign),
     state: { sorting, columnFilters, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -1173,6 +1269,9 @@ export function EmployeeOrdersTable() {
       alert("Error exporting file!");
     }
   };
+// after `const table = useReactTable({...})`
+const selectedRows = table.getFilteredSelectedRowModel().rows;
+const allSelectedReady = selectedRows.length > 0 && selectedRows.every(r => r.original.status === "ready");
 
   if (loading) return <p className="p-4">Loading orders...</p>;
 
@@ -1214,9 +1313,18 @@ export function EmployeeOrdersTable() {
           {/* Conditionally show bulk action buttons when selection exists */}
           {selectedCount > 0 && (
             <>
-              <Button onClick={() => setAssignBulkOpen(true)}>
-                Assign Selected ({selectedCount})
-              </Button>
+              <Button
+  onClick={() => setAssignBulkOpen(true)}
+  disabled={!canAssign || !allSelectedReady}
+  title={
+    !canAssign ? "You don't have permission to assign orders"
+    : !allSelectedReady ? "Only 'ready' orders can be assigned — deselect or update others"
+    : undefined
+  }
+>
+  Assign Selected ({selectedCount})
+</Button>
+
 
               <Button variant="destructive" onClick={() => setDeleteBulkOpen(true)}>
                 Delete Selected ({selectedCount})

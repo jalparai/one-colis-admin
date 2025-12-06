@@ -1,419 +1,392 @@
-"use client";
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+"use client"
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardContent,
 } from "@/components/ui/card";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { TrendingDown, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
-/**
- * Single-file DeliveredVsReturned page with:
- * - date presets + manual range
- * - client-side calculation (from /api/admin/orders)
- * - chart, metric cards, filtered table
- * - Download PDF (uses same from/to query params)
- *
- * Tweak `deliveredStatuses` / `returnedStatuses` to match your backend.
- */
-
-type RawOrder = {
-  id: string;
-  orderId?: string;
-  status?: string;
-  totalAmount?: number | null;
-  createdAt?: string | null;
-  seller?: any;
+type Props = {
+  apiUrlRatio?: string;
+  apiUrlOrders?: string;
+  token?: string; // either full 'Bearer ...' or raw token
 };
 
-function getDateRangeForFilter(key: string): [Date | null, Date | null] {
-  const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
+type RatioApiData = {
+  deliveredOrders: number;
+  returnedOrders: number;
+  ratio: string;
+};
 
-  switch (key) {
+type OrderItem = Record<string, any>;
+
+const RANGE_OPTIONS = [
+  "all",
+  "today",
+  "yesterday",
+  "this_week",
+  "last_week",
+  "this_month",
+  "last_month",
+] as const;
+
+type RangeKey = typeof RANGE_OPTIONS[number];
+
+function startOfWeek(d: Date) {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Monday as first day
+  return new Date(date.setDate(diff));
+}
+
+function endOfWeek(d: Date) {
+  const s = startOfWeek(d);
+  return new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6, 23, 59, 59, 999);
+}
+
+function getRangeDates(range: RangeKey) {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  switch (range) {
     case "today":
-      return [startOfToday, endOfToday];
+      return { from: todayStart, to: todayEnd };
     case "yesterday": {
-      const s = new Date(startOfToday);
-      s.setDate(s.getDate() - 1);
-      const e = new Date(s);
-      e.setHours(23, 59, 59, 999);
-      return [s, e];
+      const y = new Date(todayStart);
+      y.setDate(y.getDate() - 1);
+      return { from: new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0, 0), to: new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999) };
     }
-    case "this_week": {
-      const d = new Date(startOfToday);
-      const day = d.getDay();
-      const diffToMonday = (day + 6) % 7;
-      const s = new Date(d);
-      s.setDate(d.getDate() - diffToMonday);
-      s.setHours(0, 0, 0, 0);
-      const e = new Date(s);
-      e.setDate(s.getDate() + 6);
-      e.setHours(23, 59, 59, 999);
-      return [s, e];
-    }
+    case "this_week":
+      return { from: startOfWeek(now), to: endOfWeek(now) };
     case "last_week": {
-      const d = new Date(startOfToday);
-      const day = d.getDay();
-      const diffToMonday = (day + 6) % 7;
-      const startThisWeek = new Date(d);
-      startThisWeek.setDate(d.getDate() - diffToMonday);
-      startThisWeek.setHours(0, 0, 0, 0);
-      const s = new Date(startThisWeek);
-      s.setDate(startThisWeek.getDate() - 7);
-      const e = new Date(startThisWeek);
-      e.setDate(startThisWeek.getDate() - 1);
-      e.setHours(23, 59, 59, 999);
-      return [s, e];
+      const last = new Date(now);
+      last.setDate(last.getDate() - 7);
+      return { from: startOfWeek(last), to: endOfWeek(last) };
     }
-    case "this_month": {
-      const s = new Date(now.getFullYear(), now.getMonth(), 1);
-      s.setHours(0, 0, 0, 0);
-      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      e.setHours(23, 59, 59, 999);
-      return [s, e];
-    }
+    case "this_month":
+      return { from: new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0), to: todayEnd };
     case "last_month": {
-      const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      s.setHours(0, 0, 0, 0);
-      const e = new Date(now.getFullYear(), now.getMonth(), 0);
-      e.setHours(23, 59, 59, 999);
-      return [s, e];
+      const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthDate = new Date(firstOfThisMonth);
+      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      return { from: new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth(), 1, 0, 0, 0, 0), to: new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0, 23, 59, 59, 999) };
     }
     case "all":
     default:
-      return [null, null];
+      return { from: undefined, to: undefined } as const;
   }
 }
 
-export default function DeliveredVsReturnedSingle() {
-  const [allOrders, setAllOrders] = useState<RawOrder[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(true);
-  const [preset, setPreset] = useState<string>("all");
-  const [fromDate, setFromDate] = useState<string | null>(null); // yyyy-mm-dd
-  const [toDate, setToDate] = useState<string | null>(null); // yyyy-mm-dd
-  const [downloading, setDownloading] = useState(false);
+function formatIso(date?: Date | undefined) {
+  return date ? date.toISOString() : undefined;
+}
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+/** Convert a possible customer value to a safe display string.
+ *  Handles string, object, null/undefined.
+ */
+function customerToDisplay(c: any): string {
+  if (!c && c !== 0) return "Unknown";
 
-  // Adjust these sets to match your backend's status values
-  const deliveredStatuses = new Set(["delivered", "collected", "paid"]);
-  const returnedStatuses = new Set(["returned", "rto"]);
+  if (typeof c === "string") return c;
+  if (typeof c === "number") return String(c);
 
-  const fetchAllOrders = useCallback(async () => {
-    setLoadingOrders(true);
-    try {
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        validateStatus: () => true,
-      });
-      const raw = res.data?.data ?? res.data ?? [];
-      const normalized: RawOrder[] = Array.isArray(raw)
-        ? raw.map((o: any) => ({
-            id: o.id ?? o._id ?? String(Math.random()),
-            orderId: (o.orderId ?? o.order_number ?? o._id ?? o.orderID ?? o.orderNumber) as string,
-            status: (o.status ?? "").toString().toLowerCase(),
-            totalAmount: o.totalAmount ?? o.total ?? o.amount ?? null,
-            createdAt: o.createdAt ?? o.orderDate ?? o.created_at ?? null,
-            seller: o.seller ?? null,
-          }))
-        : [];
-      setAllOrders(normalized);
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
-      setAllOrders([]);
-    } finally {
-      setLoadingOrders(false);
-    }
+  // object -> try common fields
+  const name = c?.name ?? c?.fullName ?? c?.customerName ?? c?.firstName ?? c?.lastName;
+  const phone = c?.phone ?? c?.mobile ?? c?.phoneNumber;
+  const addr = c?.address ?? c?.addr ?? c?.shippingAddress;
+  const city = c?.city ?? c?.cityName;
+  const postal = c?.postalCode ?? c?.zipCode;
+
+  // Prefer name if present
+  if (name) {
+    const extras = [phone, city].filter(Boolean).join(" • ");
+    return extras ? `${String(name)} — ${extras}` : String(name);
+  }
+
+  // If no name, try phone or email
+  if (phone) return String(phone);
+  if (c?.email) return String(c.email);
+
+  // Otherwise serialize to short JSON (avoid huge dumps)
+  try {
+    const keys = Object.keys(c).slice(0, 4);
+    const shortObj: Record<string, any> = {};
+    keys.forEach(k => (shortObj[k] = c[k]));
+    return JSON.stringify(shortObj);
+  } catch {
+    return "Customer";
+  }
+}
+
+export default function DeliveredVsReturnedSingle({
+  apiUrlRatio = "https://cod-ecommerce-two.vercel.app/api/admin/getDeliveredVsReturnedRatio",
+  apiUrlOrders = "https://cod-ecommerce-two.vercel.app/api/admin/orders",
+  token,
+}: Props) {
+  // orderRange controls only the orders table
+  const [orderRange, setOrderRange] = useState<RangeKey>("all");
+
+  // ratio data (cards) shown for overall data. They do not change when user changes orderRange.
+  const [ratioData, setRatioData] = useState<RatioApiData | null>(null);
+  const [ratioLoading, setRatioLoading] = useState(false);
+  const [ratioError, setRatioError] = useState<string | null>(null);
+
+  const [orders, setOrders] = useState<OrderItem[] | null>(null);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const authHeader = useMemo(() => {
+    const stored = token ?? (typeof window !== "undefined" && (localStorage.getItem("token") || localStorage.getItem("authToken"))) ?? null;
+    if (!stored) return undefined;
+    return stored.toString().startsWith("Bearer ") ? stored.toString() : `Bearer ${stored}`;
   }, [token]);
 
+  // Fetch ratio once or when apiUrlRatio/authHeader change. This intentionally ignores orderRange
   useEffect(() => {
-    fetchAllOrders();
-  }, [fetchAllOrders]);
+    let mounted = true;
 
-  // preset -> populate from/to
-  useEffect(() => {
-    const [s, e] = getDateRangeForFilter(preset);
-    if (s && e) {
-      const fmt = (d: Date) => d.toISOString().slice(0, 10);
-      setFromDate(fmt(s));
-      setToDate(fmt(e));
-    } else {
-      setFromDate(null);
-      setToDate(null);
-    }
-  }, [preset]);
-
-  // filtered orders derived from allOrders + date range
-  const filteredOrders = useMemo(() => {
-    if (!allOrders.length) return [];
-
-    const start = fromDate ? new Date(fromDate + "T00:00:00") : null;
-    const end = toDate ? new Date(toDate + "T23:59:59.999") : null;
-
-    return allOrders.filter((o) => {
-      if (!o.createdAt) return false;
-      const created = new Date(o.createdAt);
-      if (isNaN(created.getTime())) return false;
-      if (start && created < start) return false;
-      if (end && created > end) return false;
-      return true;
-    });
-  }, [allOrders, fromDate, toDate]);
-
-  // compute delivered & returned metrics
-  const metrics = useMemo(() => {
-    const total = filteredOrders.length;
-    const deliveredList = filteredOrders.filter((o) => deliveredStatuses.has((o.status ?? "").toLowerCase()));
-    const returnedList = filteredOrders.filter((o) => returnedStatuses.has((o.status ?? "").toLowerCase()));
-    const deliveredCount = deliveredList.length;
-    const returnedCount = returnedList.length;
-    const deliveredPct = total > 0 ? ((deliveredCount / total) * 100).toFixed(2) : "0.00";
-    const returnedPct = total > 0 ? ((returnedCount / total) * 100).toFixed(2) : "0.00";
-    const ratio = returnedCount > 0 ? String(deliveredCount / returnedCount) : returnedCount === 0 && deliveredCount > 0 ? "Infinity" : "0";
-    return {
-      totalOrders: total,
-      delivered: { count: deliveredCount, percentage: deliveredPct },
-      returned: { count: returnedCount, percentage: returnedPct },
-      ratio: { deliveredToReturned: ratio },
-      deliveredList,
-      returnedList,
+    const fetchRatio = async () => {
+      setRatioLoading(true);
+      setRatioError(null);
+      try {
+        const res = await axios.get<{ message?: string; data?: RatioApiData }>(apiUrlRatio, {
+          headers: authHeader ? { Authorization: authHeader } : undefined,
+        });
+        if (!mounted) return;
+        setRatioData(res.data?.data ?? null);
+      } catch (err: any) {
+        if (!mounted) return;
+        setRatioError(err?.response?.data?.message ?? err?.message ?? "Failed to fetch ratio");
+      } finally {
+        if (!mounted) return;
+        setRatioLoading(false);
+      }
     };
-  }, [filteredOrders]);
 
-  const chartData = useMemo(
-    () => [
-      { name: "Delivered", value: metrics.delivered.count },
-      { name: "Returned", value: metrics.returned.count },
-    ],
-    [metrics]
-  );
+    fetchRatio();
 
-  const handleDownloadPDF = useCallback(async () => {
-    setDownloading(true);
+    return () => {
+      mounted = false;
+    };
+  }, [apiUrlRatio, authHeader]);
+
+  // Fetch orders and respect orderRange. This only controls the orders table.
+// Replace your fetchOrders useEffect with this
+useEffect(() => {
+  let mounted = true;
+
+  const fetchOrders = async () => {
+    setOrdersLoading(true);
+    setOrdersError(null);
+
     try {
-      const params = new URLSearchParams();
-      if (fromDate) params.set("from", new Date(fromDate + "T00:00:00").toISOString());
-      if (toDate) params.set("to", new Date(toDate + "T23:59:59.999").toISOString());
-      // assume server exposes a PDF endpoint; tweak path if needed
-      const url = params.toString()
-        ? `https://cod-ecommerce-two.vercel.app/api/admin/getDeliveredVsReturnedRatio/pdf?${params.toString()}`
-        : `https://cod-ecommerce-two.vercel.app/api/admin/getDeliveredVsReturnedRatio/pdf`;
+      const { from, to } = getRangeDates(orderRange);
 
-      const res = await axios.get(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        responseType: "blob",
+      // Prepare both ISO and YYYY-MM-DD forms to maximize compatibility
+      const isoFrom = from ? formatIso(from) : undefined;
+      const isoTo = to ? formatIso(to) : undefined;
+      const dateFrom = from ? isoFrom!.slice(0, 10) : undefined; // YYYY-MM-DD
+      const dateTo = to ? isoTo!.slice(0, 10) : undefined;
+
+      // send many param names so backend that expects another key still works
+      const params: any = {};
+      if (isoFrom) params.from = isoFrom;
+      if (isoTo) params.to = isoTo;
+      if (dateFrom) params.fromDate = dateFrom;
+      if (dateTo) params.toDate = dateTo;
+      if (dateFrom) params.start = dateFrom;
+      if (dateTo) params.end = dateTo;
+      // helpful: include a human-readable note for debugging (remove in prod)
+      params._debug = "delivered-returned-filter";
+
+      console.debug("Fetching orders with params:", params);
+
+      const res = await axios.get<any>(apiUrlOrders, {
+        headers: authHeader ? { Authorization: authHeader } : undefined,
+        params,
         validateStatus: () => true,
       });
 
-      if (res.status >= 200 && res.status < 300) {
-        const blob = new Blob([res.data], { type: "application/pdf" });
-        const link = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = link;
-        const suffix = fromDate ? `-${fromDate}` : "";
-        a.download = `delivered-vs-returned${suffix}.pdf`;
-        a.click();
-        window.URL.revokeObjectURL(link);
-      } else {
-        let msg = `Server returned ${res.status}`;
-        try {
-          const text = await (res.data as Blob).text();
-          msg += `: ${text.slice(0, 300)}`;
-        } catch {}
-        console.error(msg);
-        alert("Failed to download PDF. See console for details.");
+      console.debug("Orders API raw response:", res.status, res.data);
+
+      // Normalize response to an array
+      let arr: any[] = [];
+      if (Array.isArray(res.data)) {
+        arr = res.data;
+      } else if (Array.isArray(res.data?.data)) {
+        arr = res.data.data;
+      } else if (Array.isArray(res.data?.orders)) {
+        arr = res.data.orders;
+      } else if (res.data && typeof res.data === "object") {
+        // sometimes API returns { message, data: { orders: [...] } } or { data: { results: [...] } }
+        const maybe =
+          res.data.data?.orders ??
+          res.data.data?.results ??
+          res.data.data ??
+          res.data.orders ??
+          res.data.results ??
+          null;
+        if (Array.isArray(maybe)) arr = maybe;
+        // some backends return an object keyed by id: { "abc": {...}, "def": {...} }
+        else if (maybe && typeof maybe === "object") arr = Object.values(maybe);
       }
-    } catch (err) {
-      console.error("Download PDF error:", err);
-      alert("Failed to download PDF. See console for details.");
+
+      // Filter to delivered/returned orders only on client-side (defensive)
+      const filtered = arr.filter((o: any) => {
+        if (!o) return false;
+        const status = (o.status || o.orderStatus || o.state || "").toString().toLowerCase();
+        if (status.includes("delivered") || status.includes("returned") || status.includes("return")) return true;
+        if (o.isReturned === true || o.isDelivered === true) return true;
+        if (o.returned === true || o.delivered === true) return true;
+        return false;
+      });
+
+      if (!mounted) return;
+      setOrders(filtered);
+    } catch (err: any) {
+      if (!mounted) return;
+      console.error("fetchOrders error:", err);
+      setOrdersError(err?.response?.data?.message ?? err?.message ?? "Failed to fetch orders");
+      setOrders([]);
     } finally {
-      setDownloading(false);
+      if (!mounted) return;
+      setOrdersLoading(false);
     }
-  }, [fromDate, toDate, token]);
+  };
 
-  const startISOForChildren = fromDate ? new Date(fromDate + "T00:00:00").toISOString() : null;
-  const endISOForChildren = toDate ? new Date(toDate + "T23:59:59.999").toISOString() : null;
-
-  if (loadingOrders && !allOrders.length) return <p>Loading...</p>;
+  fetchOrders();
+  return () => {
+    mounted = false;
+  };
+}, [orderRange, apiUrlOrders, authHeader]);
 
   return (
-    <div className="lg:p-6 space-y-6 p-4">
-      {/* header + filter controls */}
-      <div className="lg:flex block items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Delivered vs Returned Orders</h1>
-          <div className="text-sm text-muted-foreground">Showing metrics for selected date range</div>
-        </div>
-
-        <div className="flex items-center gap-3 lg:overflow-auto overflow-x-scroll">
-          <select
-            value={preset}
-            onChange={(e) => setPreset(e.target.value)}
-            className="border px-2 py-2 rounded"
-            title="Quick ranges"
-          >
-            <option value="all">All</option>
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
-            <option value="this_week">This week</option>
-            <option value="last_week">Last week</option>
-            <option value="this_month">This month</option>
-            <option value="last_month">Last month</option>
-          </select>
-
-          <label className="text-sm">From:</label>
-          <input
-            type="date"
-            value={fromDate ?? ""}
-            onChange={(e) => {
-              setFromDate(e.target.value || null);
-              setPreset("custom");
-            }}
-            className="border rounded px-2 py-1"
-          />
-          <label className="text-sm">To:</label>
-          <input
-            type="date"
-            value={toDate ?? ""}
-            onChange={(e) => {
-              setToDate(e.target.value || null);
-              setPreset("custom");
-            }}
-            className="border rounded px-2 py-1"
-          />
-
-          <Button onClick={handleDownloadPDF} disabled={downloading}>
-            {downloading ? "Downloading..." : "Download PDF"}
-          </Button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold">Orders overview</h2>
+        {/* Note: the filter below only controls the orders table. Cards always show overall ratio data. */}
       </div>
 
-      {/* metric cards */}
-      <div
-        className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card 
-        dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 
-        *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs 
-        @xl/main:grid-cols-2 @5xl/main:grid-cols-4"
-      >
-        {[
-          {
-            title: "Delivered Orders",
-            value: metrics.delivered.count,
-            sub: `${metrics.delivered.percentage}%`,
-            trend: "up",
-          },
-          {
-            title: "Returned Orders",
-            value: metrics.returned.count,
-            sub: `${metrics.returned.percentage}%`,
-            trend: "down",
-          },
-          {
-            title: "Delivery Ratio",
-            value:
-              metrics.ratio.deliveredToReturned === "Infinity"
-                ? "100%"
-                : isFinite(Number(metrics.ratio.deliveredToReturned))
-                ? `${(Number(metrics.ratio.deliveredToReturned) * 100).toFixed(2)}%`
-                : "—",
-            sub: "",
-            trend: "up",
-          },
-        ].map((m, i) => {
-          const isPositive = m.trend === "up";
-          const Icon = isPositive ? TrendingUp : TrendingDown;
-          return (
-            <Card key={i} className="@container/card">
-              <CardHeader>
-                <CardDescription>{m.title}</CardDescription>
-                <CardTitle className="text-2xl">{m.value}{m.sub ? ` (${m.sub})` : ""}</CardTitle>
-                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll text-sm text-muted-foreground">
-                  <Icon className={`h-4 w-4 ${isPositive ? "text-green-500" : "text-red-500"}`} />
-                  {isPositive ? "Trending up" : "Trending down"}
-                </div>
-              </CardHeader>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* chart */}
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>Orders Chart</CardTitle>
-          <CardDescription>Delivered vs Returned</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="value" fill="#E0B660" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* table of filtered orders */}
-      <div className="overflow-hidden rounded-md border">
-        <table className="w-full">
-          <thead>
-            <tr className="text-left">
-              <th className="px-3 py-2">Order ID</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Total</th>
-              <th className="px-3 py-2">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loadingOrders ? (
-              <tr>
-                <td colSpan={4} className="p-4 text-center">
-                  Loading orders...
-                </td>
-              </tr>
-            ) : filteredOrders.length ? (
-              filteredOrders.map((o) => (
-                <tr key={o.id} className="border-t">
-                  <td className="px-3 py-2 font-mono text-xs">{o.orderId ?? o.id}</td>
-                  <td className="px-3 py-2">{o.status}</td>
-                  <td className="px-3 py-2">{typeof o.totalAmount === "number" ? o.totalAmount : "—"}</td>
-                  <td className="px-3 py-2">{o.createdAt ? new Date(o.createdAt).toLocaleString() : "—"}</td>
-                </tr>
-              ))
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Delivered</CardTitle>
+            <CardDescription>Number of delivered orders</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {ratioLoading ? (
+              <div className="py-4 text-center">Loading...</div>
+            ) : ratioError ? (
+              <div className="text-sm text-red-600">{ratioError}</div>
             ) : (
-              <tr>
-                <td colSpan={4} className="p-4 text-center">
-                  No orders for this date range.
-                </td>
-              </tr>
+              <div className="text-2xl font-semibold">{ratioData ? ratioData.deliveredOrders : "-"}</div>
             )}
-          </tbody>
-        </table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Returned</CardTitle>
+            <CardDescription>Number of returned orders</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {ratioLoading ? (
+              <div className="py-4 text-center">Loading...</div>
+            ) : ratioError ? (
+              <div className="text-sm text-red-600">{ratioError}</div>
+            ) : (
+              <div className="text-2xl font-semibold">{ratioData ? ratioData.returnedOrders : "-"}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ratio</CardTitle>
+            <CardDescription>Delivered vs Returned</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {ratioLoading ? (
+              <div className="py-4 text-center">Loading...</div>
+            ) : ratioError ? (
+              <div className="text-sm text-red-600">{ratioError}</div>
+            ) : (
+              <div className="text-2xl font-semibold">{ratioData ? `${ratioData.ratio}%` : "-"}</div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="text-sm text-muted-foreground">
-        Showing {filteredOrders.length} order(s) — data fetched from <code>/api/admin/orders</code>
+      <div>
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <div>
+              <CardTitle>Delivered & Returned Orders</CardTitle>
+              <CardDescription>List of orders filtered by selected range</CardDescription>
+            </div>
+
+            {/* Filter now only controls the orders table */}
+            {/* <div className="flex items-center gap-3">
+              <label htmlFor="order-range" className="text-sm text-muted-foreground">
+                Filter
+              </label>
+              <select
+                id="order-range"
+                value={orderRange}
+                onChange={(e) => setOrderRange(e.target.value as RangeKey)}
+                className="rounded-md border px-3 py-1 text-sm"
+              >
+                {RANGE_OPTIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div> */}
+          </CardHeader>
+
+          <CardContent>
+            {ordersLoading ? (
+              <div className="py-6 text-center">Loading orders...</div>
+            ) : ordersError ? (
+              <div className="text-sm text-red-600">{ordersError}</div>
+            ) : !orders || orders.length === 0 ? (
+              <div className="py-4 text-sm text-slate-600">No returned or delivered orders found for selected range.</div>
+            ) : (
+              <div className="divide-y">
+                {orders.map((o, idx) => {
+                  const id = o._id || o.id || o.orderId || idx;
+                  const rawStatus = o.status || o.orderStatus || o.state || "";
+                  const status = typeof rawStatus === "string" || typeof rawStatus === "number" ? String(rawStatus) : (o.isReturned ? "Returned" : o.isDelivered ? "Delivered" : "");
+                  const date = o.createdAt || o.date || o.orderDate || "";
+                  const customer = o.customer ?? o.user ?? o.username ?? o.email ?? null;
+                  const customerDisplay = customerToDisplay(customer);
+                  const totalVal = (typeof o.total === "number" && !isNaN(o.total)) ? o.total : (typeof o.grand_total === "number" ? o.grand_total : o.totalAmount ?? o.amount ?? null);
+                  const total = totalVal != null ? String(totalVal) : "";
+
+                  return (
+                    <div key={String(id)} className="py-3 flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        {/* <div className="text-sm font-medium truncate">Order: {String(id)}</div> */}
+                        <div className="text-xs text-muted-foreground truncate">{customerDisplay}</div>
+                        <div className="text-xs text-muted-foreground">{date ? new Date(date).toLocaleString() : ""}</div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className={`text-sm font-semibold`}>{status || (o.isReturned ? "Returned" : o.isDelivered ? "Delivered" : "")}</div>
+                        <div className="text-xs text-muted-foreground">{total ? `Total: ${total}` : ""}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

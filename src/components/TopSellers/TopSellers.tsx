@@ -249,6 +249,8 @@ export default function TopSellersPage() {
   // Chart data
   const chartData = data.map((seller) => ({
     name: seller.sellerName,
+      "Delivered Orders": seller.orders,
+
     Orders: seller.orders,
     Revenue: seller.revenue,
   }))
@@ -324,7 +326,7 @@ export default function TopSellersPage() {
               <p className="text-sm text-muted-foreground">{seller.city}</p>
             </CardHeader>
             <CardContent>
-              <p className="text-lg font-semibold">Orders: {seller.orders}</p>
+              <p className="text-lg font-semibold">Delivered Orders: {seller.orders}</p>
               <Progress
                 value={maxOrders ? (seller.orders / maxOrders) * 100 : 0}
                 className="h-2 mt-2"
@@ -348,7 +350,7 @@ export default function TopSellersPage() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="Orders" fill="#2BC3F1" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="Delivered Orders" fill="#2BC3F1" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="Revenue" fill="#E0B660" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

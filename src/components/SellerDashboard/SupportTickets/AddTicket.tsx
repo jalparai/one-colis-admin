@@ -123,8 +123,9 @@ export function AddTicket({
 
           <div className="grid gap-3">
             <Label htmlFor="ticketMessage">Message</Label>
-            <Input
+            <textarea
               id="ticketMessage"
+              className="border border-gray-200 p-2"
               value={ticketMessage}
               onChange={(e) => setTicketMessage(e.target.value)}
               placeholder="Describe your issue..."

@@ -434,7 +434,6 @@ const handleAddOrder = async (e: React.FormEvent) => {
                 )}
               </div>
 
-              <Input placeholder="Postal Code" value={customerPostalCode} onChange={(e) => setCustomerPostalCode(e.target.value)} />
             </div>
           </div>
           <div>
@@ -465,8 +464,18 @@ const handleAddOrder = async (e: React.FormEvent) => {
                   <div className="col-span-1">
                     <label className="text-[12px] mb-2">Unit Price</label>
 
-                    <Input value={String(row.unitPrice ?? "")} readOnly placeholder="unit price" />
-                  </div>
+  <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        placeholder=""
+                        value={row.unitPrice ?? ""}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const parsed = v === "" ? undefined : parseFloat(v);
+                          updateItem(idx, { unitPrice: parsed });
+                        }}
+                      />                  </div>
 
 
 
