@@ -129,11 +129,17 @@ export default function TopSellersPage() {
 
         const range = getRangeForFilter(filterKey)
 
-        // Build GET URL (if range is null, fetch all)
-        let url = "https://cod-ecommerce-two.vercel.app/api/admin/getTopSellers"
+        // Build GET URL (include multiple common param names so server accepts one or the other)
+        const baseUrl = "https://cod-ecommerce-two.vercel.app/api/admin/getTopSellers"
+        const params = new URLSearchParams()
         if (range) {
-          url += `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
+          params.set("from", range.from)
+          params.set("to", range.to)
+          // some APIs expect different param names:
+          params.set("startDate", range.from)
+          params.set("endDate", range.to)
         }
+        const url = params.toString() ? `${baseUrl}?${params.toString()}` : baseUrl
 
         console.info("[TopSellers] Fetching (GET):", url)
 
@@ -142,42 +148,38 @@ export default function TopSellersPage() {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
           },
         })
 
         const json = await res.json().catch(() => null)
         console.info("[TopSellers] GET response status:", res.status, json)
 
-        if (res.ok && json) {
-          // Some backends wrap data differently. Try common shapes:
-          const payload = json.data ?? json.results ?? json.topSellers ?? json
-          if (Array.isArray(payload)) {
-            setData(payload)
-            return
-          }
-          // If payload not an array — set data empty and show warning
-          console.warn("[TopSellers] GET returned non-array payload", payload)
-          setData([])
-          setError("Server returned data in an unexpected format (GET). Check console logs.")
+        // Normalize possible payload shapes
+        const payload = json?.data ?? json?.results ?? json?.topSellers ?? json
 
-          // fallback to POST if allowed
-          if (!res.ok && USE_POST_FALLBACK) {
-            console.info("[TopSellers] GET failed — attempting POST fallback")
-          }
-          // If GET returned empty array, we might still want to try POST fallback depending on API
+        // If GET worked and payload is an array -> use it
+        if (res.ok && Array.isArray(payload)) {
+          setData(payload)
+          return
         }
 
-        // If GET wasn't ok or returned unexpected result, try POST fallback (some APIs expect POST body)
+        // If GET returned something unexpected (non-array) or failed, attempt POST fallback (if enabled).
+        // NOTE: previously your code only attempted POST on !res.ok. We should attempt POST also when payload isn't an array.
         if (USE_POST_FALLBACK) {
-          const postUrl = "https://cod-ecommerce-two.vercel.app/api/admin/getTopSellers"
+          console.info("[TopSellers] GET did not return expected array payload — attempting POST fallback")
+
+          // Build a flexible POST body with a couple of common date key names
           const postBody: any = {}
           if (range) {
-            // adjust property names if your backend expects startDate/endDate etc.
             postBody.from = range.from
             postBody.to = range.to
+            postBody.startDate = range.from
+            postBody.endDate = range.to
           }
 
-          console.info("[TopSellers] Attempting POST to:", postUrl, "body:", postBody)
+          const postUrl = baseUrl
+          console.info("[TopSellers] POST to:", postUrl, "body:", postBody)
 
           const postRes = await fetch(postUrl, {
             method: "POST",
@@ -191,23 +193,21 @@ export default function TopSellersPage() {
           const postJson = await postRes.json().catch(() => null)
           console.info("[TopSellers] POST response status:", postRes.status, postJson)
 
-          if (postRes.ok && postJson) {
-            const payload = postJson.data ?? postJson.results ?? postJson.topSellers ?? postJson
-            if (Array.isArray(payload)) {
-              setData(payload)
-              return
-            }
-            console.warn("[TopSellers] POST returned non-array payload", payload)
-            setData([])
-            setError("Server returned data in an unexpected format (POST). Check console logs.")
+          const postPayload = postJson?.data ?? postJson?.results ?? postJson?.topSellers ?? postJson
+          if (postRes.ok && Array.isArray(postPayload)) {
+            setData(postPayload)
             return
           }
 
-          // If POST also failed
-          const message = postJson?.message || postJson?.error || `POST failed with status ${postRes.status}`
-          throw new Error(message)
+          // POST also failed or returned unexpected format
+          const postMessage = postJson?.message ?? postJson?.error ?? `POST failed (${postRes.status})`
+          throw new Error(postMessage)
         }
 
+        // if we get here, GET did not produce an array and POST fallback is disabled
+        console.warn("[TopSellers] GET returned unexpected payload and POST fallback disabled", payload)
+        setData([])
+        setError("Server returned data in an unexpected format (GET). Check console logs.")
       } catch (err: any) {
         console.error("[TopSellers] Fetch error:", err)
         setError(err.message || "Failed to fetch data — see console for details")
@@ -216,8 +216,9 @@ export default function TopSellersPage() {
         setLoading(false)
       }
     },
-    [customFrom, customTo]
+    [customFrom, customTo],
   )
+
 
   // fetch when filter changes (except custom — custom needs apply)
   useEffect(() => {

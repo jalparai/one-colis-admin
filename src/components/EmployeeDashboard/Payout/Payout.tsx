@@ -204,9 +204,9 @@ export function PayoutTable() {
             Amount <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         ),
-        cell: ({ row }) => <div>${row.original.amount}</div>,
+        cell: ({ row }) => <div>{row.original.amount} DH</div>,
       },
-      { accessorKey: "fees", header: "Fee", cell: ({ row }) => <div>${row.original.fees}</div> },
+      { accessorKey: "fees", header: "Fee", cell: ({ row }) => <div>{row.original.fees} DH</div> },
       { accessorKey: "notes", header: "Notes", cell: ({ row }) => <div>{row.original.notes || "-"}</div> },
       {
         accessorKey: "status",

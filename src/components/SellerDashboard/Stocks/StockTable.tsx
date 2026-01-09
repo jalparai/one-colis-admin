@@ -165,7 +165,18 @@ export function StocksTable() {
         final = Array.isArray(payload) ? payload : [];
       }
 
-      setStocks(final);
+// normalize quantity to a non-negative integer (treat missing / invalid / negative as 0)
+const safeFinal: Stock[] = final.map((item: any) => ({
+  ...item,
+  quantity: (() => {
+    const n = Number(item?.quantity);
+    if (!Number.isFinite(n)) return 0;
+    // treat negative values (e.g. -1) as 0
+    return Math.max(0, Math.floor(n));
+  })(),
+}));
+
+setStocks(safeFinal);
       if (final.length === 0) {
         console.warn("No stocks parsed from response. Full payload:", payload);
       }

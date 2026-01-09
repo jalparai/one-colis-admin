@@ -341,11 +341,15 @@ export const getColumns = (
         const [pickupLoading, setPickupLoading] = React.useState(false);
         const [editOpen, setEditOpen] = useState(false);
         const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-
+        
+        // NEW CODE - Replace with this:
         const isReady = order.status === "ready";
-        // NEW: disable edit also when status is 'collected' or 'shipped'
-        const editDisabled = isReady || order.status === "collected" || order.status === "shipped";
-
+        const isDelivered = order.status === "delivered";
+        
+        // Define statuses where edit should be DISABLED
+        const disabledEditStatuses = ["shipped", "delivered", "processing", "collected", "confirmed"];
+        const editDisabled = disabledEditStatuses.includes(order.status);
+        
         const handleUpdate = async () => {
           setLoading(true);
           await onStatusUpdate(order._id, selectedStatus);
@@ -440,13 +444,15 @@ export const getColumns = (
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem
-                  className={isReady ? "text-gray-400" : "text-red-600"}
-                  disabled={isReady}
-                  onClick={() => !isReady && setDeleteOpen(true)}
-                >
-                  {isReady ? "Delete Disabled" : "Delete Order"}
-                </DropdownMenuItem>
+ <DropdownMenuItem
+  className={isReady ? "text-red-600" : "text-gray-400 cursor-not-allowed"}
+  disabled={!isReady}
+  onClick={() => isReady && setDeleteOpen(true)}
+  title={isReady ? "Delete order" : "Only orders with status 'ready' can be deleted"}
+>
+  {isReady ? "Delete Order" : "Delete Disabled (only 'ready' orders)"}
+</DropdownMenuItem>
+
 
                 {isReady && (
                   <>
@@ -548,6 +554,7 @@ export function OrderTable() {
   const [openAddOrder, setOpenAddOrder] = useState(false);
 const [bulkPickupLoading, setBulkPickupLoading] = useState(false);
 const [bulkExportLoading, setBulkExportLoading] = useState(false);
+const [globalFilter, setGlobalFilter] = useState("");
 
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
@@ -962,24 +969,37 @@ const handleBulkExportLabels = async (): Promise<void> => {
       }
     });
   }, [orders, dateFilter]);
+const searchedData = React.useMemo(() => {
+  if (!globalFilter || !globalFilter.trim()) return filteredData;
+  const q = globalFilter.toLowerCase().trim();
+
+  return filteredData.filter((o) => {
+    const orderId = (o.orderId ?? "").toString().toLowerCase();
+    const city = (o.customer?.city ?? "").toString().toLowerCase();
+
+    return orderId.includes(q) || city.includes(q);
+  });
+}, [filteredData, globalFilter]);
+
 
   // Use filteredData here
-  const table = useReactTable({
-    data: filteredData,
-    columns: getColumns(handleStatusUpdate, handleDelete, fetchOrders),
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: { pageIndex: 0, pageSize: 100 },
-    },
-  });
+const table = useReactTable({
+  data: searchedData, // <- use searchedData so the input filters results
+  columns: getColumns(handleStatusUpdate, handleDelete, fetchOrders),
+  state: { sorting, columnFilters, columnVisibility, rowSelection },
+  onSortingChange: setSorting,
+  onColumnFiltersChange: setColumnFilters,
+  onColumnVisibilityChange: setColumnVisibility,
+  onRowSelectionChange: setRowSelection,
+  getCoreRowModel: getCoreRowModel(),
+  getFilteredRowModel: getFilteredRowModel(),
+  getSortedRowModel: getSortedRowModel(),
+  getPaginationRowModel: getPaginationRowModel(),
+  initialState: {
+    pagination: { pageIndex: 0, pageSize: 100 },
+  },
+});
+
  const selectedRows = table.getSelectedRowModel().rows ?? [];
   const readySelectedRows = selectedRows.filter((r) => r.original.status === "ready");
   const readySelectedCount = readySelectedRows.length;
@@ -1006,7 +1026,6 @@ const handleBulkExportLabels = async (): Promise<void> => {
 
     return null;
   }
-
 
 
   const exportEndpoints = [
@@ -1064,11 +1083,46 @@ const handleBulkExportLabels = async (): Promise<void> => {
       // show UI feedback here if you want
     }
   };
+// helper (put this in the same component file)
+async function downloadFile(url: string, fallbackName: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Network response was not ok')
+
+    const blob = await res.blob()
+
+    // try to extract filename from Content-Disposition header
+    let filename = fallbackName
+    const cd = res.headers.get("content-disposition")
+    if (cd) {
+      const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^;"']+)/)
+      if (match && match[1]) filename = decodeURIComponent(match[1])
+    }
+
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch (err) {
+    console.warn("Download with fetch failed, falling back to opening URL:", err)
+    // fallback — open in new tab (server/browser may still prompt download)
+    window.open(url, "_blank")
+  }
+}
 
   return (
     <div className="w-full">
       {/* Top bar */}
-      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
+<Input
+  placeholder="Search Order ID, City, Customer..."
+  value={globalFilter}
+  onChange={(e) => setGlobalFilter(e.target.value)}
+  className="w-[260px]"
+/>      <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -1167,16 +1221,28 @@ const handleBulkExportLabels = async (): Promise<void> => {
           label="Import Orders Based on Stock"
           onSuccess={fetchOrders}
         />
-        <Button
-          onClick={() =>
-            window.open(
-              "https://1drv.ms/x/c/3c77c4662797e2f6/IQB9gr52xjE0RaUVvJh4DyogAZ58Lyf4Plb6B9dLy0BOTvc?e=5Cj0pU",
-              "_blank"
-            )
-          }
-        >
-          View Excal Example
-        </Button>
+    <Button
+  onClick={() =>
+    downloadFile(
+      "https://drive.google.com/uc?export=download&id=15daw6bKF1wRbgKnWVPqi_UHweG1LSgOt",
+      "BOS-Template.docx"
+    )
+  }
+>
+          BOS Template
+</Button>
+
+<Button
+  onClick={() =>
+    downloadFile(
+      "https://drive.google.com/uc?export=download&id=1wXAgKlzCc9Jrk53F2sSeW0ErlX4PXx5M&confirm=t",
+      "ReadyOrderExample.xlsx"
+    )
+  }
+>
+           Ready Order Template
+</Button>
+
         {exportEndpoints.map((item) => (
           <Button
             key={item.label}

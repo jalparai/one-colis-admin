@@ -15,7 +15,7 @@ import {
   flexRender,
   RowData,
 } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, ChevronDown } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, ChevronDown, Download, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -89,6 +89,32 @@ const DATE_FILTERS = [
 ] as const;
 type DateFilter = (typeof DATE_FILTERS)[number];
 
+// File validation utility
+const validateFile = (file: File): { isValid: boolean; error?: string } => {
+  const allowedTypes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv',
+  ];
+  const maxSize = 10 * 1024 * 1024; // 10MB
+
+  if (!allowedTypes.includes(file.type)) {
+    return {
+      isValid: false,
+      error: 'Please select a valid Excel file (.xlsx, .xls) or CSV file',
+    };
+  }
+
+  if (file.size > maxSize) {
+    return {
+      isValid: false,
+      error: 'File size must be less than 10MB',
+    };
+  }
+
+  return { isValid: true };
+};
+
 export const columns: ColumnDef<Payout>[] = [
   {
     id: "select",
@@ -143,17 +169,17 @@ export const columns: ColumnDef<Payout>[] = [
         Amount <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <div> DH {row.original.amount}</div>,
+    cell: ({ row }) => <div>{row.original.amount} DH</div>,
   },
   {
     accessorKey: "netAmount",
     header: "Fee",
-    cell: ({ row }) => <div> DH{row.original.fees}</div>,
+    cell: ({ row }) => <div>{row.original.fees} DH</div>,
   },
   {
     accessorKey: "notes",
     header: "Notes",
-    cell: ({ row }) => <div> DH{row.original.notes}</div>,
+    cell: ({ row }) => <div>{row.original.notes}</div>,
   },
   {
     accessorKey: "status",
@@ -275,7 +301,6 @@ export const columns: ColumnDef<Payout>[] = [
                 Assign to Manager
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setEditOpen(true)}>Edit</DropdownMenuItem>
-
               <DropdownMenuItem onClick={() => setDeleteOpen(true)}>
                 Delete
               </DropdownMenuItem>
@@ -289,7 +314,6 @@ export const columns: ColumnDef<Payout>[] = [
             onUpdated={table.options.meta?.refresh || (() => {})}
           />
 
-          {/* Assign Dialog (single) */}
           <AlertDialog open={assignOpen} onOpenChange={setAssignOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -319,7 +343,6 @@ export const columns: ColumnDef<Payout>[] = [
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Delete Dialog */}
           <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -361,6 +384,11 @@ export function PayoutTable() {
   const [selectedManagerBulk, setSelectedManagerBulk] = React.useState("");
   const [bulkLoading, setBulkLoading] = React.useState(false);
 
+  // Import/Export states
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [importLoading, setImportLoading] = React.useState(false);
+  const [exportLoading, setExportLoading] = React.useState(false);
+
   const fetchPayouts = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -381,7 +409,6 @@ export function PayoutTable() {
     fetchPayouts();
   }, [fetchPayouts]);
 
-  // Fetch managers for bulk assign when modal opens
   React.useEffect(() => {
     if (!assignBulkOpen) return;
     (async () => {
@@ -515,6 +542,103 @@ export function PayoutTable() {
     }
   };
 
+  // Import handler
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.isValid) {
+      toast.error(validation.error || "Invalid file");
+      return;
+    }
+
+    try {
+      setImportLoading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      toast.loading('Importing payouts...', { id: 'import' });
+
+      await axios.post(
+        'https://cod-ecommerce-two.vercel.app/api/admin/payout/bulk-upload',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      toast.success('Successfully imported payouts!', { id: 'import' });
+      fetchPayouts();
+    } catch (error: any) {
+      console.error('Import error:', error);
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.message || 
+        'Failed to import payouts';
+      
+      toast.error(errorMessage, { id: 'import' });
+    } finally {
+      setImportLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // Export handler
+  const handleExport = async () => {
+    try {
+      setExportLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      toast.loading('Exporting payouts...', { id: 'export' });
+
+      const response = await axios.get(
+        'https://cod-ecommerce-two.vercel.app/api/admin/payout/pdf',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          responseType: 'blob',
+        }
+      );
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Payouts_export_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Successfully exported payouts!', { id: 'export' });
+    } catch (error: any) {
+      console.error('Export error:', error);
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.message || 
+        'Failed to export payouts';
+      
+      toast.error(errorMessage, { id: 'export' });
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   return (
     <div className="w-full">
       {/* Top bar */}
@@ -566,7 +690,7 @@ export function PayoutTable() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Bulk actions: Delete + Assign show when one or more rows selected */}
+          {/* Bulk actions */}
           {selectedCount > 0 && (
             <>
               <Button
@@ -586,6 +710,37 @@ export function PayoutTable() {
               </Button>
             </>
           )}
+
+          {/* Import/Export buttons */}
+          <Input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            className="flex items-center gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            {importLoading ? "Importing..." : "Import"}
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exportLoading}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            {exportLoading ? "Exporting..." : "Export"}
+          </Button>
 
           <AddPayout onPayoutAdded={fetchPayouts} />
         </div>
@@ -660,7 +815,7 @@ export function PayoutTable() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Pagination controls (if needed) */}
+      {/* Pagination controls */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="text-muted-foreground flex-1 text-sm">
           {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s) selected.

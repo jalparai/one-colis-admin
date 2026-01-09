@@ -40,6 +40,7 @@ import { AddReadyOrder } from "./Orders/QuickOrder"
 import Link from "next/link"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
+import { RevenueCard } from "./revenue-card"
 
 export type Order = {
   id: string
@@ -97,6 +98,8 @@ export function HomeDashboard() {
   const [cancelledOrders, setCancelledOrders] = useState<number>(0)
   const [totalOrders, setTotalOrders] = useState<number | null>(null)
   const [newOrdersToday, setNewOrdersToday] = useState<number | null>(null)
+  const [totalQuantity, setTotalQuantity] = useState<number | null>(null)
+  const [stocks, setStocks] = useState<any[]>([]) // <-- add this
 
   // color palette for pie
   const COLORS = ["#60a5fa", "#facc15", "#34d399", "#f87171", "#a78bfa", "#fb923c"]
@@ -213,11 +216,31 @@ export function HomeDashboard() {
       ])
 
       // stocks
-      const stocksPayload = stocksRes.data || []
-      const totalQty = Array.isArray(stocksPayload)
-        ? stocksPayload.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)
-        : 0
-      setTotalStocks(totalQty)
+      // ----- stocks (safe normalization + totals) -----
+      // ----- stocks (safe normalization, store in state; totals computed from filteredStocks) -----
+      const stocksPayload = stocksRes.data?.data || stocksRes.data || []
+
+      const safeStocks = Array.isArray(stocksPayload)
+        ? stocksPayload.map((item: any) => {
+          const n = Number(item?.quantity)
+          const qty = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+          return { ...item, quantity: qty }
+        })
+        : []
+
+      setStocks(safeStocks)
+
+      // total units (sum of sanitized quantities)
+      const totalQty = safeStocks.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)
+
+      // number of SKUs that actually have units (> 0)
+      const totalSkusInStock = safeStocks.filter((item: any) => (item.quantity || 0) > 0).length
+
+      setTotalQuantity(totalQty)
+      setTotalStocks(totalSkusInStock)
+
+
+
 
       const orders = (ordersRes.data && (ordersRes.data.data || ordersRes.data)) || []
       const ordersArray = Array.isArray(orders) ? orders : []
@@ -307,8 +330,104 @@ export function HomeDashboard() {
   // ---------- revenue filtering: compute revenue from filtered orders when dateFilter != 'all' ----------
   const totalRevenueFromFilteredOrders = useMemo(() => {
     if (!filteredOrders || filteredOrders.length === 0) return 0
-    return filteredOrders.reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0)
+
+    return filteredOrders
+      .filter((o) => (o.status || "").toLowerCase() === "delivered")
+      .reduce((acc, o) => acc + (Number(o.totalAmount) || 0), 0)
   }, [filteredOrders])
+  const netFromFilteredOrders = useMemo(() => {
+    const noFilters =
+      dateFilter === "all" &&
+      !fromDate &&
+      !toDate &&
+      (!searchQuery || searchQuery.trim() === "");
+
+    // Use API net when unfiltered
+    if (noFilters && sellerRevenue?.netProfit != null) {
+      return Number(sellerRevenue.netProfit) || 0;
+    }
+
+    // Delivered orders only
+    const delivered = (filteredOrders || []).filter(
+      (o) => (o.status || "").toLowerCase() === "delivered"
+    );
+
+    if (delivered.length === 0) return 0;
+
+    // Estimate net using API margin
+    if (
+      sellerRevenue?.totalRevenue != null &&
+      sellerRevenue?.netProfit != null &&
+      Number(sellerRevenue.totalRevenue) > 0
+    ) {
+      const margin =
+        Number(sellerRevenue.netProfit) /
+        Number(sellerRevenue.totalRevenue);
+
+      const estimatedNet =
+        (Number(totalRevenueFromFilteredOrders) || 0) * margin;
+
+      return Number.isFinite(estimatedNet) ? estimatedNet : 0;
+    }
+
+    return 0;
+  }, [
+    filteredOrders,
+    totalRevenueFromFilteredOrders,
+    sellerRevenue,
+    dateFilter,
+    fromDate,
+    toDate,
+    searchQuery,
+  ]);
+  // whether there are any active filters (same rule used elsewhere)
+  const noFiltersApplied =
+    dateFilter === "all" &&
+    !fromDate &&
+    !toDate &&
+    (!searchQuery || searchQuery.trim() === "");
+
+  const deliveredOrdersCount = useMemo(() => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0
+    return filteredOrders.filter((o) => (o.status || "").toLowerCase() === "delivered").length
+  }, [filteredOrders])
+
+  // stocks filtered by same logic as orders (date range takes precedence) + search by sku/name
+  const filteredStocks = useMemo(() => {
+    if (!stocks || stocks.length === 0) return []
+
+    const q = searchQuery?.trim().toLowerCase() ?? ""
+
+    return stocks.filter((item: any) => {
+      // date filter (uses inRange which respects fromDate/toDate)
+      if (!inRange(item.createdAt, dateFilter)) return false
+
+      // search filter: match sku or name if query present
+      if (!q) return true
+      const sku = (item.sku ?? "").toString().toLowerCase()
+      const name = (item.name ?? "").toString().toLowerCase()
+      return sku.includes(q) || name.includes(q) || JSON.stringify(item).toLowerCase().includes(q)
+    })
+  }, [stocks, dateFilter, fromDate, toDate, searchQuery])
+  useEffect(() => {
+    if (!filteredStocks || filteredStocks.length === 0) {
+      setTotalQuantity(0)
+      setTotalStocks(0)
+      return
+    }
+
+    const totalQty = filteredStocks.reduce((sum: number, it: any) => {
+      const n = Number(it?.quantity)
+      const safe = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+      return sum + safe
+    }, 0)
+
+    // count SKUs with quantity > 0 (or use filteredStocks.length if you want to count rows regardless)
+    const totalSkusInStock = filteredStocks.filter((it: any) => (Number(it?.quantity) || 0) > 0).length
+
+    setTotalQuantity(totalQty)
+    setTotalStocks(totalSkusInStock)
+  }, [filteredStocks])
 
   // ---------- compute delivery/collection from filteredOrders so the card respects the same filter ----------
   const deliverySummaryFromFiltered = useMemo(() => {
@@ -472,22 +591,78 @@ export function HomeDashboard() {
     getCoreRowModel: getCoreRowModel(),
   })
 
+
+
   // small helper for safe read of displayedDeliverySummary
   const readDisplayed = (key: string) => ({
     count: displayedDeliverySummary?.[key]?.count ?? 0,
     totalAmount: displayedDeliverySummary?.[key]?.totalAmount ?? 0,
   })
-const STATUS_COLORS: Record<string, string> = {
-  pending: "#dab15f",        // Yellow
-  confirmed: "#3b82f6",      // Blue
-  shipped: "#8b5cf6",        // Purple
-  delivered: "#22c55e",      // Green
-  canceled: "#ef4444",       // Red (american spelling)
-  cancelled: "#ef4444",      // Red (british spelling)
-  returned: "#a855f7",       // Violet
-  processing: "#06b6d4",     // Cyan
-  default: "#9ca3af",        // Gray fallback
-};
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "#dab15f",        // Yellow
+    confirmed: "#3b82f6",      // Blue
+    shipped: "#8b5cf6",        // Purple
+    delivered: "#22c55e",      // Green
+    canceled: "#ef4444",       // Red (american spelling)
+    cancelled: "#ef4444",      // Red (british spelling)
+    returned: "#a855f7",       // Violet
+    processing: "#06b6d4",     // Cyan
+    default: "#9ca3af",        // Gray fallback
+  };
+
+  const [revenueReportData, setRevenueReportData] = useState<any | null>(null)
+  const [loadingRevenueReport, setLoadingRevenueReport] = useState(false)
+
+  const fetchRevenueReport = useCallback(async () => {
+    const token = localStorage.getItem("token")
+    if (!token) return
+
+    setLoadingRevenueReport(true)
+    try {
+      const params = new URLSearchParams()
+
+      // Map frontend dateFilter to API filterType
+      const filterTypeMap: Record<string, string> = {
+        today: "today",
+        yesterday: "yesterday",
+        this_week: "thisWeek",
+        last_week: "lastWeek",
+        this_month: "thisMonth",
+        last_month: "lastMonth",
+      }
+
+      const apiFilterType = filterTypeMap[dateFilter] || "custom"
+
+      if (apiFilterType !== "custom") {
+        params.append("filterType", apiFilterType)
+      } else if (fromDate || toDate) {
+        params.append("filterType", "custom")
+        if (fromDate) params.append("startDate", fromDate)
+        if (toDate) params.append("endDate", toDate)
+      }
+
+      params.append("interval", "daily")
+
+      const res = await axios.get(
+        `https://cod-ecommerce-two.vercel.app/api/seller/revenue/?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+
+      setRevenueReportData(res.data)
+    } catch (err) {
+      console.error("Error fetching revenue report:", err)
+      setRevenueReportData(null)
+    } finally {
+      setLoadingRevenueReport(false)
+    }
+  }, [dateFilter, fromDate, toDate])
+
+  useEffect(() => {
+    fetchRevenueReport()
+  }, [fetchRevenueReport])
+
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -656,20 +831,32 @@ const STATUS_COLORS: Record<string, string> = {
       {/* added items-stretch so children with h-full will be equal height */}
       <div className="grid grid-cols-1 gap-6 items-stretch @xl/main:grid-cols-4 @5xl/main:grid-cols-4">
         {/* Total Stocks */}
+        {/* Total Stocks */}
         <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
             <div>
-              <CardTitle>Total Product</CardTitle>
+              <CardTitle>Total Products</CardTitle>
             </div>
             <IconPackage className="text-blue-500 h-6 w-6" />
           </CardHeader>
+
           <CardContent className="flex-1 flex flex-col justify-between">
             <div>
-              <div className="flex items-baseline justify-between">
-                <div className="text-3xl font-semibold">{loading ? "..." : (totalStocks ?? 0)}</div>
-                <div className="text-sm text-muted-foreground text-right">
-                  <div>In inventory</div>
-                  <div className="text-xs mt-1">Updated just now</div>
+              <div className="flex items-baseline justify-between gap-4">
+                {/* SKUs */}
+                <div>
+                  <div className="text-3xl font-semibold">
+                    {loading ? "..." : (totalStocks ?? 0)}
+                  </div>
+                  {/* <div className="text-xs text-muted-foreground mt-1">stock</div> */}
+                </div>
+
+                {/* Units */}
+                <div className="text-right">
+                  <div className="text-xl font-semibold">
+                    {loading ? "..." : (totalQuantity ?? 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">Total Quanity</div>
                 </div>
               </div>
 
@@ -678,15 +865,17 @@ const STATUS_COLORS: Record<string, string> = {
                   <IconArrowUpRight className="h-4 w-4 text-green-500" />
                   <span>+{Math.round((totalStocks ?? 0) * 0.08 || 0)}% month</span>
                 </div>
-                <div className="text-xs">SKU count</div>
+                <div className="text-xs">SKU & unit summary</div>
               </div>
             </div>
 
             <div className="mt-3">
-              <ProgressBar value={totalStocks ? Math.min(100, (totalStocks % 100) as number) : 0} />
+              {/* Use totalQuantity for progress (or choose whichever metric fits) */}
+              <ProgressBar value={totalQuantity ? Math.min(100, (totalQuantity % 100) as number) : 0} />
             </div>
           </CardContent>
         </Card>
+
 
         {/* Total Orders */}
         <Card className="hover:shadow-lg transition-all duration-200 h-full">
@@ -726,44 +915,86 @@ const STATUS_COLORS: Record<string, string> = {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-200 h-full">
-          <CardHeader className="flex items-center justify-between">
-            <div>
-              <CardTitle>Total Revenue</CardTitle>
+        
+
+        {/* Total Revenue */}
+<Card className="hover:shadow-lg transition-all duration-200 h-full">
+  <CardHeader className="flex items-center justify-between">
+    <div>
+      <CardTitle>Total Revenue</CardTitle>
+    </div>
+    <IconTrendingUp className="text-green-500 h-6 w-6" />
+  </CardHeader>
+  <CardContent className="flex-1 flex flex-col justify-between">
+    <div>
+      <div className="flex items-baseline justify-between">
+        <div className="text-3xl font-semibold">
+          {loading || loadingRevenueReport
+            ? "..."
+            : Number(revenueReportData?.totals?.revenue || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+          DH
+        </div>
+        <div className="text-sm text-muted-foreground text-right">
+          <div>{`${revenueReportData?.totals?.orderCount || 0} delivered`}</div>
+          <div className="text-xs mt-1">
+            {loadingRevenueReport
+              ? "..."
+              : `Net: ${Number(revenueReportData?.totals?.netRevenue || 0).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })} DH`}
+          </div>
+          {/* {(revenueReportData?.totals?.cityFees || 0) > 0 && (
+            <div className="text-xs mt-1 text-orange-600">
+              {`Fees: ${Number(revenueReportData.totals.cityFees).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} DH`}
             </div>
-            <IconTrendingUp className="text-green-500 h-6 w-6" />
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            <div>
-              <div className="flex items-baseline justify-between">
-                <div className="text-3xl font-semibold">
-                  {loading ? "..." : Number(totalRevenueFromFilteredOrders || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-sm text-muted-foreground text-right">
-                  <div>{filteredOrders.length != null ? `${filteredOrders.length} orders` : "—"}</div>
-                  <div className="text-xs mt-1">{dateFilter === 'all' ? (sellerRevenue?.netProfit != null ? `Net: ${Number(sellerRevenue.netProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "") : "Net: calculated from filtered orders"}</div>
+          )} */}
+        </div>
+      </div>
+
+      <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
+        <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
+          <IconArrowUpRight className="h-4 w-4 text-green-500" />
+          <span>{`Profit: ${Number(revenueReportData?.totals?.profit || 0).toFixed(2)} DH`}</span>
+        </div>
+        <div className="text-xs">
+          {revenueReportData?.totals?.profitRatio
+            ? `${Number(revenueReportData.totals.profitRatio).toFixed(1)}% margin`
+            : "Revenue"}
+        </div>
+      </div>
+
+      {/* Cities Delivered Breakdown */}
+      {/* {revenueReportData?.citiesDelivered && revenueReportData.citiesDelivered.length > 0 && (
+        <div className="mt-4 pt-3 border-t">
+          <div className="text-xs font-semibold mb-2">Cities Delivered:</div>
+          <div className="grid grid-cols-2 gap-2 max-h-24 overflow-y-auto">
+            {revenueReportData.citiesDelivered.map((city: any, idx: number) => (
+              <div key={idx} className="text-xs">
+                <div className="font-medium">{city.city}</div>
+                <div className="text-muted-foreground">
+                  {city.orderCount} orders • {city.totalFees.toFixed(2)} DH
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )} */}
+    </div>
 
-              <div className="mt-3 text-sm text-muted-foreground flex items-center justify-between">
-                <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
-                  <IconArrowUpRight className="h-4 w-4 text-green-500" />
-                  <span>{`${Number(totalRevenueFromFilteredOrders || 0).toFixed(2)} this period`}</span>
-                </div>
-                <div className="text-xs">Revenue</div>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <ProgressBar value={Math.min(100, (Number(totalRevenueFromFilteredOrders || 0) % 100))} />
-            </div>
-
-            {/* when showing All, still show API totals below as a reference */}
-            {dateFilter === 'all' && sellerRevenue?.totalRevenue != null && (
-              <div className="mt-2 text-xs text-muted-foreground">All-time (API): {Number(sellerRevenue.totalRevenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            )}
-          </CardContent>
-        </Card>
+    <div className="mt-3">
+      <ProgressBar
+        value={Math.min(100, (Number(revenueReportData?.totals?.revenue || 0) % 100))}
+      />
+    </div>
+  </CardContent>
+</Card>
 
         {/* Processing */}
         <Card className="hover:shadow-lg transition-all duration-200 h-full">
@@ -859,6 +1090,7 @@ const STATUS_COLORS: Record<string, string> = {
           </CardContent>
         </Card>
 
+
         {/* Delivered */}
         <Card className="hover:shadow-lg transition-all duration-200 h-full">
           <CardHeader className="flex items-center justify-between">
@@ -947,28 +1179,28 @@ const STATUS_COLORS: Record<string, string> = {
             {/* status summary: use displayedDeliverySummary which picks filtered view when filters applied */}
             <div>
               <div className="grid grid-cols-2 gap-3">
-                {['pending','processing','shipped','delivered','ready','cancelled'].map((k) => {
+                {['pending', 'processing', 'shipped', 'delivered', 'ready', 'cancelled'].map((k) => {
                   const item = readDisplayed(k)
                   return (
                     <div key={k} className="text-sm">
                       <div className="text-xs text-muted-foreground">{k.charAt(0).toUpperCase() + k.slice(1)}</div>
                       <div className="flex gap-2 items-center">
-     <div className="text-lg font-semibold">{displayedDeliverySummary ? item.count : '...'}</div>
-                      <div className="text-xs text-muted-foreground">{displayedDeliverySummary ? Number(item.totalAmount).toLocaleString() : ''} DH</div>
-                    
+                        <div className="text-lg font-semibold">{displayedDeliverySummary ? item.count : '...'}</div>
+                        <div className="text-xs text-muted-foreground">{displayedDeliverySummary ? Number(item.totalAmount).toLocaleString() : ''} DH</div>
+
                       </div>
-                 
+
                     </div>
                   )
                 })}
               </div>
 
-             
 
-          
+
+
             </div>
 
-               </CardContent>
+          </CardContent>
         </Card>
 
       </div>
@@ -982,22 +1214,22 @@ const STATUS_COLORS: Record<string, string> = {
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
-             <Pie
-  data={orderData}
-  dataKey="value"
-  nameKey="name"
-  innerRadius={60}
-  outerRadius={100}
-  paddingAngle={5}
-  label
->
-  {orderData.map((item, idx) => (
-    <Cell
-      key={idx}
-      fill={STATUS_COLORS[item.name?.toLowerCase()] || STATUS_COLORS.default}
-    />
-  ))}
-</Pie>
+                <Pie
+                  data={orderData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  label
+                >
+                  {orderData.map((item, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={STATUS_COLORS[item.name?.toLowerCase()] || STATUS_COLORS.default}
+                    />
+                  ))}
+                </Pie>
 
                 <Tooltip />
                 <Legend />
@@ -1016,16 +1248,16 @@ const STATUS_COLORS: Record<string, string> = {
                 <XAxis dataKey="status" />
                 <YAxis />
                 <Tooltip />
-<Bar dataKey="count" radius={[6, 6, 0, 0]}>
-  {chartData.map((entry, idx) => (
-    <Cell
-      key={`bar-${idx}`}
-      fill={
-        STATUS_COLORS[entry.status?.toLowerCase()] || STATUS_COLORS.default
-      }
-    />
-  ))}
-</Bar>
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {chartData.map((entry, idx) => (
+                    <Cell
+                      key={`bar-${idx}`}
+                      fill={
+                        STATUS_COLORS[entry.status?.toLowerCase()] || STATUS_COLORS.default
+                      }
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

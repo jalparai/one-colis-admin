@@ -74,36 +74,16 @@ export function DeliveryOrdersTable() {
   const [selectedStatusById, setSelectedStatusById] = React.useState<Record<string, string>>({})
 
   const STATUSES = [
-    "pending",
-    "processing",
-    "shipped",
-    "delivered",
-    "cancelled",
-    "ready",
-    "confirmed",
-    "pickup_requested",
-    "returned",
-    "collected",
-    "order_assigned",
-    "awaiting_merchant_pickup",
-    "picked_up",
-    "on_the_way",
-    "arrived_at_location",
-    "awaiting_customer_1st_delivery_attempt",
-    "2nd_delivery_attempt",
-    "final_delivery_attempt",
-    "delivery_attempt_failed",
-    "delivered_partially",
-    "delivery_failed",
-    "delivery_cancelled",
-    "delayed",
-    "undeliverable",
-    "refused",
-    "incident_reported",
-    "to_be_settled",
-    "settled",
-    "return_to_sender",
-    "documentation_complete",
+        "pending",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+        "ready",
+        "pickup_requested",
+        "returned",
+        "collected",
+     
   ]
 
   const toSlug = (s: string) =>
@@ -211,110 +191,125 @@ export function DeliveryOrdersTable() {
     }
   }, [])
 
-  const handleUpdateStatus = async (orderId: string) => {
-    const selectedRaw = selectedStatusById[orderId]
-    if (!selectedRaw) {
-      toast.error("Please select a status first.")
-      return
-    }
+const tryToSlug = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^\w_]/g, "");
 
-    const order = orders.find((o) => o.id === orderId)
-    if (!order) {
-      toast.error("Order not found.")
-      return
-    }
-    if ((order.status ?? "").toLowerCase() === selectedRaw.toLowerCase()) {
-      toast("Status unchanged.")
-      return
-    }
+const tryToHyphen = (s: string) =>
+  s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-]/g, "");
 
-    const token = localStorage.getItem("token")
-    if (!token) {
-      toast.error("No token found, please log in again.")
-      return
-    }
+const handleUpdateStatus = async (orderId: string) => {
+  const selectedRaw = selectedStatusById[orderId];
+  if (!selectedRaw) {
+    toast.error("Please select a status first.");
+    return;
+  }
 
-    const tryStatuses = [selectedRaw, toSlug(selectedRaw)]
-    let lastErr: any = null
+  const order = orders.find((o) => o.id === orderId);
+  if (!order) {
+    toast.error("Order not found.");
+    return;
+  }
 
-    try {
-      setLoadingId(orderId)
+  if ((order.status ?? "").toLowerCase() === selectedRaw.toLowerCase()) {
+    toast("Status unchanged.");
+    return;
+  }
 
-      for (const st of tryStatuses) {
-        const payload = { code: orderId, status: st }
-        console.log("[v0] Attempting status update with payload:", JSON.stringify(payload))
+  const token = localStorage.getItem("token");
+  if (!token) {
+    toast.error("No token found, please log in again.");
+    return;
+  }
 
-        try {
-          const res = await axios.post("https://cod-ecommerce-two.vercel.app/api/delivery-agent/scan", payload, {
+  setLoadingId(orderId);
+
+  // build list of candidate status values to try
+  const tries = Array.from(
+    new Set([
+      selectedRaw,
+      selectedRaw.toLowerCase(),
+      tryToSlug(selectedRaw),
+      tryToHyphen(selectedRaw),
+      tryToSlug(selectedRaw).replace(/^_+|_+$/g, ""), // cleaned
+      tryToHyphen(selectedRaw).replace(/^-+|-+$/g, ""),
+    ]),
+  );
+
+  let lastErr: any = null;
+  for (const st of tries) {
+    const payloadVariants = [
+      { code: orderId, status: st },
+      { orderId: orderId, status: st },
+      { code: order.orderId ?? orderId, status: st }, // if API expects orderId in code field
+    ];
+
+    for (const payload of payloadVariants) {
+      try {
+        console.log("[status-update] trying", payload);
+        const res = await axios.post(
+          "https://cod-ecommerce-two.vercel.app/api/delivery-agent/scan",
+          payload,
+          {
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
             timeout: 10000,
-          })
+          },
+        );
 
-          console.log("[v0] Status update successful:", res.status, res.data)
-          setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: selectedRaw } : o)))
-          toast.success("Status updated successfully")
-          setSelectedStatusById((prev) => ({ ...prev, [orderId]: "" }))
-          lastErr = null
-          break
-        } catch (err: any) {
-          lastErr = err
-          const errorStatus = err?.response?.status
-          const errorData = err?.response?.data
-          console.warn(
-            `[v0] Attempt failed for status "${st}":`,
-            "Status:",
-            errorStatus,
-            "Data:",
-            JSON.stringify(errorData),
-          )
-
-          if (err?.code === "ECONNABORTED") {
-            console.error("[v0] Request timeout - server not responding")
-          } else if (errorStatus === 401 || errorStatus === 403) {
-            console.error("[v0] Authentication error - token may be invalid")
-          } else if (errorStatus === 404) {
-            console.error("[v0] API endpoint not found - check URL")
-          }
-        }
+        console.log("[status-update] success", res.status, res.data);
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: selectedRaw } : o)));
+        toast.success("Status updated successfully");
+        setSelectedStatusById((prev) => ({ ...prev, [orderId]: "" }));
+        lastErr = null;
+        setLoadingId(null);
+        return;
+      } catch (err: any) {
+        lastErr = err;
+        console.warn("[status-update] attempt failed", { payload, status: err?.response?.status, data: err?.response?.data });
+        // continue to next payload/variant
       }
-
-      if (lastErr) {
-        const r = lastErr.response
-        const status = r?.status
-        const data = r?.data
-
-        let message = "Failed to update status"
-
-        if (status === 401 || status === 403) {
-          message = "Authentication failed - your session may have expired. Please log in again."
-        } else if (status === 404) {
-          message = "API endpoint not found. Please check the server."
-        } else if (status === 400) {
-          message = data?.message || "Invalid status value. Please check your selection."
-        } else if (status === 500) {
-          message = "Server error. Please try again later."
-        } else if (lastErr?.code === "ECONNABORTED") {
-          message = "Request timeout - the server is not responding."
-        } else {
-          message = data?.message || data?.error || lastErr.message || message
-        }
-
-        console.error("[v0] Final error details:", {
-          status,
-          message,
-          data,
-          error: lastErr,
-        })
-
-        toast.error(message)
-      }
-    } finally {
-      setLoadingId(null)
     }
   }
+
+  // After all attempts failed: show best info to user
+  setLoadingId(null);
+  if (lastErr) {
+    const r = lastErr.response;
+    if (r) {
+      const status = r.status;
+      const data = r.data;
+      const serverMsg = data?.message || data?.error || JSON.stringify(data);
+      console.error("[status-update] final error", status, data);
+      if (status === 401 || status === 403) {
+        toast.error("Authentication failed — please log in again.");
+      } else if (status === 404) {
+        toast.error(`API not found or status not permitted. Server: ${serverMsg}`);
+      } else if (status === 400) {
+        toast.error(`Invalid status. Server: ${serverMsg}`);
+      } else if (status >= 500) {
+        toast.error("Server error. Try again later.");
+      } else {
+        toast.error(serverMsg || "Failed to update status.");
+      }
+    } else if (lastErr.code === "ECONNABORTED") {
+      toast.error("Request timed out. Try again.");
+    } else {
+      toast.error(lastErr.message || "Unknown error updating status.");
+    }
+  } else {
+    toast.error("Failed to update status (unknown reason).");
+  }
+};
 
   React.useEffect(() => {
     fetchOrders()
@@ -368,17 +363,36 @@ export function DeliveryOrdersTable() {
     })
   }, [filteredByDate, rangeFilter])
 
-  const finalData = React.useMemo(() => {
-    if (!globalFilter.trim()) return rangeFiltered
-    const q = globalFilter.toLowerCase()
-    return rangeFiltered.filter(
-      (order) =>
-        order.seller?.name?.toLowerCase().includes(q) ||
-        order.customer?.name?.toLowerCase().includes(q) ||
-        order.customer?.phone?.toLowerCase().includes(q) ||
-        order.items.some((i) => i.productName.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)),
+const finalData = React.useMemo(() => {
+  const qRaw = globalFilter?.trim()
+  if (!qRaw) return rangeFiltered
+  const q = qRaw.toLowerCase()
+
+  return rangeFiltered.filter((order) => {
+    // safe, lower-cased search sources
+    const sellerName = order.seller?.name?.toLowerCase() ?? ""
+    const sellerStore = order.seller?.storeName?.toLowerCase() ?? ""
+    const customerName = order.customer?.name?.toLowerCase() ?? ""
+    const customerPhone = order.customer?.phone?.toLowerCase() ?? ""
+    const customerCity = order.customer?.city?.toLowerCase() ?? ""
+    const orderId = (order.orderId ?? order.id ?? "").toString().toLowerCase()
+
+    // items match (sku or product name)
+    const itemsMatch =
+      Array.isArray(order.items) &&
+      order.items.some((i) => (i.productName ?? "").toLowerCase().includes(q) || (i.sku ?? "").toLowerCase().includes(q))
+
+    return (
+      sellerName.includes(q) ||
+      sellerStore.includes(q) ||
+      customerName.includes(q) ||
+      customerPhone.includes(q) ||
+      customerCity.includes(q) ||   // <-- new: search by city
+      orderId.includes(q) ||        // <-- new: search by order id / orderId
+      itemsMatch
     )
-  }, [rangeFiltered, globalFilter])
+  })
+}, [rangeFiltered, globalFilter])
 
   // helper to create wa.me link from seller phone
   const makeWaLink = (rawPhone?: string) => {
@@ -390,14 +404,23 @@ export function DeliveryOrdersTable() {
   }
 
   const columns: ColumnDef<DeliveryOrder>[] = [
-    
+      {
+    id: "order-id",
+    header: "# Order ID",
+    accessorFn: (row) => row.orderId ?? row.id,
+    cell: ({ row }) => (
+      <div className="font-mono text-xs text-muted-foreground">
+        {row.original.orderId ?? row.original.id}
+      </div>
+    ),
+  },
     {
       header: "Total Amount",
       accessorKey: "totalAmount",
       cell: ({ row }) => `dh - ${row.original.totalAmount}`,
     },
     {
-      header: "Seller",
+      header: "Store Name",
       accessorFn: (row) => row.seller?.name ?? "-",
     },
     // NEW: WhatsApp column
@@ -516,12 +539,13 @@ export function DeliveryOrdersTable() {
     <div className="w-full">
       <Toaster position="top-right" />
       <div className="flex flex-wrap justify-between items-center gap-4 py-4">
-        <Input
-          placeholder="Search orders..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
+       <Input
+  placeholder="Search by order id, city.."
+  value={globalFilter}
+  onChange={(e) => setGlobalFilter(e.target.value)}
+  className="max-w-sm"
+/>
+
 
         <div className="flex items-center gap-2 lg:overflow-auto overflow-x-scroll">
           <label>From:</label>

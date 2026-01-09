@@ -65,6 +65,7 @@ export function MyPayoutsTable() {
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
   const [rangeFilter, setRangeFilter] = React.useState<{ from?: string; to?: string }>({});
+  const [updatingStatusId, setUpdatingStatusId] = React.useState<string | null>(null);
 
   // Seller details modal state
   const [detailsOpen, setDetailsOpen] = React.useState(false);
@@ -215,6 +216,52 @@ export function MyPayoutsTable() {
     );
   }, [rangeFiltered, globalFilter]);
 
+  // Known status options (include ones already present so users can re-use them)
+  const statusOptions = React.useMemo(() => {
+    const defaults = ["pending", "paid", "failed"];
+    const fromData = payouts.map((p) => p.status).filter(Boolean) as string[];
+    return Array.from(new Set([...defaults, ...fromData]));
+  }, [payouts]);
+
+  const handleStatusUpdate = React.useCallback(
+    async (payoutId: string, status: string) => {
+      if (!status?.trim()) return;
+
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        if (typeof window !== "undefined") window.alert("Missing auth token. Please sign in again.");
+        return;
+      }
+
+      setUpdatingStatusId(payoutId);
+      try {
+        const res = await axios.patch(
+          `https://cod-ecommerce-two.vercel.app/api/payouts-managers/update-payout-status/${payoutId}/status`,
+          { status },
+          { headers: { Authorization: `Bearer ${token}` }, validateStatus: () => true }
+        );
+
+        if (!res?.data?.ok) {
+          const message = res?.data?.message ?? "Failed to update payout status";
+          throw new Error(message);
+        }
+
+        setPayouts((prev) =>
+          prev.map((p) => (p._id === payoutId ? { ...p, status, updatedAt: new Date().toISOString() } : p))
+        );
+      } catch (err) {
+        console.error("Failed to update payout status", err);
+        if (typeof window !== "undefined") {
+          const message = err instanceof Error ? err.message : "Unable to update payout status.";
+          window.alert(message);
+        }
+      } finally {
+        setUpdatingStatusId(null);
+      }
+    },
+    []
+  );
+
   // Table columns (includes View Seller action)
   const columns: ColumnDef<Payout>[] = React.useMemo(
     () => [
@@ -247,6 +294,7 @@ export function MyPayoutsTable() {
           // try common id locations
           const sid = sellerObj?._id ?? sellerObj?.id ?? (typeof sellerObj === "string" ? sellerObj : null);
           const disabled = !sid;
+          const payoutId = row.original._id;
           return (
             <div className="flex gap-2">
               <Button
@@ -263,12 +311,44 @@ export function MyPayoutsTable() {
               >
                 View Seller
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="secondary" disabled={updatingStatusId === payoutId}>
+                    {updatingStatusId === payoutId ? "Updating..." : "Update Status"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {statusOptions.map((status) => (
+                    <DropdownMenuItem
+                      key={status}
+                      disabled={updatingStatusId === payoutId || status === row.original.status}
+                      onClick={() => handleStatusUpdate(payoutId, status)}
+                    >
+                      {status === row.original.status ? `${status} (current)` : status}
+                    </DropdownMenuItem>
+                  ))}
+                  {/* <DropdownMenuItem
+                    disabled={updatingStatusId === payoutId}
+                    onClick={() => {
+                      const custom =
+                        typeof window !== "undefined"
+                          ? window.prompt("Enter a custom status", row.original.status ?? "")
+                          : null;
+                      if (custom && custom.trim()) {
+                        handleStatusUpdate(payoutId, custom.trim());
+                      }
+                    }}
+                  >
+                    Custom...
+                  </DropdownMenuItem> */}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           );
         },
       },
     ],
-    []
+    [handleStatusUpdate, statusOptions, updatingStatusId]
   );
 
   const table = useReactTable({

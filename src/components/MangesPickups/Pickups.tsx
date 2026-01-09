@@ -47,14 +47,24 @@ import { ENTITY_CONFIGS } from "@/lib/import-export-utils"
 export type Order = {
   id?: string
   _id?: string
+    orderId?: string   // <-- add this line
+
   seller: string
   sellerEmail: string
+  
   items: {
     productName: string
     quantity: number
     unitPrice: number
     total: number
   }[]
+    customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    postalCode?: string;
+  };
   itemsTotal: number
   totalAmount: number
   status: string
@@ -99,6 +109,11 @@ export const orderColumns: ColumnDef<Order>[] = [
     enableSorting: false,
     enableHiding: false,
   },
+     {
+    accessorKey: "orderId",
+    header: "# Order ID",
+    cell: ({ row }) => <div className="font-mono text-xs text-muted-foreground">{row.getValue("orderId") as string}</div>,
+  },
   {
     accessorKey: "seller",
     header: "Seller",
@@ -106,6 +121,12 @@ export const orderColumns: ColumnDef<Order>[] = [
       const seller = row.getValue("seller") as any;
       return <div>{typeof seller === "object" ? seller.name || "N/A" : seller}</div>;
     },
+  },
+  {
+    id: "customer_city",
+    header: "City",
+    accessorKey: "customer",
+    cell: ({ row }) => <div>{row.original.customer?.city ?? "—"}</div>,
   },
   {
     accessorKey: "items",
@@ -473,21 +494,51 @@ export function PickUpTable() {
   }, [filteredOrders, rangeFilter])
 
   // Optional: lightweight client-side search (since globalFilter state exists)
-  const finalOrders = React.useMemo(() => {
-    if (!globalFilter.trim()) return timeFilteredOrders
-    const q = globalFilter.toLowerCase()
-    return timeFilteredOrders.filter((o) => {
-      return (
-        o.seller.toLowerCase().includes(q) ||
-        o.sellerEmail.toLowerCase().includes(q) ||
-        o.status.toLowerCase().includes(q) ||
-        o.notes.toLowerCase().includes(q) ||
-        o.items.some(
-          (it) => it.productName.toLowerCase().includes(q) || String(it.quantity).includes(q) || String(it.unitPrice).includes(q),
+  // Replace your existing finalOrders useMemo with this
+const finalOrders = React.useMemo(() => {
+  const qRaw = globalFilter ?? ""
+  const q = qRaw.trim().toLowerCase()
+  if (!q) return timeFilteredOrders
+
+  return timeFilteredOrders.filter((o) => {
+    // Normalize seller (can be string or object)
+
+
+
+    // Order id may live in orderId, _id, or id
+    const orderIdStr = String(o.orderId ?? o._id ?? o.id ?? "")
+
+    // City from nested customer
+    const cityStr = String(o.customer?.city ?? "")
+
+    const sellerEmail = String(o.sellerEmail ?? "")
+    const status = String(o.status ?? "")
+    const notes = String(o.notes ?? "")
+
+    // Search items: any productName / quantity / unitPrice matches
+    const itemsMatch =
+      Array.isArray(o.items) &&
+      o.items.some((it) => {
+        const pname = String(it.productName ?? "")
+        const qty = String(it.quantity ?? "")
+        const price = String(it.unitPrice ?? "")
+        return (
+          pname.toLowerCase().includes(q) ||
+          qty.includes(q) ||
+          price.includes(q)
         )
-      )
-    })
-  }, [timeFilteredOrders, globalFilter])
+      })
+
+    return (
+      sellerEmail.toLowerCase().includes(q) ||
+      status.toLowerCase().includes(q) ||
+      notes.toLowerCase().includes(q) ||
+      itemsMatch ||
+      orderIdStr.toLowerCase().includes(q) ||
+      cityStr.toLowerCase().includes(q)
+    )
+  })
+}, [timeFilteredOrders, globalFilter])
 
   const table = useReactTable({
     data: finalOrders,

@@ -468,27 +468,7 @@ if (!it.productId) {
     {order?.status === "ready" ? <span className="text-red-500">*</span> : !it.productId ? <span className="text-red-500">*</span> : null}
   </label>
 
-  {order?.status === "ready" ? (
-    // For 'ready' orders allow typing a product name (required)
-    <div>
-      <Input
-        value={it.productName ?? ""}
-        placeholder="Enter product name"
-        onChange={(e) =>
-          updateItem(idx, {
-            productName: e.target.value,
-            // keep productId empty when user types free-text product name
-            productId: "",
-          })
-        }
-      />
-      <div className="text-xs text-muted-foreground mt-1">
-        Enter product name (must be provided for 'ready' orders).
-      </div>
-    </div>
-  ) : (
-    // Default behavior: select from available stock
-    <div>
+ <div>
       <select
         value={it.productId ?? ""}
         onChange={(e) => onSelectProduct(idx, e.target.value)}
@@ -511,8 +491,7 @@ if (!it.productId) {
       <div className="text-xs text-muted-foreground mt-1">
         {it.productName || (it.productId ? "(product selected)" : "Choose a product")}
       </div>
-    </div>
-  )}
+    </div>   
 </div>
 
                   <div className="w-28">

@@ -623,6 +623,8 @@ export function EmployeeOrdersTable() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
   const [globalFilter, setGlobalFilter] = React.useState("");
+  const [orderIdFilter, setOrderIdFilter] = React.useState("");
+
   const [dateFilter, setDateFilter] = React.useState<
     "all" | "today" | "yesterday" | "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth"
   >("all");
@@ -639,63 +641,84 @@ export function EmployeeOrdersTable() {
   const [deleteBulkLoading, setDeleteBulkLoading] = React.useState(false);
 const canAssign = userHasPermission("assignOrders");
 
-  const fetchOrders = React.useCallback(async () => {
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+// ---------- fetchOrders (replace existing) ----------
+const fetchOrders = React.useCallback(async (useLastWeek = false) => {
+  setLoading(true);
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const base = "https://cod-ecommerce-two.vercel.app/api/admin";
+    // choose endpoint based on flag
+    const endpoint = useLastWeek ? `${base}/orders/last-week` : `${base}/orders`;
 
-      // Normalize IDs and ensure items include productId + productName + quantity + unitPrice
-      const raw = res.data?.data || [];
-      const normalized = raw.map((o: any) => {
-        const itemsRaw = Array.isArray(o.items) ? o.items : [];
-        const items = itemsRaw.map((it: any) => {
-          const productId = it.productId ?? it.product?._id ?? it._id ?? null;
-          const productName = it.productName ?? it.product?.name ?? it.name ?? "";
-          const quantity = Number(it.quantity ?? it.qty ?? 0);
-          const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
-          const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
-          return {
-            productId,
-            productName,
-            quantity,
-            unitPrice,
-            total,
-          };
-        });
+    const res = await axios.get(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
+      validateStatus: () => true,
+    });
 
-        const customer = (o.customer && typeof o.customer === "object") ? {
-          name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
-          phone: o.customer.phone ?? o.customer.mobile ?? undefined,
-          address: o.customer.address ?? o.customer.addr ?? undefined,
-          city: o.customer.city ?? undefined,
-          postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
-        } : undefined;
-
+    const raw = res.data?.data || [];
+    const normalized = raw.map((o: any) => {
+      const itemsRaw = Array.isArray(o.items) ? o.items : [];
+      const items = itemsRaw.map((it: any) => {
+        const productId = it.productId ?? it.product?._id ?? it._id ?? null;
+        const productName = it.productName ?? it.product?.name ?? it.name ?? "";
+        const quantity = Number(it.quantity ?? it.qty ?? 0);
+        const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
+        const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
         return {
-          id: o.id ?? o._id ?? String(Math.random()),
-          orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : undefined) ?? "",
-          seller:
-            typeof o.seller === "object" ? (o.seller.name ?? o.seller.company ?? o.seller._id) : o.seller ?? o.sellerName ?? "",
-          sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
-          items,
-          customer,
-          itemsTotal: o.itemsTotal ?? o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-          totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-          status: o.status ?? "",
-          notes: o.notes ?? "",
-          createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
-        } as Order;
+          productId,
+          productName,
+          quantity,
+          unitPrice,
+          total,
+        };
       });
 
-      setOrders(normalized);
-    } catch (err) {
-      console.error("Error fetching orders:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      const customer =
+        o.customer && typeof o.customer === "object"
+          ? {
+              name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
+              phone: o.customer.phone ?? o.customer.mobile ?? undefined,
+              address: o.customer.address ?? o.customer.addr ?? undefined,
+              city: o.customer.city ?? undefined,
+              postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
+            }
+          : undefined;
+
+      return {
+        id: o.id ?? o._id ?? String(Math.random()),
+        orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : "") ?? "",
+        seller:
+          typeof o.seller === "object" ? (o.seller.name ?? o.seller.company ?? o.seller._id) : o.seller ?? o.sellerName ?? "",
+        sellerEmail:
+          o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
+        items,
+        customer,
+        itemsTotal:
+          o.itemsTotal ??
+          items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+        totalAmount:
+          o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+        status: o.status ?? "",
+        notes: o.notes ?? "",
+        createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
+      } as Order;
+    });
+
+    setOrders(normalized);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    toast.error("Failed to load orders");
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+// ---------- useEffect to call fetchOrders when dateFilter changes ----------
+React.useEffect(() => {
+  // When the dateFilter is lastWeek, fetch from the dedicated endpoint.
+  // Otherwise fetch the normal /orders endpoint.
+  fetchOrders(dateFilter === "lastWeek");
+}, [fetchOrders, dateFilter]);
 
   React.useEffect(() => {
     fetchOrders();
@@ -1200,33 +1223,27 @@ function userHasPermission(permission: string): boolean {
     });
   }, [filteredOrders, rangeFilter]);
 
-   const finalOrders = React.useMemo(() => {
-    // If cityFilter is provided, use it to filter by customer.city only
-    if (cityFilter && cityFilter.trim()) {
-      const q = cityFilter.toLowerCase();
-      return timeFilteredOrders.filter((o) => (o.customer?.city ?? "").toLowerCase().includes(q));
-    }
+const finalOrders = React.useMemo(() => {
+  if (!globalFilter.trim()) return timeFilteredOrders;
 
-    // Otherwise fall back to globalFilter (existing behavior)
-    if (!globalFilter.trim()) return timeFilteredOrders;
-    const q = globalFilter.toLowerCase();
-    return timeFilteredOrders.filter((o) => {
-      return (
-        (o.seller ?? "").toLowerCase().includes(q) ||
-        (o.sellerEmail ?? "").toLowerCase().includes(q) ||
-        (o.status ?? "").toLowerCase().includes(q) ||
-        (o.notes ?? "").toLowerCase().includes(q) ||
-        (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        (o.customer?.phone ?? "").toLowerCase().includes(q) ||
-        o.items.some(
-          (it) =>
-            it.productName.toLowerCase().includes(q) ||
-            String(it.quantity).includes(q) ||
-            String(it.unitPrice).includes(q)
-        )
-      );
-    });
-  }, [timeFilteredOrders, globalFilter, cityFilter]);
+  const q = globalFilter.toLowerCase();
+
+  return timeFilteredOrders.filter((o) => {
+    return (
+      (o.orderId ?? "").toLowerCase().includes(q) ||   // ✅ ORDER ID
+      (o.customer?.city ?? "").toLowerCase().includes(q) ||
+      (o.customer?.name ?? "").toLowerCase().includes(q) ||
+      (o.customer?.phone ?? "").toLowerCase().includes(q) ||
+      (o.seller ?? "").toLowerCase().includes(q) ||
+      (o.sellerEmail ?? "").toLowerCase().includes(q) ||
+      (o.status ?? "").toLowerCase().includes(q) ||
+      (o.notes ?? "").toLowerCase().includes(q) ||
+      o.items.some((it) =>
+        it.productName.toLowerCase().includes(q)
+      )
+    );
+  });
+}, [timeFilteredOrders, globalFilter]);
 
   const table = useReactTable({
     data: finalOrders,
@@ -1279,14 +1296,16 @@ const allSelectedReady = selectedRows.length > 0 && selectedRows.every(r => r.or
 
   return (
     <div className="w-full">
+ <Input
+  placeholder="Search Order ID, City, Customer..."
+  value={globalFilter}
+  onChange={(e) => setGlobalFilter(e.target.value)}
+  className="w-[260px]"
+/>
+
       {/* Top bar */}
       <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
-  <Input
-    placeholder="Filter by city..."
-    value={cityFilter}
-    onChange={(e) => setCityFilter(e.target.value)}
-    className="max-w-sm"
-  />
+
 
         {/* Date Range Filter */}
         <div className="flex items-center gap-2">

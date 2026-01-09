@@ -256,7 +256,7 @@ export default function PayoutHistoryPage() {
                   {pendingBalances.map((b, i) => (
                     <TableRow key={i}>
                       <TableCell>{b.seller}</TableCell>
-                      <TableCell className="text-right">${b.amount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">DH {b.amount.toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -326,9 +326,16 @@ export default function PayoutHistoryPage() {
                     <TableRow key={i}>
                       <TableCell>{p.sellerName}</TableCell>
                       <TableCell>{p.sellerEmail}</TableCell>
-                      <TableCell className="text-right">DH {p.amount.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">DH {p.fees.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">DH {p.netAmount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+  DH {(p.amount ?? 0).toLocaleString()}
+</TableCell>
+<TableCell className="text-right">
+  DH {(p.fees ?? 0).toLocaleString()}
+</TableCell>
+<TableCell className="text-right">
+  DH {(p.netAmount ?? 0).toLocaleString()}
+</TableCell>
+
                       <TableCell className="text-right capitalize">{p.status}</TableCell>
                       <TableCell className="text-right">{new Date(p.date).toLocaleDateString()}</TableCell>
                     </TableRow>

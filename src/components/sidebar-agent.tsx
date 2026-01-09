@@ -38,11 +38,11 @@ export function AppSidebarAgent({
         url: `/${locale}/agent/Return-Notes`,
         icon: FileIcon,
       },
-       {
-        title: t("agentSidebar.returnNote", { defaultValue: "My-Pickups" }),
-        url: `/${locale}/agent/My-Pickups`,
-        icon: ListIcon,
-      },
+      //  {
+      //   title: t("agentSidebar.returnNote", { defaultValue: "My-Pickups" }),
+      //   url: `/${locale}/agent/My-Pickups`,
+      //   icon: ListIcon,
+      // },
     ],
   };
 

@@ -9,13 +9,11 @@ import {
   Sheet,
   SheetClose,
   SheetContent,
-  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import toast from "react-hot-toast";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 
 /* ---------- Helpers / Types ---------- */
 
@@ -69,11 +67,10 @@ const uid = () =>
     ? (crypto as any).randomUUID()
     : `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
-const getStockId = (p: StockProduct) => String(p._id ?? p.id ?? p.productId ?? p.product?._id ?? p.product?.id ?? "").trim();
-const getStockName = (p: StockProduct) => (p.productName ?? p.name ?? p.product?.name ?? p.sku ?? "").toString().trim();
-const getStockAvailable = (p: StockProduct) =>
-  typeof p.quantity === "number" ? p.quantity : typeof p.stock === "number" ? p.stock : typeof p.available === "number" ? p.available : undefined;
-const getStockUnitPrice = (p: StockProduct) => (p.price ?? p.unitPrice) as number | undefined;
+const getStockId = (p: StockProduct) =>
+  String(
+    p._id ?? p.id ?? p.productId ?? p.product?._id ?? p.product?.id ?? ""
+  ).trim();
 
 const deriveSellerId = (ord: Order | null | undefined) => {
   if (!ord) return undefined;
@@ -89,7 +86,7 @@ const deriveSellerId = (ord: Order | null | undefined) => {
   return undefined;
 };
 
-/* ---------- Component ---------- */
+/* ---------- Component (items are NOT editable) ---------- */
 
 export function EditOrder({
   order,
@@ -105,7 +102,6 @@ export function EditOrder({
   const API_BASE = "https://cod-ecommerce-two.vercel.app";
 
   const [notes, setNotes] = useState<string>("");
-  const [items, setItems] = useState<Item[]>([]);
   const [customer, setCustomer] = useState<Order["customer"]>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -121,7 +117,7 @@ export function EditOrder({
     return localStorage.getItem("token");
   }
 
-  /* Fetch stock when editor opens */
+  /* Fetch stock when editor opens (kept in case you want enrichment) */
   useEffect(() => {
     const ctrl = new AbortController();
     const fetchStock = async () => {
@@ -129,7 +125,7 @@ export function EditOrder({
       setLoadingProducts(true);
       try {
         const token = getToken();
-        const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/seller/seller/stock", {
+        const res = await axios.get(`${API_BASE}/api/seller/seller/stock`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           signal: ctrl.signal as any,
           validateStatus: () => true,
@@ -153,7 +149,7 @@ export function EditOrder({
       } catch (err: any) {
         if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return;
         console.error("fetchStock error", err);
-        toast.error("Could not load products");
+        // silent: we don't require products for item editing since items are not editable
       } finally {
         setLoadingProducts(false);
       }
@@ -175,24 +171,23 @@ export function EditOrder({
 
     if (!order) {
       setNotes("");
-      setItems([]);
       setCustomer({});
       return;
     }
 
     setNotes(order.notes ?? "");
 
+    // Keep items as-is but ensure productId is a trimmed string
     const initialItems: Item[] = (order.items ?? []).map((it) => ({
       uid: uid(),
       sku: (it as any).sku ?? undefined,
-      productId: (it as any).productId ?? (it as any)._id ?? null,
+      productId: String((it as any).productId ?? (it as any)._id ?? (it as any).id ?? "").trim(),
       productName: it.productName ?? (it as any).name ?? "",
       quantity: Number(it.quantity ?? 1),
       unitPrice: Number((it as any).unitPrice ?? (it as any).price ?? 0),
       available: (it as any).available,
     }));
 
-    setItems(initialItems.length ? initialItems : [{ uid: uid(), productName: "", quantity: 1, unitPrice: 0 }]);
 
     setCustomer({
       name: order.customer?.name ?? undefined,
@@ -203,81 +198,9 @@ export function EditOrder({
     });
   }, [order]);
 
-  /* Enrich items from products WITHOUT overwriting user changes */
-  useEffect(() => {
-    if (!products?.length) return;
-    setItems((prev) =>
-      prev.map((it) => {
-        let stock: StockProduct | undefined;
-        if (it.productId) stock = products.find((p) => getStockId(p) === it.productId);
-        if (!stock && it.productName) stock = products.find((p) => getStockName(p).toLowerCase() === it.productName.toLowerCase().trim());
-        if (!stock) return it;
-        return {
-          ...it,
-          productId: it.productId || getStockId(stock),
-          productName: (it.productName && it.productName.trim()) ? it.productName : getStockName(stock),
-          unitPrice: it.unitPrice ?? getStockUnitPrice(stock),
-          available: it.available ?? getStockAvailable(stock),
-        };
-      })
-    );
-  }, [products]);
+  /* NOTE: We intentionally do NOT render item editing controls.
+     Items remain in state and will be sent unchanged when saving. */
 
-  /* Filter products for this seller (best-effort). Fallback to all products when none matched. */
-  const sellerProducts = React.useMemo(() => {
-    if (!sellerId) return products;
-    const normalize = (v?: string) => (v ?? "").toString().trim().toLowerCase();
-    const wanted = normalize(String(sellerId));
-    const filtered = products.filter((p) => {
-      const sid = normalize(String(p._id ?? p.id ?? p.seller ?? p.sellerId ?? p.seller?._id ?? ""));
-      const sname = normalize(String(p.sellerName ?? p.seller?.name ?? ""));
-      const semail = normalize(String(p.sellerEmail ?? p.seller?.email ?? ""));
-      if (wanted && sid && wanted === sid) return true;
-      if (wanted && semail && wanted === semail) return true;
-      if (wanted && sname && wanted === sname) return true;
-      return false;
-    });
-    return filtered.length ? filtered : products;
-  }, [products, sellerId]);
-
-  const updateItem = (index: number, patch: Partial<Item>) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
-
-  const onSelectProduct = (idx: number, selectedId: string) => {
-    if (!selectedId) {
-      updateItem(idx, { productId: "", productName: "", unitPrice: undefined, available: undefined });
-      return;
-    }
-
-    const stock = sellerProducts.find((s) => getStockId(s) === selectedId) ?? products.find((s) => getStockId(s) === selectedId);
-    if (!stock) {
-      updateItem(idx, { productId: selectedId });
-      return;
-    }
-
-    updateItem(idx, {
-      productId: getStockId(stock),
-      productName: getStockName(stock),
-      unitPrice: getStockUnitPrice(stock),
-      available: getStockAvailable(stock),
-    });
-  };
-
-  const addItem = () => {
-    if (sellerProducts.length > 0) {
-      const p = sellerProducts[0];
-      const pid = getStockId(p);
-      const pname = getStockName(p);
-      const price = getStockUnitPrice(p);
-      const available = getStockAvailable(p);
-      setItems((s) => [...s, { uid: uid(), productId: pid, productName: pname, quantity: 1, unitPrice: price ?? 0, available }]);
-      return;
-    }
-    setItems((s) => [...s, { uid: uid(), productName: "", quantity: 1, unitPrice: 0 }]);
-  };
-
-  const removeItem = (index: number) => setItems((s) => s.filter((_, i) => i !== index));
-
-  // inside your EditOrder component: replace the handleSave function with this
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setMessage("");
@@ -289,37 +212,7 @@ export function EditOrder({
         setLoading(false);
         return;
       }
-      if (!items.length) {
-        toast.error("Order must contain at least one item");
-        setLoading(false);
-        return;
-      }
 
-      // Validate items quickly before sending
-      const invalid: { idx: number; reason: string }[] = [];
-      const productIds = new Set(products.map((p) => getStockId(p)));
-
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        if (!it.productId || !String(it.productId).trim()) {
-          invalid.push({ idx: i, reason: "No product selected" });
-          continue;
-        }
-        if (!productIds.has(it.productId)) {
-          invalid.push({ idx: i, reason: `Unknown productId ${it.productId}` });
-          continue;
-        }
-        if (!it.quantity || Number(it.quantity) <= 0) {
-          invalid.push({ idx: i, reason: `Invalid quantity ${it.quantity}` });
-        }
-      }
-
-      if (invalid.length) {
-        const first = invalid[0];
-        toast.error(`Item ${first.idx + 1}: ${first.reason}`);
-        setLoading(false);
-        return;
-      }
 
       const token = getToken();
       if (!token) {
@@ -328,10 +221,11 @@ export function EditOrder({
         return;
       }
 
-      // Build payload exactly as your backend expects
+      // Build payload using current items state WITHOUT client-side per-item validation.
+      // We include productId when present (trimmed), quantity (as number), and optionally productName/unitPrice.
       const payload = {
         notes: notes ?? "",
-        items: items.map((it) => ({ productId: it.productId!.trim(), quantity: Number(it.quantity) })),
+     
         customer: {
           name: customer?.name ?? undefined,
           phone: customer?.phone ?? undefined,
@@ -393,7 +287,6 @@ export function EditOrder({
       if (!ok) {
         console.error("[EditOrder] all attempts failed", errors);
         const firstErr = errors[0];
-        // prefer server message if any
         const detail =
           firstErr?.data?.message ?? firstErr?.data ?? firstErr?.error ? JSON.stringify(firstErr.data ?? firstErr.error) : lastRes?.data ?? "No response";
         setMessage(`❌ Update failed — ${detail}`);
@@ -415,16 +308,14 @@ export function EditOrder({
     }
   };
 
-
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Edit Order</SheetTitle>
-          <SheetDescription>Edit customer, pick products from your stock and adjust quantity. Order id (orderId) is display only.</SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSave} className="grid gap-6 px-4 overflow-scroll">
+        <form onSubmit={handleSave} className="grid gap-6 px-4 overflow-auto">
           <div className="grid gap-2">
             <Label>Order ID</Label>
             <Input value={order?.orderId ?? order?._id ?? order?.id ?? ""} disabled />
@@ -458,110 +349,22 @@ export function EditOrder({
             </div>
           </fieldset>
 
-          <fieldset className="space-y-4 mt-4">
-            <legend className="font-medium mb-2">Items</legend>
-
-            {items.map((it, idx) => (
-              <div className="bg-gray-50 p-4 rounded-lg border">
-
-              <div
-                key={it.uid ?? idx}
-                className="grid grid-cols-12 gap-4 items-end"
-              >
-                {/* Product Select - 6 columns */}
-                <div className="col-span-12">
-                  <Label>Product</Label>
-                  {products.length ? (
-                    <Select
-                      value={it.productId ?? ""}
-                      onValueChange={(val) => onSelectProduct(idx, val)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={it.productName || "Select product"}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sellerProducts.map((p) => (
-                          <SelectItem
-                            key={getStockId(p) || p.name}
-                            value={getStockId(p)}
-                          >
-                            {getStockName(p)}
-                            {p.sku ? ` (${p.sku})` : ""}
-                            {typeof getStockAvailable(p) === "number"
-                              ? ` — stock: ${getStockAvailable(p)}`
-                              : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-                </div>
-
-                {/* Quantity - 2 columns */}
-                <div className="col-span-6">
-                  <Label>Qty</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={it.quantity}
-                    onChange={(e) =>
-                      updateItem(idx, { quantity: Number(e.target.value) || 1 })
-                    }
-                  />
-                </div>
-
-                {/* Unit Price - 3 columns */}
-                <div className="col-span-5">
-                  <Label>Unit Price</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={it.unitPrice ?? 0}
-                    onChange={(e) =>
-                      updateItem(idx, { unitPrice: Number(e.target.value) || 0 })
-                    }
-                  />
-                </div>
-              </div>
-  {/* Remove Button - 1 column */}
-                <div className="col-span-1 flex justify-end mt-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => removeItem(idx)}
-                    disabled={items.length === 1}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              
-              </div>
-
-            ))}
-
-            <div className="pt-2">
-              <Button type="button" onClick={addItem}>
-                + Add item
-              </Button>
-            </div>
-          </fieldset>
+          {/* ITEMS UI intentionally removed per request.
+              Items are kept in state (initialized from order) and will be submitted as-is. */}
 
           <div className="grid gap-2">
             <Label>Notes</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Urgent delivery" />
           </div>
 
-          {message && (
-            <p className={`text-sm ${message.startsWith("✅") ? "text-green-600" : "text-red-500"}`}>{message}</p>
-          )}
+          {message && <p className={`text-sm ${message.startsWith("✅") ? "text-green-600" : "text-red-500"}`}>{message}</p>}
 
           <SheetFooter>
-            <Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save changes'}</Button>
+            <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save changes"}</Button>
             <SheetClose asChild>
-              <Button type="button" variant="outline" onClick={() => onClose()}>Close</Button>
+              <Button type="button" variant="outline" onClick={() => onClose()}>
+                Close
+              </Button>
             </SheetClose>
           </SheetFooter>
         </form>

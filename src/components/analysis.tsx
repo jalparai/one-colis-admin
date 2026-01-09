@@ -98,24 +98,32 @@ interface DashboardMetricCard {
   link: string;
 }
 
+// Make Order flexible (allow unknown keys coming from API)
 export type Order = {
-  id: string;
-  seller: string;
-  sellerEmail: string;
-  items: {
-    productName: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
+  id?: string;
+  seller?: string;
+  sellerEmail?: string;
+  items?: {
+    productName?: string;
+    quantity?: number;
+    unitPrice?: number;
+    total?: number;
   }[];
-  itemsTotal: number;
-  totalAmount: number;
-  status: string;
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-  // optional: additional fields may exist in your real schema (city, fees, deliveredAt, pickupAt, sellerAmount, etc.)
-};
+  itemsTotal?: number | string;
+  totalAmount?: number | string | null;
+  status?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  customer?: {
+    name?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    postalCode?: string;
+  };
+  // allow any other fields (city, fees, sellerAmount, commission, etc.)
+} & Record<string, any>;
 
 interface CollectedPendingData {
   totalOrders: number;
@@ -160,15 +168,12 @@ export default function Analysis() {
     const cleaned = name.trim().toLowerCase();
     if (!cleaned) return null;
 
-    // 1) exact match
     const exact = sellers.find((s) => s.name.toLowerCase() === cleaned);
     if (exact) return exact.id;
 
-    // 2) startsWith match
     const starts = sellers.find((s) => s.name.toLowerCase().startsWith(cleaned));
     if (starts) return starts.id;
 
-    // 3) contains match (fallback)
     const contains = sellers.find((s) => s.name.toLowerCase().includes(cleaned));
     if (contains) return contains.id;
 
@@ -179,7 +184,6 @@ export default function Analysis() {
   const router = useRouter();
   const locale = (params as any)?.locale ?? "en";
   const { t } = useTranslation("common");
-  // add near other useState(...) lines inside the Analysis component
   const [collectedPending, setCollectedPending] = useState<CollectedPendingData | null>(null);
   const [ordersView, setOrdersView] = useState<"all" | "pending">("all");
 
@@ -191,7 +195,6 @@ export default function Analysis() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // computeRange returns { start, end } strings for presets (YYYY-MM-DD)
   const computeRange = (
     filter:
       | "all"
@@ -220,14 +223,24 @@ export default function Analysis() {
         monday.setDate(now.getDate() - dayIndex);
         return { start: formatDate(monday), end: today };
       }
-      case "lastWeek": {
-        const dayIndex = (now.getDay() + 6) % 7;
-        const lastWeekEnd = new Date(now);
-        lastWeekEnd.setDate(now.getDate() - dayIndex - 1); // previous Sunday
-        const lastWeekStart = new Date(lastWeekEnd);
-        lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
-        return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
-      }
+    case "lastWeek": {
+  // Monday-based last week (consistent with sameWeek helper)
+  const dayIndex = (now.getDay() + 6) % 7; // Monday = 0
+  const thisWeekMonday = new Date(now);
+  thisWeekMonday.setDate(now.getDate() - dayIndex);
+  thisWeekMonday.setHours(0, 0, 0, 0);
+
+  const lastWeekStart = new Date(thisWeekMonday);
+  lastWeekStart.setDate(thisWeekMonday.getDate() - 7);
+  lastWeekStart.setHours(0, 0, 0, 0);
+
+  const lastWeekEnd = new Date(lastWeekStart);
+  lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+  lastWeekEnd.setHours(23, 59, 59, 999);
+
+  return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
+}
+
       case "thisMonth": {
         const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         return { start: formatDate(startMonth), end: today };
@@ -242,7 +255,6 @@ export default function Analysis() {
     }
   };
 
-  // Build params helper - accepts dateFilter and optional customStart/customEnd
   const buildParams = (filterArg?: typeof dateFilter, customS?: string | null, customE?: string | null) => {
     const params: Record<string, string> = {};
     if (!filterArg || filterArg === "all") {
@@ -251,7 +263,6 @@ export default function Analysis() {
     }
 
     if (filterArg === "custom") {
-      // use provided custom dates if any
       if (customS) {
         params.startDate = customS;
         params.start = customS;
@@ -325,17 +336,18 @@ export default function Analysis() {
     {
       header: t("table.created"),
       accessorKey: "createdAt",
-      cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
+      cell: ({ row }) =>
+        row.original.createdAt
+          ? <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>
+          : <div>-</div>,
     },
   ];
 
   // ----------------- Fetch Data (respects dateFilter and customStart/customEnd) -----------------
-  // now refetches when date filter / custom range / selected seller changes so charts update
   useEffect(() => {
     let mounted = true;
 
     async function fetchData() {
-      // setLoading(true);
       setError(null);
 
       try {
@@ -346,27 +358,31 @@ export default function Analysis() {
           return;
         }
 
-        const headers = {
+        const headers: Record<string, string> = {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         };
 
-        // Build shared params for date range & seller
         const params = buildParams(dateFilter, customStart, customEnd);
         if (selectedSeller) params.sellerId = selectedSeller;
 
-        // endpoints
         const base = "https://cod-ecommerce-two.vercel.app/api/admin";
         const deliveredUrl = appendParamsToUrl(`${base}/getDeliveredVsReturnedRatio`, params);
         const avgDeliveryUrl = appendParamsToUrl(`${base}/getAverageDeliveryTime`, params);
         const topSellersUrl = appendParamsToUrl(`${base}/getTopSellers`, params);
         const cityPerfUrl = appendParamsToUrl(`${base}/city-performance`, params);
         const cityFeesUrl = appendParamsToUrl(`${base}/city-fees`, params);
-        // orders: limit recent orders to 50, sort desc
-        const ordersParams = { ...params, limit: "50", sort: "desc" as string };
-        const ordersUrl = appendParamsToUrl(`${base}/orders`, ordersParams);
+      // --- replace the existing ordersParams / ordersUrl building with this ---
+const ordersParams = { ...params, limit: "50", sort: "desc" as string };
 
-        // request all in parallel
+// Use the server-provided last-week endpoint when the filter is 'lastWeek'
+let ordersUrl = appendParamsToUrl(`${base}/orders`, ordersParams);
+if (dateFilter === "lastWeek") {
+  // prefer the dedicated last-week endpoint (still include params in case backend accepts them)
+  ordersUrl = appendParamsToUrl(`${base}/orders/last-week`, ordersParams);
+}
+
+
         const [
           deliveredRes,
           avgDeliveryRes,
@@ -383,7 +399,6 @@ export default function Analysis() {
           fetch(ordersUrl, { headers }),
         ]);
 
-        // parse safely and gracefully
         const [
           deliveredJson,
           avgDeliveryJson,
@@ -402,7 +417,6 @@ export default function Analysis() {
 
         if (!mounted) return;
 
-        // Normalize shapes (try common locations)
         const deliveredData = deliveredJson?.data ?? deliveredJson ?? { deliveredOrders: 0, returnedOrders: 0 };
         const avgDeliveryData = Array.isArray(avgDeliveryJson?.data) ? avgDeliveryJson.data : Array.isArray(avgDeliveryJson) ? avgDeliveryJson : avgDeliveryJson?.result ?? [];
         const topSellersData = Array.isArray(topSellersJson?.data) ? topSellersJson.data : Array.isArray(topSellersJson) ? topSellersJson : topSellersJson?.result ?? [];
@@ -419,9 +433,7 @@ export default function Analysis() {
           cityFees: cityFeesData,
         });
 
-        // orders - server-limited to recent (limit param). We'll still allow client-side filter as fallback.
         setOrders(Array.isArray(ordersData) ? ordersData : []);
-
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
         setError("Failed to load dashboard data.");
@@ -435,7 +447,7 @@ export default function Analysis() {
     return () => {
       mounted = false;
     };
-  }, [dateFilter, customStart, customEnd, selectedSeller]); // re-run when filter or seller changes
+  }, [dateFilter, customStart, customEnd, selectedSeller]);
 
   // fetch sellers once (no date param)
   useEffect(() => {
@@ -486,68 +498,99 @@ export default function Analysis() {
   // ----------------- Date Filter Logic (client-side helpers retained) -----------------
   const now = useMemo(() => new Date(), [dateFilter, customStart, customEnd]); // updates when filter/custom range changes
 
+  // monday-based sameWeek
   const sameWeek = (d1: Date, d2: Date) => {
     const startOfWeek = (d: Date) => {
       const copy = new Date(d);
-      const day = copy.getDay(); // 0 (Sun) - 6
-      copy.setDate(copy.getDate() - day); // start of week (Sunday)
+      const dayIndex = (copy.getDay() + 6) % 7; // Monday = 0
+      copy.setDate(copy.getDate() - dayIndex);
       copy.setHours(0, 0, 0, 0);
       return copy;
     };
-    const w1 = startOfWeek(d1).toDateString();
-    const w2 = startOfWeek(d2).toDateString();
-    return w1 === w2 && d1.getFullYear() === d2.getFullYear();
+    return startOfWeek(d1).toDateString() === startOfWeek(d2).toDateString() && d1.getFullYear() === d2.getFullYear();
   };
 
   // filteredOrders computed from orders + dateFilter (client-side fallback)
-  const filteredOrders = useMemo(() => {
-    if (!orders || orders.length === 0) return [];
+ const filteredOrders = useMemo(() => {
+  if (!orders || orders.length === 0) return [];
 
-    const nowLocal = new Date();
-    return orders.filter((order) => {
-      const created = new Date(order.createdAt);
+  const nowLocal = new Date();
 
-      // If using custom range, apply it client-side as well
-      if (dateFilter === "custom") {
-        const from = customStart ? new Date(customStart + "T00:00:00") : null;
-        const to = customEnd ? new Date(customEnd + "T23:59:59") : null;
-        if (from && created < from) return false;
-        if (to && created > to) return false;
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+  const startOfWeekMonday = (d: Date) => {
+    const copy = new Date(d);
+    const dayIndex = (copy.getDay() + 6) % 7; // Monday = 0
+    copy.setDate(copy.getDate() - dayIndex);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+
+  return orders.filter((order) => {
+    if (!order.createdAt) return false;
+    const created = new Date(order.createdAt);
+
+    // custom range handled client-side as before
+    if (dateFilter === "custom") {
+      const from = customStart ? new Date(customStart + "T00:00:00") : null;
+      const to = customEnd ? new Date(customEnd + "T23:59:59.999") : null;
+      if (from && created < from) return false;
+      if (to && created > to) return false;
+      return true;
+    }
+
+    switch (dateFilter) {
+      case "today": {
+        const s = startOfDay(nowLocal);
+        const e = endOfDay(nowLocal);
+        return created >= s && created <= e;
+      }
+
+      case "yesterday": {
+        const y = new Date(nowLocal);
+        y.setDate(nowLocal.getDate() - 1);
+        const s = startOfDay(y);
+        const e = endOfDay(y);
+        return created >= s && created <= e;
+      }
+
+      case "thisWeek": {
+        const weekStart = startOfWeekMonday(nowLocal);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        return created >= weekStart && created <= weekEnd;
+      }
+
+      case "lastWeek": {
+        const thisWeekStart = startOfWeekMonday(nowLocal);
+        const lastWeekStart = new Date(thisWeekStart);
+        lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+        const lastWeekEnd = new Date(lastWeekStart);
+        lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+        lastWeekEnd.setHours(23, 59, 59, 999);
+        return created >= lastWeekStart && created <= lastWeekEnd;
+      }
+
+      case "thisMonth": {
+        const s = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), 1, 0, 0, 0, 0);
+        const e = new Date(nowLocal.getFullYear(), nowLocal.getMonth() + 1, 0, 23, 59, 59, 999);
+        return created >= s && created <= e;
+      }
+
+      case "lastMonth": {
+        const s = new Date(nowLocal.getFullYear(), nowLocal.getMonth() - 1, 1, 0, 0, 0, 0);
+        const e = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), 0, 23, 59, 59, 999);
+        return created >= s && created <= e;
+      }
+
+      default:
         return true;
-      }
-
-      const diffDays = Math.floor((nowLocal.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-
-      switch (dateFilter) {
-        case "today":
-          return created.toDateString() === nowLocal.toDateString();
-        case "yesterday":
-          return diffDays === 1;
-        case "thisWeek":
-          return sameWeek(created, nowLocal);
-        case "lastWeek": {
-          const lastWeek = new Date(nowLocal);
-          lastWeek.setDate(nowLocal.getDate() - 7);
-          return sameWeek(created, lastWeek);
-        }
-        case "thisMonth":
-          return (
-            created.getMonth() === nowLocal.getMonth() &&
-            created.getFullYear() === nowLocal.getFullYear()
-          );
-        case "lastMonth": {
-          const prevMonth = new Date(nowLocal);
-          prevMonth.setMonth(nowLocal.getMonth() - 1);
-          return (
-            created.getMonth() === prevMonth.getMonth() &&
-            created.getFullYear() === prevMonth.getFullYear()
-          );
-        }
-        default:
-          return true;
-      }
-    });
-  }, [orders, dateFilter, customStart, customEnd]);
+    }
+  });
+}, [orders, dateFilter, customStart, customEnd]);
 
   // filteredPendingOrders derived from filteredOrders
   const filteredPendingOrders = useMemo(() => {
@@ -558,11 +601,11 @@ export default function Analysis() {
   }, [filteredOrders]);
 
   // ----------------- Calculations (use filteredOrders where meaningful) -----------------
-  const totalSellerRevenueAllTime = metrics?.topSellers.reduce((sum, s) => sum + s.revenue, 0) ?? 0;
+  const totalSellerRevenueAllTime = metrics?.topSellers.reduce((sum, s) => sum + (s.revenue || 0), 0) ?? 0;
   const totalServiceRevenueAllTime = metrics?.cityPerformance.reduce((sum, c) => {
     const feeObj = metrics?.cityFees.find((f) => f.city === c.city);
     const deliveryFee = feeObj ? feeObj.fee : 0;
-    return sum + deliveryFee * c.delivered;
+    return sum + deliveryFee * (c.delivered || 0);
   }, 0) ?? 0;
 
   const netProfitAllTime = totalSellerRevenueAllTime - totalServiceRevenueAllTime;
@@ -589,10 +632,8 @@ export default function Analysis() {
   const pendingRate = allOrdersCount > 0 ? (pendingCount / allOrdersCount) * 100 : 0;
 
   // ----------------- FIXED: service revenue fetch & usage (keeps API fallback) -----------------
-  // keep a small state for service revenue coming from the API endpoint and loading
   const [statsState, setStatsState] = useState<{ totalRevenue: number; loading: boolean }>({ totalRevenue: 0, loading: true });
 
-  // Fixed useEffect - simplified to always use API response
   useEffect(() => {
     let mounted = true;
 
@@ -622,7 +663,6 @@ export default function Analysis() {
 
         if (res.ok) {
           const data = await res.json();
-          // Use the API's totalRevenue directly
           const revenue = data?.totalRevenue ?? 0;
           if (mounted) setStatsState({ totalRevenue: revenue, loading: false });
         } else {
@@ -640,26 +680,62 @@ export default function Analysis() {
       mounted = false;
     };
   }, [dateFilter, customStart, customEnd]);
-  // ----------------- exact per-order-based calculations (replacement) -----------------
 
-  /* ---------- Replacement calculation block ---------- */
+  // ----------------- Helpers (must be declared before useMemo that uses them) -----------------
 
-  /** Safe numeric picker — provide likely field names used by various APIs
-   *  Add extra keys here if your API uses different names (e.g. seller_net_amount, city_selected_fee, etc.)
-   */
-  const pickNumber = (obj: any, keys: string[]) => {
-    if (!obj) return 0;
+  // safe parse that tolerates strings like "DH 1,000" or objects like { amount: "1,000" }
+  const parseNumberSafe = (value: any): number => {
+    if (value == null) return 0;
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const cleaned = value.replace(/[^\d.-]/g, "");
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    if (typeof value === "object") {
+      const candidateKeys = ["amount", "value", "amt", "amountValue", "price", "total"];
+      for (const key of candidateKeys) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+          const raw = (value as any)[key];
+          const n = parseNumberSafe(raw);
+          if (n !== 0) return n;
+        }
+      }
+    }
+
+    return 0;
+  };
+
+  // flexible picker: check multiple keys on an object, case-insensitive fallback
+  const pickNumberFromObj = (obj: Record<string, any> | null | undefined, keys: string[]): number => {
+    if (!obj || typeof obj !== "object") return 0;
     for (const k of keys) {
-      const v = obj[k];
-      if (v == null) continue;
-      const n = Number(v);
-      if (!Number.isNaN(n)) return n;
+      if (Object.prototype.hasOwnProperty.call(obj, k)) {
+        const n = parseNumberSafe((obj as any)[k]);
+        if (n !== 0) return n;
+      }
+      // case-insensitive key match
+      const found = Object.keys(obj).find((kk) => kk.toLowerCase() === k.toLowerCase());
+      if (found) {
+        const n = parseNumberSafe((obj as any)[found]);
+        if (n !== 0) return n;
+      }
     }
     return 0;
   };
 
+  // small wrapper to check one or more keys, used in older code
+  const pickNumber = (obj: any, keys: string[]) => {
+    return pickNumberFromObj(obj, keys);
+  };
+
   /** Helper: is order delivered (fuzzy match) */
-  const isDelivered = (o: Order) => /deliv|delivered/i.test(o.status ?? "");
+  const isDelivered = (o: Order) => /deliv|delivered|completed|success/i.test(o.status ?? "");
 
   /** Build city->fee map from metrics.cityFees (case-insensitive keys) */
   const cityFeesMap = useMemo(() => {
@@ -673,19 +749,25 @@ export default function Analysis() {
   }, [metrics?.cityFees]);
 
   /** 1) Seller revenue for current view
-   *   - If "all": use aggregated topSellers total as fallback (all-time)
-   *   - Else: prefer explicit seller amount fields on order, otherwise fallback to order.totalAmount
+   *   - Prefer per-order (filteredOrders), else fall back to orders list, else fallback to aggregated metric
    */
   const sellerRevenueFiltered = useMemo(() => {
-    if (dateFilter === "all") {
-      // prefer metrics sum if available (already defined earlier)
+    // source: prefer filteredOrders, then orders (client-side), then aggregated metric (server)
+    const source: Order[] =
+      filteredOrders && filteredOrders.length > 0
+        ? filteredOrders
+        : orders && orders.length > 0
+        ? orders
+        : [];
+
+    if (source.length === 0) {
       return totalSellerRevenueAllTime || 0;
     }
-    if (!filteredOrders || filteredOrders.length === 0) return 0;
-    return filteredOrders.reduce((sum, o) => {
-      if (!isDelivered(o)) return sum; // only count delivered orders (same logic you used)
-      // common seller-side numeric fields
-      const sellerAmt = pickNumber(o as any, [
+
+    return source.reduce((sum: number, o: Order) => {
+      if (!isDelivered(o)) return sum;
+
+      const sellerAmt = pickNumberFromObj(o as any, [
         "sellerAmount",
         "seller_amount",
         "sellerEarnings",
@@ -694,12 +776,19 @@ export default function Analysis() {
         "net_amount",
         "netAmount",
         "sellerTotal",
+        "sellerRevenue",
+        // extras you might need to add if API uses them:
+        "seller_revenue",
+        "seller_price",
+        "seller_payout",
+        "orderAmount",
+        "order_total"
       ]);
-      if (sellerAmt) return sum + sellerAmt;
-      // fallback: order totalAmount
-      return sum + (Number((o as any).totalAmount) || 0);
+
+      const fallbackTotal = parseNumberSafe(o.totalAmount);
+      return sum + (sellerAmt || fallbackTotal);
     }, 0);
-  }, [filteredOrders, dateFilter, totalSellerRevenueAllTime]);
+  }, [filteredOrders, orders, dateFilter, totalSellerRevenueAllTime]);
 
   /** 2) Service revenue (city-selected fees) for current view
    *   - Prefer explicit per-order fee fields (cityFee/serviceFee/fees array)
@@ -707,21 +796,25 @@ export default function Analysis() {
    *   - If no per-order data exists for the filtered range, fallback to API statsState.totalRevenue
    */
   const serviceRevenueFiltered = useMemo(() => {
-    // all-time -> prefer aggregated from metrics or API
-    if (dateFilter === "all") {
+    // use the same source selection strategy as sellerRevenueFiltered
+    const source: Order[] =
+      filteredOrders && filteredOrders.length > 0
+        ? filteredOrders
+        : orders && orders.length > 0
+        ? orders
+        : [];
+
+    if (source.length === 0) {
       return totalServiceRevenueAllTime || statsState?.totalRevenue || 0;
     }
-
-    if (!filteredOrders || filteredOrders.length === 0) return 0;
 
     let total = 0;
     let hadAnyPerOrderFee = false;
 
-    for (const o of filteredOrders) {
+    for (const o of source) {
       if (!isDelivered(o)) continue;
 
-      // 1) try direct per-order numeric fields
-      const perOrderFee = pickNumber(o as any, [
+      const perOrderFee = pickNumberFromObj(o as any, [
         "cityFee",
         "city_fee",
         "serviceFee",
@@ -729,83 +822,208 @@ export default function Analysis() {
         "service_charge",
         "deliveryFee",
         "delivery_fee",
+        "delivery_charge",
+        "shippingFee",
+        "shipping_fee",
+        // add more keys your API might use
       ]);
+
       if (perOrderFee) {
         total += perOrderFee;
         hadAnyPerOrderFee = true;
         continue;
       }
 
-      // 2) try fees array (common structure: fees: [{type,name,amount}])
-      const feesArr = (o as any).fees;
-      if (Array.isArray(feesArr) && feesArr.length > 0) {
+      const feesArr = Array.isArray((o as any).fees) ? (o as any).fees : null;
+      if (feesArr && feesArr.length > 0) {
         const found = feesArr.find((f: any) => {
           const name = String(f?.name ?? f?.type ?? "").toLowerCase();
-          return name.includes("city") || name.includes("service") || name.includes("delivery") || name.includes("fee");
+          return (
+            name.includes("city") ||
+            name.includes("service") ||
+            name.includes("delivery") ||
+            name.includes("fee") ||
+            name.includes("shipping")
+          );
         });
-        if (found && (found.amount || found.value || found.amt)) {
-          total += Number(found.amount ?? found.value ?? found.amt ?? 0);
+        if (found) {
+          total += parseNumberSafe(found.amount ?? found.value ?? found.amt ?? found.price);
           hadAnyPerOrderFee = true;
           continue;
         }
       }
 
-      // 3) fallback: if order has a city, map it via cityFeesMap
+      // fallback: map by city using cityFeesMap
       const cityCandidate =
-        (o as any).city ||
-        (o as any).deliveryCity ||
-        (o as any).shippingCity ||
-        (o as any).billingCity ||
-        "";
+  (o as any).customer?.city ||
+  (o as any).city ||
+  (o as any).deliveryCity ||
+  (o as any).shippingCity ||
+  (o as any).billingCity ||
+  "";
+
       const cityKey = String(cityCandidate).trim().toLowerCase();
       if (cityKey && cityFeesMap[cityKey] !== undefined) {
         total += Number(cityFeesMap[cityKey] || 0);
-        // don't mark hadAnyPerOrderFee true here — this is derived from metrics map
+        // not marking hadAnyPerOrderFee true because this is derived from metrics
         continue;
       }
 
-      // if we reach here there was no explicit fee & no city mapping; skip (can't infer)
+      // else we couldn't infer a fee for this order
     }
 
-    // If we calculated nothing from per-order sources but API returned a value for this range,
-    // it's better to fallback to the API (statsState) than show zero.
     if (!hadAnyPerOrderFee && (statsState?.totalRevenue || 0) > 0) {
-      // The API's totalRevenue should be for the same date range (your fetch uses buildParams)
       return statsState.totalRevenue;
     }
 
     return total;
-  }, [filteredOrders, dateFilter, cityFeesMap, statsState?.totalRevenue, totalServiceRevenueAllTime]);
+  }, [filteredOrders, orders, dateFilter, cityFeesMap, statsState?.totalRevenue, totalServiceRevenueAllTime]);
 
   /** 3) Commission & delivery charges sums (if present) — to make net more accurate */
   const commissionSumFiltered = useMemo(() => {
-    if (!filteredOrders || filteredOrders.length === 0) return 0;
-    return filteredOrders.reduce((s, o) => {
+    const source: Order[] =
+      filteredOrders && filteredOrders.length > 0
+        ? filteredOrders
+        : orders && orders.length > 0
+        ? orders
+        : [];
+
+    if (source.length === 0) return 0;
+
+    return source.reduce((s: number, o: Order) => {
       if (!isDelivered(o)) return s;
-      return s + pickNumber(o as any, ["commission", "platformFee", "platform_fee", "adminFee", "fee"]);
+      return s + pickNumberFromObj(o as any, ["commission", "platformFee", "platform_fee", "adminFee", "fee", "commissionAmount"]);
     }, 0);
-  }, [filteredOrders]);
+  }, [filteredOrders, orders]);
 
   const deliveryChargesSumFiltered = useMemo(() => {
-    if (!filteredOrders || filteredOrders.length === 0) return 0;
-    return filteredOrders.reduce((s, o) => {
+    const source: Order[] =
+      filteredOrders && filteredOrders.length > 0
+        ? filteredOrders
+        : orders && orders.length > 0
+        ? orders
+        : [];
+
+    if (source.length === 0) return 0;
+
+    return source.reduce((s: number, o: Order) => {
       if (!isDelivered(o)) return s;
-      return s + pickNumber(o as any, ["deliveryFee", "shippingFee", "shipmentFee", "delivery_charge", "shipping_charge"]);
+      return s + pickNumberFromObj(o as any, [
+        "deliveryFee",
+        "shippingFee",
+        "shipmentFee",
+        "delivery_charge",
+        "shipping_charge",
+      ]);
     }, 0);
-  }, [filteredOrders]);
+  }, [filteredOrders, orders]);
 
   /** 4) Net profit for filtered view:
-   *    seller revenue minus service revenue minus commission minus delivery charges
-   *    (this can be extended with COGS if order.item cost is available)
+   *    seller revenue minus delivery/service revenue
+   *    (we follow your formula Net = SellerRevenue - DeliveryFees)
    */
   const netProfitFiltered = useMemo(() => {
-    const base = sellerRevenueFiltered - serviceRevenueFiltered;
-    const minusCommission = base - (commissionSumFiltered || 0);
-    const minusDelivery = minusCommission - (deliveryChargesSumFiltered || 0);
-    return minusDelivery;
-  }, [sellerRevenueFiltered, serviceRevenueFiltered, commissionSumFiltered, deliveryChargesSumFiltered]);
+    // Use same source strategy
+    const source: Order[] =
+      filteredOrders && filteredOrders.length > 0
+        ? filteredOrders
+        : orders && orders.length > 0
+        ? orders
+        : [];
 
-  /* ---------- End replacement block ---------- */
+    if (source.length === 0) {
+      const fallbackSeller = totalSellerRevenueAllTime || 0;
+      const fallbackService = totalServiceRevenueAllTime || statsState?.totalRevenue || 0;
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.debug("netProfit fallback debug:", { fallbackSeller, fallbackService });
+      }
+      return fallbackSeller - fallbackService;
+    }
+
+    let sellerRevenue = 0;
+    let deliveryFees = 0;
+
+    for (const o of source) {
+      if (!isDelivered(o)) continue;
+
+      const sellerAmt = pickNumberFromObj(o as any, [
+        "sellerAmount",
+        "seller_amount",
+        "sellerEarnings",
+        "sellerEarningsAmount",
+        "seller_net",
+        "net_amount",
+        "netAmount",
+        "sellerTotal",
+        "sellerRevenue",
+        "seller_revenue",
+        "seller_price",
+        "seller_payout",
+        "orderAmount",
+        "order_total",
+      ]);
+      sellerRevenue += sellerAmt || parseNumberSafe(o.totalAmount);
+
+      const perOrderDelivery = pickNumberFromObj(o as any, [
+        "cityFee",
+        "city_fee",
+        "serviceFee",
+        "service_fee",
+        "service_charge",
+        "deliveryFee",
+        "delivery_fee",
+        "delivery_charge",
+        "shippingFee",
+        "shipping_fee",
+      ]);
+      if (perOrderDelivery) {
+        deliveryFees += perOrderDelivery;
+      } else {
+        const feesArr = Array.isArray((o as any).fees) ? (o as any).fees : null;
+        if (feesArr && feesArr.length > 0) {
+          const found = feesArr.find((f: any) => {
+            const name = String(f?.name ?? f?.type ?? "").toLowerCase();
+            return (
+              name.includes("city") ||
+              name.includes("service") ||
+              name.includes("delivery") ||
+              name.includes("fee") ||
+              name.includes("shipping")
+            );
+          });
+          if (found) {
+            deliveryFees += parseNumberSafe(found.amount ?? found.value ?? found.amt ?? found.price);
+          }
+        } else {
+        const cityCandidate =
+  (o as any).customer?.city ||
+  (o as any).city ||
+  (o as any).deliveryCity ||
+  (o as any).shippingCity ||
+  (o as any).billingCity ||
+  "";
+
+          const cityKey = String(cityCandidate).trim().toLowerCase();
+          if (cityKey && cityFeesMap[cityKey] !== undefined) {
+            deliveryFees += Number(cityFeesMap[cityKey] || 0);
+          }
+        }
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.debug("netProfit debug:", {
+        sellerRevenue,
+        deliveryFees,
+        ordersCount: source.length,
+      });
+    }
+
+    // follow Net = SellerRevenue - DeliveryFees (per your formula)
+    return sellerRevenue - deliveryFees;
+  }, [filteredOrders, orders, totalSellerRevenueAllTime, totalServiceRevenueAllTime, statsState?.totalRevenue, cityFeesMap]);
 
   // ----------------- Dashboard cards now use filtered calculations -----------------
   const formatDH = (amount: number) =>
@@ -813,7 +1031,6 @@ export default function Analysis() {
 
   // ----------------- Return / Delivery rates for filteredOrders -----------------
   const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
-    // if no filtered orders, fall back to the all-time rates computed from metrics
     if (!filteredOrders || filteredOrders.length === 0) {
       return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
     }
@@ -908,9 +1125,9 @@ export default function Analysis() {
   const RECENT_COUNT = 10; // change to 3, 5, etc.
   const recentOrders = useMemo(() => {
     if (!orders || orders.length === 0) return [];
-    // ensure newest first — if your server already returns newest-first you can remove the sort
+    const getTime = (s?: string) => (s ? new Date(s).getTime() : 0);
     const sorted = [...orders].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => getTime(b.createdAt) - getTime(a.createdAt)
     );
     return sorted.slice(0, RECENT_COUNT);
   }, [orders]);

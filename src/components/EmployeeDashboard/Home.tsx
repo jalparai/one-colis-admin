@@ -122,7 +122,7 @@ const [employeePermissions, setEmployeePermissions] = useState({
       header: "Total Amount",
       accessorKey: "totalAmount",
       cell: ({ row }) => (
-        <div>${row.original.totalAmount.toLocaleString()}</div>
+        <div>{row.original.totalAmount.toLocaleString()} DH</div>
       ),
     },
     {
@@ -270,6 +270,86 @@ useEffect(() => {
   fetchAgents();
 }, []);
 
+
+
+
+  // ----------------- Date Filter Logic -----------------
+  const now = new Date();
+const filteredOrders = React.useMemo(() => {
+  if (!orders || orders.length === 0) return [];
+
+  const now = new Date();
+
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+  // Monday-based week start
+  const startOfWeekMonday = (d: Date) => {
+    const copy = new Date(d);
+    const dayIndex = (copy.getDay() + 6) % 7; // Monday = 0
+    copy.setDate(copy.getDate() - dayIndex);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  };
+
+  return orders.filter((order) => {
+    if (!order.createdAt) return false;
+    const created = new Date(order.createdAt);
+
+    // custom handling for each filter type
+    switch (dateFilter) {
+      case "today": {
+        const s = startOfDay(now);
+        const e = endOfDay(now);
+        return created >= s && created <= e;
+      }
+
+      case "yesterday": {
+        const y = new Date(now);
+        y.setDate(now.getDate() - 1);
+        const s = startOfDay(y);
+        const e = endOfDay(y);
+        return created >= s && created <= e;
+      }
+
+      case "thisWeek": {
+        const weekStart = startOfWeekMonday(now);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        return created >= weekStart && created <= weekEnd;
+      }
+
+      case "lastWeek": {
+        const thisWeekStart = startOfWeekMonday(now);
+        const lastWeekStart = new Date(thisWeekStart);
+        lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+        const lastWeekEnd = new Date(lastWeekStart);
+        lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+        lastWeekEnd.setHours(23, 59, 59, 999);
+        return created >= lastWeekStart && created <= lastWeekEnd;
+      }
+
+      case "thisMonth": {
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        return created >= startMonth && created <= endMonth;
+      }
+
+      case "lastMonth": {
+        const startLast = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const endLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        return created >= startLast && created <= endLast;
+      }
+
+      default:
+        return true;
+    }
+  });
+}, [orders, dateFilter]);
+
+  // ----------------- Calculations -----------------
   // ----------------- Conditional UI -----------------
   if (loading)
     return (
@@ -277,44 +357,6 @@ useEffect(() => {
         Loading dashboard...
       </div>
     );
-
-
-
-  // ----------------- Date Filter Logic -----------------
-  const now = new Date();
-  const filteredOrders = orders.filter((order) => {
-    const created = new Date(order.createdAt);
-    const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-    const sameWeek = (d1: Date, d2: Date) => {
-      const week1 = Math.ceil(((+d1 - +new Date(d1.getFullYear(), 0, 1)) / 86400000 + new Date(d1.getFullYear(), 0, 1).getDay() + 1) / 7);
-      const week2 = Math.ceil(((+d2 - +new Date(d2.getFullYear(), 0, 1)) / 86400000 + new Date(d2.getFullYear(), 0, 1).getDay() + 1) / 7);
-      return week1 === week2 && d1.getFullYear() === d2.getFullYear();
-    };
-
-    switch (dateFilter) {
-      case "today":
-        return created.toDateString() === now.toDateString();
-      case "yesterday":
-        return diffDays === 1;
-      case "thisWeek":
-        return sameWeek(created, now);
-      case "lastWeek": {
-        const lastWeek = new Date(now);
-        lastWeek.setDate(now.getDate() - 7);
-        return sameWeek(created, lastWeek);
-      }
-      case "thisMonth":
-        return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-      case "lastMonth":
-        const prevMonth = new Date(now);
-        prevMonth.setMonth(now.getMonth() - 1);
-        return created.getMonth() === prevMonth.getMonth() && created.getFullYear() === prevMonth.getFullYear();
-      default:
-        return true;
-    }
-  });
-
-  // ----------------- Calculations -----------------
 
  
 
