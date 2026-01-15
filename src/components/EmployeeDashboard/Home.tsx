@@ -304,13 +304,13 @@ const filteredOrders = React.useMemo(() => {
         return created >= s && created <= e;
       }
 
-      case "yesterday": {
-        const y = new Date(now);
-        y.setDate(now.getDate() - 1);
-        const s = startOfDay(y);
-        const e = endOfDay(y);
-        return created >= s && created <= e;
-      }
+        case "yesterday": {
+          const y = new Date(now);
+          y.setDate(now.getDate() - 1);
+          const s = startOfDay(y);
+          const e = endOfDay(y);
+          return created >= s && created <= e;
+        }
 
       case "thisWeek": {
         const weekStart = startOfWeekMonday(now);

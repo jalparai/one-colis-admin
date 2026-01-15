@@ -412,6 +412,8 @@ export const getColumns = (
             setLoading(false);
           }
         };
+// Edit is allowed ONLY for "ready"
+const canEdit = order.status === "ready";
 
         return (
           <>
@@ -428,15 +430,17 @@ export const getColumns = (
 
                 {/* Edit Order - now disabled for ready, collected or shipped statuses */}
                 <DropdownMenuItem
-                  disabled={editDisabled}
-                  onClick={() => {
-                    if (editDisabled) return;
-                    setSelectedOrder(order);
-                    setEditOpen(true);
-                  }}
-                >
-                  Edit Order
-                </DropdownMenuItem>
+  disabled={!canEdit}
+  className={!canEdit ? "text-gray-400 cursor-not-allowed" : ""}
+  onClick={() => {
+    if (!canEdit) return;
+    setSelectedOrder(order);
+    setEditOpen(true);
+  }}
+>
+  Edit Order
+</DropdownMenuItem>
+
 
                 {isReady && (
                   <DropdownMenuItem onClick={handlePrintLabel}>Print Label</DropdownMenuItem>
@@ -1224,7 +1228,7 @@ async function downloadFile(url: string, fallbackName: string) {
     <Button
   onClick={() =>
     downloadFile(
-      "https://drive.google.com/uc?export=download&id=15daw6bKF1wRbgKnWVPqi_UHweG1LSgOt",
+      "https://docs.google.com/spreadsheets/d/1lN34l-Bdrr4fP1Tnn1-D1Z3GkJJ8dR-jxcqwnWHoQNE/template/preview",
       "BOS-Template.docx"
     )
   }
@@ -1235,7 +1239,7 @@ async function downloadFile(url: string, fallbackName: string) {
 <Button
   onClick={() =>
     downloadFile(
-      "https://drive.google.com/uc?export=download&id=1wXAgKlzCc9Jrk53F2sSeW0ErlX4PXx5M&confirm=t",
+      "https://docs.google.com/spreadsheets/d/1BB8slyN2gyisJt5MDizhNv8KoIlKWl8NRbE9gp7pjEc/template/preview",
       "ReadyOrderExample.xlsx"
     )
   }

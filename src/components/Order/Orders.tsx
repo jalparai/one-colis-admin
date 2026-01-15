@@ -382,7 +382,7 @@ export const getOrderColumns = (
         try {
           setPickupLoading(true);
           const res = await axios.post(`https://cod-ecommerce-two.vercel.app/api/seller/orders/${order.id}/request-pickup`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-          // alert(res.data.message || "Pickup requested successfully");
+          alert(res.data.message || "Pickup requested successfully");
           await onStatusUpdate(order.id, "pickup_request");
           onUpdated?.();
         } catch (err: any) {
@@ -391,14 +391,7 @@ export const getOrderColumns = (
           setPickupLoading(false);
         }
       };
-function unwrapOrder(maybe: unknown) {
-  if (!maybe) return null;
-  // if it's an API wrapper { data: order } -> return data
-  if (typeof maybe === "object" && maybe !== null && "data" in (maybe as any)) {
-    return (maybe as any).data;
-  }
-  return maybe;
-}
+
       return (
         <>
           <DropdownMenu>
@@ -451,17 +444,16 @@ function unwrapOrder(maybe: unknown) {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-<EditOrder
-  order={unwrapOrder(selectedOrder)}
-  open={editOpen}
-  onOpenChange={(v) => setEditOpen(v)}
-  onOrderUpdated={() => {
-    onUpdated?.();
-    table.options.meta?.refresh?.();
-  }}
-/>
 
-
+          <EditOrder
+            order={selectedOrder}
+            open={editOpen}
+            onOpenChange={(v) => setEditOpen(v)}
+            onOrderUpdated={() => {
+              onUpdated?.();
+              table.options.meta?.refresh?.();
+            }}
+          />
 
           {/* Assign Dialog */}
           <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
@@ -585,129 +577,58 @@ export function OrdersTable() {
   const [deleteBulkOpen, setDeleteBulkOpen] = React.useState(false);
   const [deleteBulkLoading, setDeleteBulkLoading] = React.useState(false);
 
-// ---------- Fetch helpers (replace existing fetchOrders and initial effect) ----------
-const fetchOrders = React.useCallback(async () => {
-  setLoading(true);
-  try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const raw = res.data?.data || [];
-    const normalized = raw.map((o: any) => {
-      const itemsRaw = Array.isArray(o.items) ? o.items : [];
-      const items = itemsRaw.map((it: any) => {
-        const productId = it.productId ?? it.product?._id ?? it._id ?? null;
-        const productName = it.productName ?? it.product?.name ?? it.name ?? "";
-        const quantity = Number(it.quantity ?? it.qty ?? 0);
-        const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
-        const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
-        return { productId, productName, quantity, unitPrice, total };
+  const fetchOrders = React.useCallback(async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders", {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      const customer =
-        o.customer && typeof o.customer === "object"
-          ? {
-              name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
-              phone: o.customer.phone ?? o.customer.mobile ?? undefined,
-              address: o.customer.address ?? o.customer.addr ?? undefined,
-              city: o.customer.city ?? undefined,
-              postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
-            }
-          : undefined;
+      const raw = res.data?.data || [];
+      const normalized = raw.map((o: any) => {
+        const itemsRaw = Array.isArray(o.items) ? o.items : [];
+        const items = itemsRaw.map((it: any) => {
+          const productId = it.productId ?? it.product?._id ?? it._id ?? null;
+          const productName = it.productName ?? it.product?.name ?? it.name ?? "";
+          const quantity = Number(it.quantity ?? it.qty ?? 0);
+          const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
+          const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
+          return { productId, productName, quantity, unitPrice, total };
+        });
 
-      return {
-        id: o.id ?? o._id ?? String(Math.random()),
-        orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : "") ?? "",
-        seller: typeof o.seller === "object" ? o.seller.name ?? o.seller.company ?? o.seller._id : o.seller ?? o.sellerName ?? "",
-        sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
-        items,
-        customer,
-        itemsTotal: o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-        totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-        status: o.status ?? "",
-        notes: o.notes ?? "",
-        createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
-      } as Order;
-    });
+        const customer =
+          o.customer && typeof o.customer === "object"
+            ? {
+                name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
+                phone: o.customer.phone ?? o.customer.mobile ?? undefined,
+                address: o.customer.address ?? o.customer.addr ?? undefined,
+                city: o.customer.city ?? undefined,
+                postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
+              }
+            : undefined;
 
-    setOrders(normalized);
-  } catch (err) {
-    console.error("Error fetching orders:", err);
-    toast.error("Failed to load orders");
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
-const fetchLastWeekOrders = React.useCallback(async () => {
-  setLoading(true);
-  try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    // <-- the endpoint you provided
-    const res = await axios.get("https://cod-ecommerce-two.vercel.app/api/admin/orders/last-week", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    const raw = res.data?.data || [];
-    // reuse same normalization logic so UI shape stays consistent
-    const normalized = raw.map((o: any) => {
-      const itemsRaw = Array.isArray(o.items) ? o.items : [];
-      const items = itemsRaw.map((it: any) => {
-        const productId = it.productId ?? it.product?._id ?? it._id ?? null;
-        const productName = it.productName ?? it.product?.name ?? it.name ?? "";
-        const quantity = Number(it.quantity ?? it.qty ?? 0);
-        const unitPrice = Number(it.unitPrice ?? it.price ?? 0);
-        const total = Number(it.total ?? it.totalPrice ?? unitPrice * quantity);
-        return { productId, productName, quantity, unitPrice, total };
+        return {
+          id: o.id ?? o._id ?? String(Math.random()),
+          orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : "") ?? "",
+          seller: typeof o.seller === "object" ? o.seller.name ?? o.seller.company ?? o.seller._id : o.seller ?? o.sellerName ?? "",
+          sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
+          items,
+          customer,
+          itemsTotal: o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
+          status: o.status ?? "",
+          notes: o.notes ?? "",
+          createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
+        } as Order;
       });
 
-      const customer =
-        o.customer && typeof o.customer === "object"
-          ? {
-              name: o.customer.name ?? o.customer.customerName ?? o.customer.fullName ?? undefined,
-              phone: o.customer.phone ?? o.customer.mobile ?? undefined,
-              address: o.customer.address ?? o.customer.addr ?? undefined,
-              city: o.customer.city ?? undefined,
-              postalCode: o.customer.postalCode ?? o.customer.postal ?? undefined,
-            }
-          : undefined;
-
-      return {
-        id: o.id ?? o._id ?? String(Math.random()),
-        orderId: o.orderId ?? o.orderID ?? o.order_number ?? o.orderNumber ?? (o._id ? String(o._id) : "") ?? "",
-        seller: typeof o.seller === "object" ? o.seller.name ?? o.seller.company ?? o.seller._id : o.seller ?? o.sellerName ?? "",
-        sellerEmail: o.sellerEmail ?? o.email ?? (o.seller && typeof o.seller === "object" ? o.seller.email : undefined) ?? "",
-        items,
-        customer,
-        itemsTotal: o.itemsTotal ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-        totalAmount: o.totalAmount ?? o.total ?? items.reduce((s: number, it: any) => s + (it.total ?? it.unitPrice * it.quantity), 0),
-        status: o.status ?? "",
-        notes: o.notes ?? "",
-        createdAt: o.createdAt ?? o.orderDate ?? new Date().toISOString(),
-      } as Order;
-    });
-
-    setOrders(normalized);
-  } catch (err) {
-    console.error("Error fetching last-week orders:", err);
-    toast.error("Failed to load last-week orders");
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
-// call the appropriate fetch based on the `dateFilter`
-// this replaces your one-time initial fetch effect so switching the filter will re-fetch from the server
-React.useEffect(() => {
-  if (dateFilter === "lastWeek") {
-    fetchLastWeekOrders();
-  } else {
-    // for other filters we still use the normal /api/admin/orders endpoint
-    fetchOrders();
-  }
-}, [dateFilter, fetchOrders, fetchLastWeekOrders]);
+      setOrders(normalized);
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     fetchOrders();
@@ -763,7 +684,7 @@ React.useEffect(() => {
         toast.success("Order status updated");
         await fetchOrders();
       } else {
-        toast.success("Status updated");
+        toast.error("Status update failed");
         if (prev) setOrders((p) => p.map((o) => (o.id === id ? prev : o)));
       }
     } catch (err) {
@@ -899,14 +820,6 @@ React.useEffect(() => {
 
     return orders.filter((order) => {
       const createdAt = new Date(order.createdAt);
-      const startOfWeekMonday = (date: Date) => {
-  const d = new Date(date);
-  const day = (d.getDay() + 6) % 7; // Monday = 0
-  d.setDate(d.getDate() - day);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
       switch (dateFilter) {
         case "today":
           return createdAt >= startOfDay(now) && createdAt <= endOfDay(now);
@@ -915,28 +828,25 @@ React.useEffect(() => {
           y.setDate(now.getDate() - 1);
           return createdAt >= startOfDay(y) && createdAt <= endOfDay(y);
         }
-    case "thisWeek": {
-  const weekStart = startOfWeekMonday(now);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  return createdAt >= weekStart && createdAt <= weekEnd;
-}
-
-      case "lastWeek": {
-  const thisWeekStart = startOfWeekMonday(now);
-
-  const lastWeekStart = new Date(thisWeekStart);
-  lastWeekStart.setDate(thisWeekStart.getDate() - 7);
-
-  const lastWeekEnd = new Date(lastWeekStart);
-  lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-  lastWeekEnd.setHours(23, 59, 59, 999);
-
-  return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
-}
-
+        case "thisWeek": {
+          const day = now.getDay();
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - day);
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= weekStart && createdAt <= weekEnd;
+        }
+        case "lastWeek": {
+          const lastWeekStart = new Date(now);
+          lastWeekStart.setDate(now.getDate() - now.getDay() - 7);
+          lastWeekStart.setHours(0, 0, 0, 0);
+          const lastWeekEnd = new Date(lastWeekStart);
+          lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
+          lastWeekEnd.setHours(23, 59, 59, 999);
+          return createdAt >= lastWeekStart && createdAt <= lastWeekEnd;
+        }
         case "thisMonth": {
           const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
           const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -952,7 +862,6 @@ React.useEffect(() => {
       }
     });
   }, [orders, dateFilter]);
-const now = new Date();
 
   // single label download
   const handleDownloadLabel = async (orderId: string) => {
@@ -1114,27 +1023,25 @@ const now = new Date();
     });
   }, [filteredOrders, rangeFilter]);
 
-const finalOrders = React.useMemo(() => {
-  if (!globalFilter.trim()) return timeFilteredOrders;
-
-  const q = globalFilter.toLowerCase();
-
-  return timeFilteredOrders.filter((o) => {
-    return (
-      (o.orderId ?? "").toLowerCase().includes(q) ||   // ✅ ORDER ID
-      (o.customer?.city ?? "").toLowerCase().includes(q) ||
-      (o.customer?.name ?? "").toLowerCase().includes(q) ||
-      (o.customer?.phone ?? "").toLowerCase().includes(q) ||
-      (o.seller ?? "").toLowerCase().includes(q) ||
-      (o.sellerEmail ?? "").toLowerCase().includes(q) ||
-      (o.status ?? "").toLowerCase().includes(q) ||
-      (o.notes ?? "").toLowerCase().includes(q) ||
-      o.items.some((it) =>
-        it.productName.toLowerCase().includes(q)
-      )
-    );
-  });
-}, [timeFilteredOrders, globalFilter]);
+  const finalOrders = React.useMemo(() => {
+    if (cityFilter && cityFilter.trim()) {
+      const q = cityFilter.toLowerCase();
+      return timeFilteredOrders.filter((o) => (o.customer?.city ?? "").toLowerCase().includes(q));
+    }
+    if (!globalFilter.trim()) return timeFilteredOrders;
+    const q = globalFilter.toLowerCase();
+    return timeFilteredOrders.filter((o) => {
+      return (
+        (o.seller ?? "").toLowerCase().includes(q) ||
+        (o.sellerEmail ?? "").toLowerCase().includes(q) ||
+        (o.status ?? "").toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        (o.customer?.phone ?? "").toLowerCase().includes(q) ||
+        o.items.some((it) => it.productName.toLowerCase().includes(q) || String(it.quantity).includes(q) || String(it.unitPrice).includes(q))
+      );
+    });
+  }, [timeFilteredOrders, globalFilter, cityFilter]);
 
   const table = useReactTable({
     data: finalOrders,
@@ -1153,7 +1060,7 @@ const finalOrders = React.useMemo(() => {
     initialState: { pagination },
   });
 
-  const exportEndpoints = [{ label: "Export Orders", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" }];
+  const exportEndpoints = [{ label: "Export Orders", url: "http://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" }];
 
   const handleExport = async (url: string): Promise<void> => {
     try {
@@ -1181,14 +1088,8 @@ const finalOrders = React.useMemo(() => {
   return (
     <div className="w-full">
       {/* Top bar */}
-<Input
-  placeholder="Search Order ID, City, Customer..."
-  value={globalFilter}
-  onChange={(e) => setGlobalFilter(e.target.value)}
-  className="w-[260px]"
-/>
-
       <div className="flex justify-between items-center py-4 overflow-x-auto scrollbar-hide gap-4">
+        <Input placeholder="Filter by city..." value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="max-w-sm" />
 
         <div className="flex items-center gap-2">
           <label>From:</label>
@@ -1223,8 +1124,7 @@ const finalOrders = React.useMemo(() => {
           </Button>
 
           <ImportReadyOrdersButton endpoint="https://cod-ecommerce-two.vercel.app/api/admin/ready-order/bulk-upload" label="Import Ready Orders" onSuccess={fetchOrders} />
-          <Button onClick={() => window.open("https://docs.google.com/spreadsheets/d/10vbpfm8SaXHwVXmLo0w8gLqKo9MLmEUHrISwLGAQEcY/edit?usp=sharing", "_blank")}>View Ready Excel Example</Button>
-          <Button onClick={() => window.open("https://docs.google.com/spreadsheets/d/1InJ5WiT7i9FXmUaNkMJ4OANQ8Y6PUD8w5csaqLhfW8w/edit?usp=sharing", "_blank")}>View Bos Excel Example</Button>
+          <Button onClick={() => window.open("https://1drv.ms/x/c/3c77c4662797e2f6/IQBZ16V_2su7R62uupIfg-qcAf_H1M__8UKwBeGdcXci2k8?e=AzlxPi", "_blank")}>View Excal Example</Button>
 
           <AddReadyOrder onOrderAdded={fetchOrders} />
           <AddOrder onOrderAdded={fetchOrders} />

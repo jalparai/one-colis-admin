@@ -112,6 +112,14 @@ export default function CollectedVsPendingSingle() {
 
   const [serverMessage, setServerMessage] = useState<string | null>(null);
 
+  // NEW: store aggregated metrics when API returns aggregated-only
+  const [aggregatedMetrics, setAggregatedMetrics] = useState<null | {
+    totalOrders: number;
+    collected: { count: number; percentage: string };
+    pending: { count: number; percentage: string };
+    ratio: { collectedToPending: string };
+  }>(null);
+
   // Normalize an order list into our shape
   const normalizeOrders = (arr: any[]): RawOrder[] =>
     arr.map((o: any) => ({
@@ -135,8 +143,14 @@ export default function CollectedVsPendingSingle() {
     return null;
   };
 
-  // Fetch main endpoint; if it returns aggregated metrics only we attempt to fetch raw orders
-  const fetchAllOrders = useCallback(async (opts?: { fromIso?: string | null; toIso?: string | null }) => {
+  /**
+   * fetchAllOrders(opts)
+   * opts:
+   *   - fromIso, toIso : optional date filters
+   *   - preferAggregatedOnly (boolean) : when true (used for preset === 'all') we WILL use aggregated metrics returned
+   *                                       by the main endpoint and SKIP the fallback to /api/admin/orders.
+   */
+  const fetchAllOrders = useCallback(async (opts?: { fromIso?: string | null; toIso?: string | null; preferAggregatedOnly?: boolean }) => {
     setLoadingOrders(true);
     setServerMessage(null);
 
@@ -162,15 +176,44 @@ export default function CollectedVsPendingSingle() {
 
       const orders = tryExtractOrders(payload);
       if (orders && orders.length) {
+        // raw orders returned directly -> use them
         setAllOrders(orders);
+        setAggregatedMetrics(null); // raw rows supersede aggregated metrics
         setServerMessage(top?.message ?? null);
         return;
       }
 
-      // no raw orders; try fallback to /api/admin/orders to get the rows
+      // If payload looks like aggregated metrics
       if (payload && (payload.totalOrders || payload.collected || payload.pending)) {
-        setServerMessage(top?.message ?? "Server returned aggregated metrics only. Trying raw orders endpoint...");
-        // try fallback
+        // parse and store aggregated metrics
+        try {
+          const totalOrders = Number(payload.totalOrders ?? 0);
+          const collected = payload.collected ?? { count: 0, percentage: "0.00" };
+          const pending = payload.pending ?? { count: 0, percentage: "0.00" };
+          const ratio = payload.ratio ?? { collectedToPending: "0" };
+
+          setAggregatedMetrics({
+            totalOrders: Number(totalOrders),
+            collected: { count: Number(collected.count ?? 0), percentage: String(collected.percentage ?? "0.00") },
+            pending: { count: Number(pending.count ?? 0), percentage: String(pending.percentage ?? "0.00") },
+            ratio: { collectedToPending: String(ratio.collectedToPending ?? "0") },
+          });
+        } catch (ex) {
+          console.warn("[fetchAllOrders] failed to parse aggregated payload", ex);
+          setAggregatedMetrics(null);
+        }
+
+        setServerMessage(top?.message ?? "Server returned aggregated metrics only.");
+
+        // IMPORTANT: when caller asked to prefer aggregated-only (used for preset === 'all'),
+        // skip the fallback and trust the aggregated numbers from the API.
+        if (opts?.preferAggregatedOnly) {
+          setAllOrders([]); // ensure raw list is empty so UI uses aggregatedMetrics
+          setLoadingOrders(false);
+          return;
+        }
+
+        // Otherwise (not preferAggregatedOnly) try the fallback to fetch raw rows (for date filters)
         const fallbackUrl = params.toString()
           ? `https://cod-ecommerce-two.vercel.app/api/admin/orders?${params.toString()}`
           : `https://cod-ecommerce-two.vercel.app/api/admin/orders`;
@@ -204,15 +247,17 @@ export default function CollectedVsPendingSingle() {
       // unrecognized
       console.warn("Unexpected payload shape:", payload);
       setAllOrders([]);
+      setAggregatedMetrics(null);
       setServerMessage("Server returned unexpected data shape. See console.");
     } catch (err) {
       console.error("Failed to fetch orders:", err);
       setAllOrders([]);
+      setAggregatedMetrics(null);
       setServerMessage("Network or server error. See console.");
     } finally {
       setLoadingOrders(false);
     }
-  }, []);
+  }, []); // stable: does not reference preset directly; we pass preferAggregatedOnly from caller
 
   // initial fetch and re-fetch when preset/from/to change
   useEffect(() => {
@@ -220,7 +265,10 @@ export default function CollectedVsPendingSingle() {
     const end = parseDateEnd(toDate);
     const fromIso = start ? start.toISOString() : null;
     const toIso = end ? end.toISOString() : null;
-    fetchAllOrders({ fromIso, toIso });
+
+    // prefer aggregated only when preset === 'all'
+    const preferAggregatedOnly = preset === "all";
+    fetchAllOrders({ fromIso, toIso, preferAggregatedOnly });
   }, [preset, fromDate, toDate, fetchAllOrders]);
 
   // preset -> populate from/to inputs in yyyy-mm-dd
@@ -230,6 +278,7 @@ export default function CollectedVsPendingSingle() {
       setFromDate(formatLocalDate(s));
       setToDate(formatLocalDate(e));
     } else {
+      // keep existing behavior: clear only when preset is not a recognized range
       setFromDate(null);
       setToDate(null);
     }
@@ -253,8 +302,24 @@ export default function CollectedVsPendingSingle() {
     });
   }, [allOrders, fromDate, toDate]);
 
-  // compute metrics from filteredOrders
+  // compute metrics: for preset === 'all' prefer aggregatedMetrics (if present),
+  // otherwise compute from filteredOrders as before.
   const computedMetrics = useMemo(() => {
+    if (preset === "all" && aggregatedMetrics) {
+      // use aggregated server values
+      const collectedCount = aggregatedMetrics.collected.count;
+      const pendingCount = aggregatedMetrics.pending.count;
+      return {
+        totalOrders: aggregatedMetrics.totalOrders,
+        collected: { count: collectedCount, percentage: aggregatedMetrics.collected.percentage },
+        pending: { count: pendingCount, percentage: aggregatedMetrics.pending.percentage },
+        ratio: { collectedToPending: aggregatedMetrics.ratio.collectedToPending },
+        collectedOrders: [],
+        pendingOrders: [],
+      } as const;
+    }
+
+    // fallback to computing from filteredOrders (for non-'all' presets or when aggregatedMetrics missing)
     const totalOrders = filteredOrders.length;
     const collectedStatuses = new Set(["collected", "delivered", "paid"]);
     const collectedOrders = filteredOrders.filter((o) => collectedStatuses.has((o.status ?? "").toLowerCase()));
@@ -272,7 +337,7 @@ export default function CollectedVsPendingSingle() {
       collectedOrders,
       pendingOrders,
     } as const;
-  }, [filteredOrders]);
+  }, [filteredOrders, aggregatedMetrics, preset]);
 
   const chartData = useMemo(
     () => [
@@ -337,7 +402,6 @@ export default function CollectedVsPendingSingle() {
       <div className="lg:flex block items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Collected vs Pending Orders</h1>
-          {/* <div className="text-sm text-muted-foreground">Showing metrics for selected date range</div> */}
         </div>
 
         <div className="flex items-center gap-3 lg:overflow-auto overflow-x-scroll">
@@ -377,19 +441,13 @@ export default function CollectedVsPendingSingle() {
         </div>
       </div>
 
-      {/* {loadingOrders ? <div className="text-sm text-muted-foreground">Loading...</div> : null} */}
-
-      {/* {serverMessage ? (
+      {/* show server message for debug (useful)
+      {serverMessage ? (
         <div className="p-3 rounded bg-yellow-50 border border-yellow-200 text-sm">
           <div className="font-medium">Server info</div>
           <div className="text-xs">{serverMessage}</div>
         </div>
       ) : null} */}
-
-      {/* quick debug stats */}
-      {/* <div className="text-sm">
-        <strong>Debug:</strong> allOrders = {allOrders.length}, filtered = {filteredOrders.length}, firstCreatedAt = {firstCreatedAt ?? "—"}
-      </div> */}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[

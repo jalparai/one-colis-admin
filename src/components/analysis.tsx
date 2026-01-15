@@ -98,32 +98,24 @@ interface DashboardMetricCard {
   link: string;
 }
 
-// Make Order flexible (allow unknown keys coming from API)
 export type Order = {
-  id?: string;
-  seller?: string;
-  sellerEmail?: string;
-  items?: {
-    productName?: string;
-    quantity?: number;
-    unitPrice?: number;
-    total?: number;
+  id: string;
+  seller: string;
+  sellerEmail: string;
+  items: {
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
   }[];
-  itemsTotal?: number | string;
-  totalAmount?: number | string | null;
-  status?: string;
-  notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  customer?: {
-    name?: string;
-    phone?: string;
-    address?: string;
-    city?: string;
-    postalCode?: string;
-  };
-  // allow any other fields (city, fees, sellerAmount, commission, etc.)
-} & Record<string, any>;
+  itemsTotal: number;
+  totalAmount: number;
+  status: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  // optional: additional fields may exist in your real schema (city, fees, deliveredAt, pickupAt, sellerAmount, etc.)
+};
 
 interface CollectedPendingData {
   totalOrders: number;
@@ -168,12 +160,15 @@ export default function Analysis() {
     const cleaned = name.trim().toLowerCase();
     if (!cleaned) return null;
 
+    // 1) exact match
     const exact = sellers.find((s) => s.name.toLowerCase() === cleaned);
     if (exact) return exact.id;
 
+    // 2) startsWith match
     const starts = sellers.find((s) => s.name.toLowerCase().startsWith(cleaned));
     if (starts) return starts.id;
 
+    // 3) contains match (fallback)
     const contains = sellers.find((s) => s.name.toLowerCase().includes(cleaned));
     if (contains) return contains.id;
 
@@ -184,6 +179,7 @@ export default function Analysis() {
   const router = useRouter();
   const locale = (params as any)?.locale ?? "en";
   const { t } = useTranslation("common");
+  // add near other useState(...) lines inside the Analysis component
   const [collectedPending, setCollectedPending] = useState<CollectedPendingData | null>(null);
   const [ordersView, setOrdersView] = useState<"all" | "pending">("all");
 
@@ -195,6 +191,7 @@ export default function Analysis() {
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  // computeRange returns { start, end } strings for presets (YYYY-MM-DD)
   const computeRange = (
     filter:
       | "all"
@@ -223,24 +220,14 @@ export default function Analysis() {
         monday.setDate(now.getDate() - dayIndex);
         return { start: formatDate(monday), end: today };
       }
-    case "lastWeek": {
-  // Monday-based last week (consistent with sameWeek helper)
-  const dayIndex = (now.getDay() + 6) % 7; // Monday = 0
-  const thisWeekMonday = new Date(now);
-  thisWeekMonday.setDate(now.getDate() - dayIndex);
-  thisWeekMonday.setHours(0, 0, 0, 0);
-
-  const lastWeekStart = new Date(thisWeekMonday);
-  lastWeekStart.setDate(thisWeekMonday.getDate() - 7);
-  lastWeekStart.setHours(0, 0, 0, 0);
-
-  const lastWeekEnd = new Date(lastWeekStart);
-  lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
-  lastWeekEnd.setHours(23, 59, 59, 999);
-
-  return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
-}
-
+      case "lastWeek": {
+        const dayIndex = (now.getDay() + 6) % 7;
+        const lastWeekEnd = new Date(now);
+        lastWeekEnd.setDate(now.getDate() - dayIndex - 1); // previous Sunday
+        const lastWeekStart = new Date(lastWeekEnd);
+        lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+        return { start: formatDate(lastWeekStart), end: formatDate(lastWeekEnd) };
+      }
       case "thisMonth": {
         const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         return { start: formatDate(startMonth), end: today };
@@ -255,6 +242,7 @@ export default function Analysis() {
     }
   };
 
+  // Build params helper - accepts dateFilter and optional customStart/customEnd
   const buildParams = (filterArg?: typeof dateFilter, customS?: string | null, customE?: string | null) => {
     const params: Record<string, string> = {};
     if (!filterArg || filterArg === "all") {
@@ -263,6 +251,7 @@ export default function Analysis() {
     }
 
     if (filterArg === "custom") {
+      // use provided custom dates if any
       if (customS) {
         params.startDate = customS;
         params.start = customS;
@@ -336,19 +325,21 @@ export default function Analysis() {
     {
       header: t("table.created"),
       accessorKey: "createdAt",
-      cell: ({ row }) =>
-        row.original.createdAt
-          ? <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>
-          : <div>-</div>,
+      cell: ({ row }) => <div>{new Date(row.original.createdAt).toLocaleDateString()}</div>,
     },
   ];
 
   // ----------------- Fetch Data (respects dateFilter and customStart/customEnd) -----------------
+  // now refetches when date filter / custom range / selected seller changes so charts update
   useEffect(() => {
     let mounted = true;
 
     async function fetchData() {
+      // setLoading(true);
       setError(null);
+      
+      // Capture current orders length at the start of fetch to avoid stale closure
+      const currentOrdersLengthAtStart = orders.length;
 
       try {
         const token = localStorage.getItem("token");
@@ -358,31 +349,27 @@ export default function Analysis() {
           return;
         }
 
-        const headers: Record<string, string> = {
+        const headers = {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         };
 
+        // Build shared params for date range & seller
         const params = buildParams(dateFilter, customStart, customEnd);
         if (selectedSeller) params.sellerId = selectedSeller;
 
+        // endpoints
         const base = "https://cod-ecommerce-two.vercel.app/api/admin";
         const deliveredUrl = appendParamsToUrl(`${base}/getDeliveredVsReturnedRatio`, params);
         const avgDeliveryUrl = appendParamsToUrl(`${base}/getAverageDeliveryTime`, params);
         const topSellersUrl = appendParamsToUrl(`${base}/getTopSellers`, params);
         const cityPerfUrl = appendParamsToUrl(`${base}/city-performance`, params);
         const cityFeesUrl = appendParamsToUrl(`${base}/city-fees`, params);
-      // --- replace the existing ordersParams / ordersUrl building with this ---
-const ordersParams = { ...params, limit: "50", sort: "desc" as string };
+        // orders: limit recent orders to 50, sort desc
+        const ordersParams = { ...params, limit: "50", sort: "desc" as string };
+        const ordersUrl = appendParamsToUrl(`${base}/orders`, ordersParams);
 
-// Use the server-provided last-week endpoint when the filter is 'lastWeek'
-let ordersUrl = appendParamsToUrl(`${base}/orders`, ordersParams);
-if (dateFilter === "lastWeek") {
-  // prefer the dedicated last-week endpoint (still include params in case backend accepts them)
-  ordersUrl = appendParamsToUrl(`${base}/orders/last-week`, ordersParams);
-}
-
-
+        // request all in parallel
         const [
           deliveredRes,
           avgDeliveryRes,
@@ -399,6 +386,7 @@ if (dateFilter === "lastWeek") {
           fetch(ordersUrl, { headers }),
         ]);
 
+        // parse safely and gracefully
         const [
           deliveredJson,
           avgDeliveryJson,
@@ -417,6 +405,7 @@ if (dateFilter === "lastWeek") {
 
         if (!mounted) return;
 
+        // Normalize shapes (try common locations)
         const deliveredData = deliveredJson?.data ?? deliveredJson ?? { deliveredOrders: 0, returnedOrders: 0 };
         const avgDeliveryData = Array.isArray(avgDeliveryJson?.data) ? avgDeliveryJson.data : Array.isArray(avgDeliveryJson) ? avgDeliveryJson : avgDeliveryJson?.result ?? [];
         const topSellersData = Array.isArray(topSellersJson?.data) ? topSellersJson.data : Array.isArray(topSellersJson) ? topSellersJson : topSellersJson?.result ?? [];
@@ -433,7 +422,20 @@ if (dateFilter === "lastWeek") {
           cityFees: cityFeesData,
         });
 
-        setOrders(Array.isArray(ordersData) ? ordersData : []);
+        // orders - server-limited to recent (limit param). We'll allow client-side filter as fallback.
+        // IMPORTANT: For date filters (not "all"), if API returns empty but we have existing orders,
+        // keep the existing orders for client-side filtering. Only update if API returns data.
+        const normalizedOrders = Array.isArray(ordersData) ? ordersData : [];
+        
+        // Only update orders if:
+        // 1. Filter is "all" (always use API response)
+        // 2. API returned data (normalizedOrders.length > 0)
+        // 3. We don't have existing orders (currentOrdersLengthAtStart === 0)
+        if (dateFilter === "all" || normalizedOrders.length > 0 || currentOrdersLengthAtStart === 0) {
+          setOrders(normalizedOrders);
+        }
+        // Otherwise, keep existing orders for client-side filtering - don't call setOrders
+
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
         setError("Failed to load dashboard data.");
@@ -447,7 +449,7 @@ if (dateFilter === "lastWeek") {
     return () => {
       mounted = false;
     };
-  }, [dateFilter, customStart, customEnd, selectedSeller]);
+  }, [dateFilter, customStart, customEnd, selectedSeller]); // re-run when filter or seller changes
 
   // fetch sellers once (no date param)
   useEffect(() => {
@@ -498,27 +500,68 @@ if (dateFilter === "lastWeek") {
   // ----------------- Date Filter Logic (client-side helpers retained) -----------------
   const now = useMemo(() => new Date(), [dateFilter, customStart, customEnd]); // updates when filter/custom range changes
 
-  // monday-based sameWeek
   const sameWeek = (d1: Date, d2: Date) => {
     const startOfWeek = (d: Date) => {
       const copy = new Date(d);
-      const dayIndex = (copy.getDay() + 6) % 7; // Monday = 0
-      copy.setDate(copy.getDate() - dayIndex);
+      const day = copy.getDay(); // 0 (Sun) - 6
+      copy.setDate(copy.getDate() - day); // start of week (Sunday)
       copy.setHours(0, 0, 0, 0);
       return copy;
     };
-    return startOfWeek(d1).toDateString() === startOfWeek(d2).toDateString() && d1.getFullYear() === d2.getFullYear();
+    const w1 = startOfWeek(d1).toDateString();
+    const w2 = startOfWeek(d2).toDateString();
+    return w1 === w2 && d1.getFullYear() === d2.getFullYear();
   };
 
-  // filteredOrders computed from orders + dateFilter (client-side fallback)
- const filteredOrders = useMemo(() => {
-  if (!orders || orders.length === 0) return [];
+// Replace your filteredOrders useMemo with this fixed version:
 
-  const nowLocal = new Date();
+// Memoize date strings based on dateFilter to ensure stability
+const dateStrings = useMemo(() => {
+  const now = new Date();
+  const getDateString = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  
+  const todayStr = getDateString(now);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = getDateString(yesterday);
+  
+  return { todayStr, yesterdayStr, now };
+}, [dateFilter]); // Only recalculate when dateFilter changes
 
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-  const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+const filteredOrders = useMemo(() => {
+  if (!orders?.length) {
+    return [];
+  }
 
+  // Use memoized date strings for stability
+  const { todayStr, yesterdayStr, now } = dateStrings;
+
+  // Helper to get date string in YYYY-MM-DD format (timezone-safe, stable)
+  const getDateString = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const startOfDay = (d: Date) => {
+    const date = new Date(d);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+  
+  const endOfDay = (d: Date) => {
+    const date = new Date(d);
+    date.setHours(23, 59, 59, 999);
+    return date;
+  };
+
+  // Monday-based week start
   const startOfWeekMonday = (d: Date) => {
     const copy = new Date(d);
     const dayIndex = (copy.getDay() + 6) % 7; // Monday = 0
@@ -527,71 +570,84 @@ if (dateFilter === "lastWeek") {
     return copy;
   };
 
-  return orders.filter((order) => {
+  const filtered = orders.filter((order) => {
     if (!order.createdAt) return false;
     const created = new Date(order.createdAt);
+    const createdTime = created.getTime();
+    const createdDateStr = getDateString(created);
 
-    // custom range handled client-side as before
-    if (dateFilter === "custom") {
-      const from = customStart ? new Date(customStart + "T00:00:00") : null;
-      const to = customEnd ? new Date(customEnd + "T23:59:59.999") : null;
-      if (from && created < from) return false;
-      if (to && created > to) return false;
-      return true;
-    }
-
+    // custom handling for each filter type
     switch (dateFilter) {
       case "today": {
-        const s = startOfDay(nowLocal);
-        const e = endOfDay(nowLocal);
-        return created >= s && created <= e;
+        // Use date string comparison for stability
+        return createdDateStr === todayStr;
       }
 
       case "yesterday": {
-        const y = new Date(nowLocal);
-        y.setDate(nowLocal.getDate() - 1);
-        const s = startOfDay(y);
-        const e = endOfDay(y);
-        return created >= s && created <= e;
+        // Use date string comparison for stability - this ensures all orders from yesterday's calendar date are included
+        return createdDateStr === yesterdayStr;
       }
 
       case "thisWeek": {
-        const weekStart = startOfWeekMonday(nowLocal);
+        const weekStart = startOfWeekMonday(now);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
-        return created >= weekStart && created <= weekEnd;
+        return createdTime >= weekStart.getTime() && createdTime <= weekEnd.getTime();
       }
 
       case "lastWeek": {
-        const thisWeekStart = startOfWeekMonday(nowLocal);
+        const thisWeekStart = startOfWeekMonday(now);
         const lastWeekStart = new Date(thisWeekStart);
         lastWeekStart.setDate(thisWeekStart.getDate() - 7);
         lastWeekStart.setHours(0, 0, 0, 0);
         const lastWeekEnd = new Date(lastWeekStart);
         lastWeekEnd.setDate(lastWeekStart.getDate() + 6);
         lastWeekEnd.setHours(23, 59, 59, 999);
-        return created >= lastWeekStart && created <= lastWeekEnd;
+        return createdTime >= lastWeekStart.getTime() && createdTime <= lastWeekEnd.getTime();
       }
 
       case "thisMonth": {
-        const s = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), 1, 0, 0, 0, 0);
-        const e = new Date(nowLocal.getFullYear(), nowLocal.getMonth() + 1, 0, 23, 59, 59, 999);
-        return created >= s && created <= e;
+        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        return createdTime >= startMonth.getTime() && createdTime <= endMonth.getTime();
       }
 
       case "lastMonth": {
-        const s = new Date(nowLocal.getFullYear(), nowLocal.getMonth() - 1, 1, 0, 0, 0, 0);
-        const e = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), 0, 23, 59, 59, 999);
-        return created >= s && created <= e;
+        const startLast = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const endLast = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        return createdTime >= startLast.getTime() && createdTime <= endLast.getTime();
+      }
+
+      case "custom": {
+        if (!customStart && !customEnd) return true;
+        
+        if (customStart && customEnd) {
+          const s = startOfDay(new Date(customStart));
+          const e = endOfDay(new Date(customEnd));
+          return createdTime >= s.getTime() && createdTime <= e.getTime();
+        }
+        
+        if (customStart) {
+          const s = startOfDay(new Date(customStart));
+          return createdTime >= s.getTime();
+        }
+        
+        if (customEnd) {
+          const e = endOfDay(new Date(customEnd));
+          return createdTime <= e.getTime();
+        }
+        
+        return true;
       }
 
       default:
         return true;
     }
   });
-}, [orders, dateFilter, customStart, customEnd]);
 
+  return filtered;
+}, [orders, dateFilter, customStart, customEnd, dateStrings]);
   // filteredPendingOrders derived from filteredOrders
   const filteredPendingOrders = useMemo(() => {
     return filteredOrders.filter((o) => {
@@ -601,11 +657,11 @@ if (dateFilter === "lastWeek") {
   }, [filteredOrders]);
 
   // ----------------- Calculations (use filteredOrders where meaningful) -----------------
-  const totalSellerRevenueAllTime = metrics?.topSellers.reduce((sum, s) => sum + (s.revenue || 0), 0) ?? 0;
+  const totalSellerRevenueAllTime = metrics?.topSellers.reduce((sum, s) => sum + s.revenue, 0) ?? 0;
   const totalServiceRevenueAllTime = metrics?.cityPerformance.reduce((sum, c) => {
     const feeObj = metrics?.cityFees.find((f) => f.city === c.city);
     const deliveryFee = feeObj ? feeObj.fee : 0;
-    return sum + deliveryFee * (c.delivered || 0);
+    return sum + deliveryFee * c.delivered;
   }, 0) ?? 0;
 
   const netProfitAllTime = totalSellerRevenueAllTime - totalServiceRevenueAllTime;
@@ -632,8 +688,10 @@ if (dateFilter === "lastWeek") {
   const pendingRate = allOrdersCount > 0 ? (pendingCount / allOrdersCount) * 100 : 0;
 
   // ----------------- FIXED: service revenue fetch & usage (keeps API fallback) -----------------
+  // keep a small state for service revenue coming from the API endpoint and loading
   const [statsState, setStatsState] = useState<{ totalRevenue: number; loading: boolean }>({ totalRevenue: 0, loading: true });
 
+  // Fixed useEffect - simplified to always use API response
   useEffect(() => {
     let mounted = true;
 
@@ -663,6 +721,7 @@ if (dateFilter === "lastWeek") {
 
         if (res.ok) {
           const data = await res.json();
+          // Use the API's totalRevenue directly
           const revenue = data?.totalRevenue ?? 0;
           if (mounted) setStatsState({ totalRevenue: revenue, loading: false });
         } else {
@@ -680,62 +739,26 @@ if (dateFilter === "lastWeek") {
       mounted = false;
     };
   }, [dateFilter, customStart, customEnd]);
+  // ----------------- exact per-order-based calculations (replacement) -----------------
 
-  // ----------------- Helpers (must be declared before useMemo that uses them) -----------------
+  /* ---------- Replacement calculation block ---------- */
 
-  // safe parse that tolerates strings like "DH 1,000" or objects like { amount: "1,000" }
-  const parseNumberSafe = (value: any): number => {
-    if (value == null) return 0;
-
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const cleaned = value.replace(/[^\d.-]/g, "");
-      const num = Number(cleaned);
-      return Number.isFinite(num) ? num : 0;
-    }
-
-    if (typeof value === "object") {
-      const candidateKeys = ["amount", "value", "amt", "amountValue", "price", "total"];
-      for (const key of candidateKeys) {
-        if (Object.prototype.hasOwnProperty.call(value, key)) {
-          const raw = (value as any)[key];
-          const n = parseNumberSafe(raw);
-          if (n !== 0) return n;
-        }
-      }
-    }
-
-    return 0;
-  };
-
-  // flexible picker: check multiple keys on an object, case-insensitive fallback
-  const pickNumberFromObj = (obj: Record<string, any> | null | undefined, keys: string[]): number => {
-    if (!obj || typeof obj !== "object") return 0;
-    for (const k of keys) {
-      if (Object.prototype.hasOwnProperty.call(obj, k)) {
-        const n = parseNumberSafe((obj as any)[k]);
-        if (n !== 0) return n;
-      }
-      // case-insensitive key match
-      const found = Object.keys(obj).find((kk) => kk.toLowerCase() === k.toLowerCase());
-      if (found) {
-        const n = parseNumberSafe((obj as any)[found]);
-        if (n !== 0) return n;
-      }
-    }
-    return 0;
-  };
-
-  // small wrapper to check one or more keys, used in older code
+  /** Safe numeric picker — provide likely field names used by various APIs
+   *  Add extra keys here if your API uses different names (e.g. seller_net_amount, city_selected_fee, etc.)
+   */
   const pickNumber = (obj: any, keys: string[]) => {
-    return pickNumberFromObj(obj, keys);
+    if (!obj) return 0;
+    for (const k of keys) {
+      const v = obj[k];
+      if (v == null) continue;
+      const n = Number(v);
+      if (!Number.isNaN(n)) return n;
+    }
+    return 0;
   };
 
   /** Helper: is order delivered (fuzzy match) */
-  const isDelivered = (o: Order) => /deliv|delivered|completed|success/i.test(o.status ?? "");
+  const isDelivered = (o: Order) => /deliv|delivered/i.test(o.status ?? "");
 
   /** Build city->fee map from metrics.cityFees (case-insensitive keys) */
   const cityFeesMap = useMemo(() => {
@@ -749,25 +772,19 @@ if (dateFilter === "lastWeek") {
   }, [metrics?.cityFees]);
 
   /** 1) Seller revenue for current view
-   *   - Prefer per-order (filteredOrders), else fall back to orders list, else fallback to aggregated metric
+   *   - If "all": use aggregated topSellers total as fallback (all-time)
+   *   - Else: prefer explicit seller amount fields on order, otherwise fallback to order.totalAmount
    */
   const sellerRevenueFiltered = useMemo(() => {
-    // source: prefer filteredOrders, then orders (client-side), then aggregated metric (server)
-    const source: Order[] =
-      filteredOrders && filteredOrders.length > 0
-        ? filteredOrders
-        : orders && orders.length > 0
-        ? orders
-        : [];
-
-    if (source.length === 0) {
+    if (dateFilter === "all") {
+      // prefer metrics sum if available (already defined earlier)
       return totalSellerRevenueAllTime || 0;
     }
-
-    return source.reduce((sum: number, o: Order) => {
-      if (!isDelivered(o)) return sum;
-
-      const sellerAmt = pickNumberFromObj(o as any, [
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((sum, o) => {
+      if (!isDelivered(o)) return sum; // only count delivered orders (same logic you used)
+      // common seller-side numeric fields
+      const sellerAmt = pickNumber(o as any, [
         "sellerAmount",
         "seller_amount",
         "sellerEarnings",
@@ -776,19 +793,12 @@ if (dateFilter === "lastWeek") {
         "net_amount",
         "netAmount",
         "sellerTotal",
-        "sellerRevenue",
-        // extras you might need to add if API uses them:
-        "seller_revenue",
-        "seller_price",
-        "seller_payout",
-        "orderAmount",
-        "order_total"
       ]);
-
-      const fallbackTotal = parseNumberSafe(o.totalAmount);
-      return sum + (sellerAmt || fallbackTotal);
+      if (sellerAmt) return sum + sellerAmt;
+      // fallback: order totalAmount
+      return sum + (Number((o as any).totalAmount) || 0);
     }, 0);
-  }, [filteredOrders, orders, dateFilter, totalSellerRevenueAllTime]);
+  }, [filteredOrders, dateFilter, totalSellerRevenueAllTime]);
 
   /** 2) Service revenue (city-selected fees) for current view
    *   - Prefer explicit per-order fee fields (cityFee/serviceFee/fees array)
@@ -796,25 +806,21 @@ if (dateFilter === "lastWeek") {
    *   - If no per-order data exists for the filtered range, fallback to API statsState.totalRevenue
    */
   const serviceRevenueFiltered = useMemo(() => {
-    // use the same source selection strategy as sellerRevenueFiltered
-    const source: Order[] =
-      filteredOrders && filteredOrders.length > 0
-        ? filteredOrders
-        : orders && orders.length > 0
-        ? orders
-        : [];
-
-    if (source.length === 0) {
+    // all-time -> prefer aggregated from metrics or API
+    if (dateFilter === "all") {
       return totalServiceRevenueAllTime || statsState?.totalRevenue || 0;
     }
+
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
 
     let total = 0;
     let hadAnyPerOrderFee = false;
 
-    for (const o of source) {
+    for (const o of filteredOrders) {
       if (!isDelivered(o)) continue;
 
-      const perOrderFee = pickNumberFromObj(o as any, [
+      // 1) try direct per-order numeric fields
+      const perOrderFee = pickNumber(o as any, [
         "cityFee",
         "city_fee",
         "serviceFee",
@@ -822,228 +828,108 @@ if (dateFilter === "lastWeek") {
         "service_charge",
         "deliveryFee",
         "delivery_fee",
-        "delivery_charge",
-        "shippingFee",
-        "shipping_fee",
-        // add more keys your API might use
       ]);
-
       if (perOrderFee) {
         total += perOrderFee;
         hadAnyPerOrderFee = true;
         continue;
       }
 
-      const feesArr = Array.isArray((o as any).fees) ? (o as any).fees : null;
-      if (feesArr && feesArr.length > 0) {
+      // 2) try fees array (common structure: fees: [{type,name,amount}])
+      const feesArr = (o as any).fees;
+      if (Array.isArray(feesArr) && feesArr.length > 0) {
         const found = feesArr.find((f: any) => {
           const name = String(f?.name ?? f?.type ?? "").toLowerCase();
-          return (
-            name.includes("city") ||
-            name.includes("service") ||
-            name.includes("delivery") ||
-            name.includes("fee") ||
-            name.includes("shipping")
-          );
+          return name.includes("city") || name.includes("service") || name.includes("delivery") || name.includes("fee");
         });
-        if (found) {
-          total += parseNumberSafe(found.amount ?? found.value ?? found.amt ?? found.price);
+        if (found && (found.amount || found.value || found.amt)) {
+          total += Number(found.amount ?? found.value ?? found.amt ?? 0);
           hadAnyPerOrderFee = true;
           continue;
         }
       }
 
-      // fallback: map by city using cityFeesMap
+      // 3) fallback: if order has a city, map it via cityFeesMap
       const cityCandidate =
-  (o as any).customer?.city ||
-  (o as any).city ||
-  (o as any).deliveryCity ||
-  (o as any).shippingCity ||
-  (o as any).billingCity ||
-  "";
-
+        (o as any).city ||
+        (o as any).deliveryCity ||
+        (o as any).shippingCity ||
+        (o as any).billingCity ||
+        "";
       const cityKey = String(cityCandidate).trim().toLowerCase();
       if (cityKey && cityFeesMap[cityKey] !== undefined) {
         total += Number(cityFeesMap[cityKey] || 0);
-        // not marking hadAnyPerOrderFee true because this is derived from metrics
+        // don't mark hadAnyPerOrderFee true here — this is derived from metrics map
         continue;
       }
 
-      // else we couldn't infer a fee for this order
+      // if we reach here there was no explicit fee & no city mapping; skip (can't infer)
     }
 
+    // If we calculated nothing from per-order sources but API returned a value for this range,
+    // it's better to fallback to the API (statsState) than show zero.
     if (!hadAnyPerOrderFee && (statsState?.totalRevenue || 0) > 0) {
+      // The API's totalRevenue should be for the same date range (your fetch uses buildParams)
       return statsState.totalRevenue;
     }
 
     return total;
-  }, [filteredOrders, orders, dateFilter, cityFeesMap, statsState?.totalRevenue, totalServiceRevenueAllTime]);
+  }, [filteredOrders, dateFilter, cityFeesMap, statsState?.totalRevenue, totalServiceRevenueAllTime]);
 
   /** 3) Commission & delivery charges sums (if present) — to make net more accurate */
   const commissionSumFiltered = useMemo(() => {
-    const source: Order[] =
-      filteredOrders && filteredOrders.length > 0
-        ? filteredOrders
-        : orders && orders.length > 0
-        ? orders
-        : [];
-
-    if (source.length === 0) return 0;
-
-    return source.reduce((s: number, o: Order) => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((s, o) => {
       if (!isDelivered(o)) return s;
-      return s + pickNumberFromObj(o as any, ["commission", "platformFee", "platform_fee", "adminFee", "fee", "commissionAmount"]);
+      return s + pickNumber(o as any, ["commission", "platformFee", "platform_fee", "adminFee", "fee"]);
     }, 0);
-  }, [filteredOrders, orders]);
+  }, [filteredOrders]);
 
   const deliveryChargesSumFiltered = useMemo(() => {
-    const source: Order[] =
-      filteredOrders && filteredOrders.length > 0
-        ? filteredOrders
-        : orders && orders.length > 0
-        ? orders
-        : [];
-
-    if (source.length === 0) return 0;
-
-    return source.reduce((s: number, o: Order) => {
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((s, o) => {
       if (!isDelivered(o)) return s;
-      return s + pickNumberFromObj(o as any, [
-        "deliveryFee",
-        "shippingFee",
-        "shipmentFee",
-        "delivery_charge",
-        "shipping_charge",
-      ]);
+      return s + pickNumber(o as any, ["deliveryFee", "shippingFee", "shipmentFee", "delivery_charge", "shipping_charge"]);
     }, 0);
-  }, [filteredOrders, orders]);
+  }, [filteredOrders]);
 
   /** 4) Net profit for filtered view:
-   *    seller revenue minus delivery/service revenue
-   *    (we follow your formula Net = SellerRevenue - DeliveryFees)
+   *    seller revenue minus service revenue minus commission minus delivery charges
+   *    (this can be extended with COGS if order.item cost is available)
    */
   const netProfitFiltered = useMemo(() => {
-    // Use same source strategy
-    const source: Order[] =
-      filteredOrders && filteredOrders.length > 0
-        ? filteredOrders
-        : orders && orders.length > 0
-        ? orders
-        : [];
+    const base = sellerRevenueFiltered - serviceRevenueFiltered;
+    const minusCommission = base - (commissionSumFiltered || 0);
+    const minusDelivery = minusCommission - (deliveryChargesSumFiltered || 0);
+    return minusDelivery;
+  }, [sellerRevenueFiltered, serviceRevenueFiltered, commissionSumFiltered, deliveryChargesSumFiltered]);
 
-    if (source.length === 0) {
-      const fallbackSeller = totalSellerRevenueAllTime || 0;
-      const fallbackService = totalServiceRevenueAllTime || statsState?.totalRevenue || 0;
-      if (typeof window !== "undefined") {
-        // eslint-disable-next-line no-console
-        console.debug("netProfit fallback debug:", { fallbackSeller, fallbackService });
-      }
-      return fallbackSeller - fallbackService;
-    }
-
-    let sellerRevenue = 0;
-    let deliveryFees = 0;
-
-    for (const o of source) {
-      if (!isDelivered(o)) continue;
-
-      const sellerAmt = pickNumberFromObj(o as any, [
-        "sellerAmount",
-        "seller_amount",
-        "sellerEarnings",
-        "sellerEarningsAmount",
-        "seller_net",
-        "net_amount",
-        "netAmount",
-        "sellerTotal",
-        "sellerRevenue",
-        "seller_revenue",
-        "seller_price",
-        "seller_payout",
-        "orderAmount",
-        "order_total",
-      ]);
-      sellerRevenue += sellerAmt || parseNumberSafe(o.totalAmount);
-
-      const perOrderDelivery = pickNumberFromObj(o as any, [
-        "cityFee",
-        "city_fee",
-        "serviceFee",
-        "service_fee",
-        "service_charge",
-        "deliveryFee",
-        "delivery_fee",
-        "delivery_charge",
-        "shippingFee",
-        "shipping_fee",
-      ]);
-      if (perOrderDelivery) {
-        deliveryFees += perOrderDelivery;
-      } else {
-        const feesArr = Array.isArray((o as any).fees) ? (o as any).fees : null;
-        if (feesArr && feesArr.length > 0) {
-          const found = feesArr.find((f: any) => {
-            const name = String(f?.name ?? f?.type ?? "").toLowerCase();
-            return (
-              name.includes("city") ||
-              name.includes("service") ||
-              name.includes("delivery") ||
-              name.includes("fee") ||
-              name.includes("shipping")
-            );
-          });
-          if (found) {
-            deliveryFees += parseNumberSafe(found.amount ?? found.value ?? found.amt ?? found.price);
-          }
-        } else {
-        const cityCandidate =
-  (o as any).customer?.city ||
-  (o as any).city ||
-  (o as any).deliveryCity ||
-  (o as any).shippingCity ||
-  (o as any).billingCity ||
-  "";
-
-          const cityKey = String(cityCandidate).trim().toLowerCase();
-          if (cityKey && cityFeesMap[cityKey] !== undefined) {
-            deliveryFees += Number(cityFeesMap[cityKey] || 0);
-          }
-        }
-      }
-    }
-
-    if (typeof window !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.debug("netProfit debug:", {
-        sellerRevenue,
-        deliveryFees,
-        ordersCount: source.length,
-      });
-    }
-
-    // follow Net = SellerRevenue - DeliveryFees (per your formula)
-    return sellerRevenue - deliveryFees;
-  }, [filteredOrders, orders, totalSellerRevenueAllTime, totalServiceRevenueAllTime, statsState?.totalRevenue, cityFeesMap]);
+  /* ---------- End replacement block ---------- */
 
   // ----------------- Dashboard cards now use filtered calculations -----------------
   const formatDH = (amount: number) =>
     `${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })} DH`;
 
   // ----------------- Return / Delivery rates for filteredOrders -----------------
-  const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
-    if (!filteredOrders || filteredOrders.length === 0) {
+const { returnRateFiltered, deliveryRateFiltered } = useMemo(() => {
+  // if there are no filtered orders, only show all-time rates for the "all" filter.
+  if (!filteredOrders || filteredOrders.length === 0) {
+    if (dateFilter === "all") {
       return { returnRateFiltered: returnRateAllTime, deliveryRateFiltered: deliveryRateAllTime };
     }
+    return { returnRateFiltered: "0.0", deliveryRateFiltered: "0.0" };
+  }
 
-    const total = filteredOrders.length;
-    const returned = filteredOrders.filter((o) => /return/i.test(o.status ?? "")).length;
-    const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status ?? "")).length;
+  const total = filteredOrders.length;
+  const returned = filteredOrders.filter((o) => /return/i.test(o.status ?? "")).length;
+  const delivered = filteredOrders.filter((o) => /deliv/i.test(o.status ?? "")).length;
 
-    const rr = total > 0 ? ((returned / total) * 100).toFixed(1) : returnRateAllTime;
-    const dr = total > 0 ? ((delivered / total) * 100).toFixed(1) : deliveryRateAllTime;
+  const rr = total > 0 ? ((returned / total) * 100).toFixed(1) : returnRateAllTime;
+  const dr = total > 0 ? ((delivered / total) * 100).toFixed(1) : deliveryRateAllTime;
 
-    return { returnRateFiltered: rr, deliveryRateFiltered: dr };
-  }, [filteredOrders, returnRateAllTime, deliveryRateAllTime]);
+  return { returnRateFiltered: rr, deliveryRateFiltered: dr };
+}, [filteredOrders, returnRateAllTime, deliveryRateAllTime, dateFilter]);
+
 
   const dashboardMetrics: DashboardMetricCard[] = [
     {
@@ -1125,9 +1011,9 @@ if (dateFilter === "lastWeek") {
   const RECENT_COUNT = 10; // change to 3, 5, etc.
   const recentOrders = useMemo(() => {
     if (!orders || orders.length === 0) return [];
-    const getTime = (s?: string) => (s ? new Date(s).getTime() : 0);
+    // ensure newest first — if your server already returns newest-first you can remove the sort
     const sorted = [...orders].sort(
-      (a, b) => getTime(b.createdAt) - getTime(a.createdAt)
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     return sorted.slice(0, RECENT_COUNT);
   }, [orders]);
