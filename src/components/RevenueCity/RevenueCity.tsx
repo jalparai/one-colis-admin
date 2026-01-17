@@ -127,13 +127,13 @@ export default function RevenueByCityPage() {
                       {city.orders}
                     </TableCell>
                     <TableCell className="text-right py-3 px-4 font-semibold text-[#E0B660]">
-                      ${city.revenue.toLocaleString()}
+                      {city.revenue.toLocaleString()} DH
                     </TableCell>
                     <TableCell className="text-right py-3 px-4 text-gray-600">
-                      ${city.fees.toLocaleString()}
+                      {city.fees.toLocaleString()} DH
                     </TableCell>
                     <TableCell className="text-right py-3 px-4 font-semibold text-[#2BC3F1]">
-                      ${city.profit.toLocaleString()}
+                      {city.profit.toLocaleString()} DH
                     </TableCell>
                   </TableRow>
                 ))}

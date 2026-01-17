@@ -130,6 +130,8 @@ export default function Analysis() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Track which filter the current orders came from (to avoid preserving orders from wrong filter)
+  const [ordersSourceFilter, setOrdersSourceFilter] = useState<typeof dateFilter>("all");
 
   // date filter presets + custom range
   const [dateFilter, setDateFilter] = useState<
@@ -424,7 +426,8 @@ export default function Analysis() {
 
         // orders - server-limited to recent (limit param). We'll allow client-side filter as fallback.
         // IMPORTANT: For date filters (not "all"), if API returns empty but we have existing orders,
-        // keep the existing orders for client-side filtering. Only update if API returns data.
+        // only preserve them if they came from "all" filter. If orders came from a different date filter,
+        // fetch "all" orders to ensure we have a complete dataset for client-side filtering.
         const normalizedOrders = Array.isArray(ordersData) ? ordersData : [];
         
         // Only update orders if:
@@ -433,8 +436,32 @@ export default function Analysis() {
         // 3. We don't have existing orders (currentOrdersLengthAtStart === 0)
         if (dateFilter === "all" || normalizedOrders.length > 0 || currentOrdersLengthAtStart === 0) {
           setOrders(normalizedOrders);
+          setOrdersSourceFilter(dateFilter);
+        } else if (ordersSourceFilter === "all") {
+          // Preserve existing orders from "all" filter for client-side filtering
+          // Don't update orders or ordersSourceFilter
+        } else {
+          // Orders came from a different date filter, fetch "all" orders instead
+          // This ensures we have a full dataset for client-side filtering
+          const allParams = buildParams("all", null, null);
+          if (selectedSeller) allParams.sellerId = selectedSeller;
+          const allOrdersUrl = appendParamsToUrl(`${base}/orders`, { ...allParams, limit: "50", sort: "desc" });
+          
+          try {
+            const allOrdersRes = await fetch(allOrdersUrl, { headers });
+            if (allOrdersRes.ok && mounted) {
+              const allOrdersJson = await allOrdersRes.json().catch(() => ({ data: [] }));
+              const allOrdersData = allOrdersJson?.data ?? allOrdersJson ?? [];
+              const allNormalizedOrders = Array.isArray(allOrdersData) ? allOrdersData : [];
+              if (allNormalizedOrders.length > 0 && mounted) {
+                setOrders(allNormalizedOrders);
+                setOrdersSourceFilter("all");
+              }
+            }
+          } catch (err) {
+            console.error("Error fetching all orders:", err);
+          }
         }
-        // Otherwise, keep existing orders for client-side filtering - don't call setOrders
 
       } catch (err) {
         console.error("Error fetching dashboard data:", err);

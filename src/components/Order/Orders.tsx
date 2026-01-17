@@ -1060,7 +1060,7 @@ export function OrdersTable() {
     initialState: { pagination },
   });
 
-  const exportEndpoints = [{ label: "Export Orders", url: "http://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" }];
+  const exportEndpoints = [{ label: "Export Orders", url: "https://cod-ecommerce-two.vercel.app/api/adminb/bulk/orders/export/excel" }];
 
   const handleExport = async (url: string): Promise<void> => {
     try {

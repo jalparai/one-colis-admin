@@ -660,7 +660,7 @@ const finalOrders = React.useMemo(() => {
 
           <ImportExportButtons
             entityType="pickups"
-            config={ENTITY_CONFIGS.delivery}
+            config={ENTITY_CONFIGS.pickups}
             onImportSuccess={fetchOrders}
             onExportSuccess={() => {}}
           />
