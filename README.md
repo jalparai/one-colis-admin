@@ -2,7 +2,7 @@
 
 A multi-role logistics management platform built for [OneColis](https://onecolis.net/en), a Moroccan e-commerce shipping company that empowers sellers with Cash on Delivery, real-time shipment tracking, and next-day payouts across Morocco.
 
-**Live site:** [onecolis.net](https://onecolis.net/en) &nbsp;·&nbsp; **Admin panel:** [one-colis-admin.vercel.app](https://one-colis-admin.vercel.app)
+**Live site:** [onecolis.net](https://onecolis.net/en)
 
 ---
 
