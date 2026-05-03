@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# One Colis — Admin Platform
 
-## Getting Started
+A multi-role logistics management platform built for [OneColis](https://onecolis.net/en), a Moroccan e-commerce shipping company that empowers sellers with Cash on Delivery, real-time shipment tracking, and next-day payouts across Morocco.
 
-First, run the development server:
+**Live site:** [onecolis.net](https://onecolis.net/en) &nbsp;·&nbsp; **Admin panel:** [one-colis-admin.vercel.app](https://one-colis-admin.vercel.app)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Overview
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+OneColis needed a unified admin system to manage the full logistics pipeline — from shipment creation to warehouse handling to financial payouts. The challenge was designing and building **6 separate role-based dashboards**, each with its own permissions, data views, and workflows, without a complete specification from the client.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+I had to independently reverse-engineer the business logic for each role by studying the live platform, understanding how data flowed between roles, and making architectural decisions without direct guidance.
 
-## Learn More
+## Role-based dashboards
 
-To learn more about Next.js, take a look at the following resources:
+| Role | Responsibility |
+|------|---------------|
+| **Admin** | Full platform oversight — users, analytics, configurations |
+| **Agent** | Field operations — shipment pickups and delivery coordination |
+| **Employee** | Internal task and order management |
+| **Payout** | Financial workflows — COD collection, commission tracking, payout scheduling |
+| **Seller** | Seller-facing dashboard — shipment creation, tracking, revenue overview |
+| **Warehouse** | Inventory and parcel management across warehouse locations |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Technical highlights
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Built entirely in **TypeScript** with Next.js App Router — strict typing enforced across all 6 dashboards
+- Implemented **role-based access control** — each role sees only the data and actions relevant to their function
+- Integrated **shadcn/ui** component library for consistent, accessible UI across all panels
+- Used **Next.js middleware** for route protection and role-based redirects at the edge
+- Consumed **RESTful APIs** for real-time order status, financial data, and shipment tracking
+- Designed and built without complete client specifications — required independent exploration of the business domain and proactive decision-making on data architecture
 
-## Deploy on Vercel
+## Tech stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Framework:** Next.js 14 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS
+- **Components:** shadcn/ui
+- **Auth & Routing:** Next.js Middleware
+- **Deployment:** Vercel
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## What I learned
+
+This project pushed me beyond typical frontend work. Without a full spec, I had to understand the *business* before I could build the *interface* — mapping out how an agent's actions affect a warehouse's view, or how a payout admin's dashboard needs to reflect a seller's COD collection in real time. It reinforced that good frontend engineering requires understanding the entire system, not just the UI layer.
